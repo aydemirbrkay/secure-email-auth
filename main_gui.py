@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 )
 
 from crypto_core import CryptoCore, EncryptedPacket, StepResult
+from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
 
 
 # ---------------------------------------------------------------------------
@@ -499,6 +500,7 @@ class MainWindow(QMainWindow):
 
         self._crypto = CryptoCore()
         self._packet: Optional[EncryptedPacket] = None
+        self._anim_windows: list = []  # animasyon pencerelerinin referanslarını tutar
         self._phase: str = "idle"
         self._alice_has_more: bool = False
         self._bob_has_more: bool = False
@@ -781,6 +783,10 @@ class MainWindow(QMainWindow):
         self._btn_start.setEnabled(True)
         self._btn_keygen.setEnabled(False)
         self._phase = "ready"
+        # RSA animasyon penceresini açar (bağımsız, engellemiyor)
+        rsa_win = RSAAnimationWindow(alice_b64, bob_b64)
+        rsa_win.show()
+        self._anim_windows.append(rsa_win)
 
     def _on_start(self) -> None:
         """Alice'in şifreleme sürecini başlatır."""
@@ -806,6 +812,28 @@ class MainWindow(QMainWindow):
     def _on_next_step(self) -> None:
         """Sonraki kriptografik adımı gösterir."""
         if self._phase == "alice":
+            # Animasyon tetikleme: SHA-256 veya AES adımında pencere aç
+            idx = self._alice_panel._current_step
+            if idx < len(self._alice_panel._steps):
+                next_step = self._alice_panel._steps[idx]
+                if "SHA" in next_step.step_name:
+                    sha_win = SHA256AnimationWindow(
+                        self._original_message,
+                        next_step.data.get("hash_hex", ""),
+                    )
+                    sha_win.show()
+                    self._anim_windows.append(sha_win)
+                elif "AES" in next_step.step_name:
+                    key_hex = next_step.data.get("session_key_hex", "")
+                    ct_preview = next_step.data.get("ciphertext_hex_preview", "")
+                    key_bytes = bytes.fromhex(key_hex) if key_hex else b"\x00" * 32
+                    aes_win = AESAnimationWindow(
+                        key=key_bytes,
+                        plaintext=self._original_message.encode("utf-8"),
+                        expected_ct_hex=ct_preview,
+                    )
+                    aes_win.show()
+                    self._anim_windows.append(aes_win)
             self._alice_has_more = self._alice_panel.show_next_step()
             if not self._alice_has_more:
                 self._phase = "transit"

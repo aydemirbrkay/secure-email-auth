@@ -74,7 +74,7 @@ def sha256_steps(message: bytes) -> dict:
 
         for i in range(64):
             s1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
-            ch = (e & f) ^ (~e & g) & 0xFFFFFFFF
+            ch = ((e & f) ^ (~e & g)) & 0xFFFFFFFF
             temp1 = (hh + s1 + ch + K[i] + w[i]) & 0xFFFFFFFF
             s0 = _rotr(a, 2) ^ _rotr(a, 13) ^ _rotr(a, 22)
             maj = (a & b) ^ (a & c) ^ (b & c)

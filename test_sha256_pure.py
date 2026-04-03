@@ -34,5 +34,16 @@ class TestSHA256Pure(unittest.TestCase):
         self.assertIn("binary_preview", result)
         self.assertGreater(len(result["binary_preview"]), 0)
 
+    def test_round_snapshots_have_rich_data(self):
+        result = sha256_steps(b"Hello World")
+        snap = result["round_snapshots"][0]
+        self.assertIn("w", snap)
+        self.assertIn("k", snap)
+        self.assertIn("t1", snap)
+        self.assertIn("t2", snap)
+        # Her değer 8 karakterlik hex string olmalı
+        self.assertEqual(len(snap["w"]), 8)
+        self.assertEqual(len(snap["k"]), 8)
+
 if __name__ == "__main__":
     unittest.main()

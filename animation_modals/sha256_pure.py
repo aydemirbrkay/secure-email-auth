@@ -95,6 +95,10 @@ def sha256_steps(message: bytes) -> dict:
                     "a": f"{a:08x}",
                     "e": f"{e:08x}",
                     "registers": [f"{v:08x}" for v in [a, b, c, d, e, f, g, hh]],
+                    "w": f"{w[i]:08x}",
+                    "k": f"{K[i]:08x}",
+                    "t1": f"{temp1:08x}",
+                    "t2": f"{temp2:08x}",
                 })
 
         h = [(x + y) & 0xFFFFFFFF for x, y in zip(h, [a, b, c, d, e, f, g, hh])]

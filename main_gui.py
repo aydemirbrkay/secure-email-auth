@@ -625,6 +625,7 @@ class MainWindow(QMainWindow):
         self._btn_anim_aes.setEnabled(False)
         self._bottom_body.setVisible(False)
         self._bottom_section.setVisible(False)
+        self._anim_windows.clear()
 
 
 # ---------------------------------------------------------------------------

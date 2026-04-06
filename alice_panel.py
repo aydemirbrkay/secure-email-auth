@@ -116,9 +116,11 @@ class AlicePanel(QWidget):
         self._step_widgets.append(box)
 
         if self._outermost_box is None:
+            # İlk adım: doğrudan container'a ekle
             self._outermost_box = box
             self._nested_container.addWidget(box)
         else:
+            # Yeni adım mevcut outermost'u içine alır → yeni outermost olur
             self._nested_container.removeWidget(self._outermost_box)
             box.layout().addWidget(self._outermost_box)
             self._outermost_box = box

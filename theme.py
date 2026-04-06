@@ -86,19 +86,19 @@ QSplitter::handle {{
 
 # Adım renkleri — Alice: içten dışa (sade → karmaşık)
 STEP_COLORS_ALICE = [
-    COLORS["accent_blue"],
-    COLORS["accent_mauve"],
-    COLORS["accent_yellow"],
-    COLORS["accent_green"],
-    COLORS["accent_peach"],
-    COLORS["accent_teal"],
+    COLORS["accent_blue"],     # Adım 1: SHA-256  (en içte)
+    COLORS["accent_mauve"],    # Adım 2: RSA İmza
+    COLORS["accent_yellow"],   # Adım 3: Birleştirme
+    COLORS["accent_green"],    # Adım 4: AES-GCM
+    COLORS["accent_peach"],    # Adım 5: RSA Anahtar Şifreleme
+    COLORS["accent_teal"],     # Adım 6: Gönderim  (en dışta)
 ]
 
 # Adım renkleri — Bob: dıştan içe (karmaşık → sade)
 STEP_COLORS_BOB = [
-    COLORS["accent_peach"],
-    COLORS["accent_green"],
-    COLORS["accent_yellow"],
-    COLORS["accent_blue"],
-    COLORS["accent_mauve"],
+    COLORS["accent_peach"],    # Adım 1: RSA Anahtar Çözme  (en dışta)
+    COLORS["accent_green"],    # Adım 2: AES-GCM Deşifreleme
+    COLORS["accent_yellow"],   # Adım 3: Ayrıştırma
+    COLORS["accent_blue"],     # Adım 4: SHA-256 Yeniden Hesaplama
+    COLORS["accent_mauve"],    # Adım 5: İmza Doğrulama (en içte)
 ]

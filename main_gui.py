@@ -473,6 +473,7 @@ class MainWindow(QMainWindow):
         rsa_win = RSAAnimationWindow(alice_b64, bob_b64)
         rsa_win.show()
         self._anim_windows.append(rsa_win)
+        self._bob_panel.show_keygen_step()
 
     def _on_start(self) -> None:
         message = self._alice_panel.msg_input.toPlainText().strip()

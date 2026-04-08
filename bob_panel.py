@@ -21,7 +21,9 @@ from PyQt6.QtWidgets import (
 )
 
 # ---------------------------------------------------------------------------
-# Diyagram Koordinat Haritası (alice and bob.png, 623×283 üzerinde)
+# Diyagram Koordinat Haritası
+# Koordinatlar 623×283 sanal uzayında; paintEvent widget boyutuna ölçekler.
+# Gerçek görsel: 2752×1536 — ölçek: x/4.418, y/5.430
 # ---------------------------------------------------------------------------
 
 _IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alice and bob.png")
@@ -29,13 +31,20 @@ _DIAGRAM_W = 623
 _DIAGRAM_H = 283
 _BLINK_MS = 1000
 
+# Alice'in 6 gönderme adımı için vurgulama alanları
 _STEP_RECTS: list[QRect] = [
-    QRect(95, 78, 95, 38),    # 0: SHA-256 — m → H(·)
-    QRect(195, 78, 80, 38),   # 1: RSA İmza — K_A^-(·)
-    QRect(268, 108, 44, 44),  # 2: Birleştir — (+)
-    QRect(330, 90, 85, 38),   # 3: AES — K_S(·)
-    QRect(330, 155, 85, 38),  # 4: RSA Anahtar — K_B^+(·)
-    QRect(408, 118, 158, 62), # 5: Gönder — (+) + Internet
+    QRect(97, 127, 102, 22),   # 0: SHA-256 — m → H(·)
+    QRect(200, 127, 42, 22),   # 1: RSA İmza — K_A^-(·)
+    QRect(231, 149, 26, 24),   # 2: Birleştir — (+) sol daire
+    QRect(306, 123, 52, 22),   # 3: AES — K_S(·)
+    QRect(303, 175, 54, 22),   # 4: RSA Anahtar — K_B^+(·)
+    QRect(385, 142, 138, 36),  # 5: Gönder — (+) sağ + Internet
+]
+
+# Anahtar üretimi adımı için K_A^- ve K_B^+ ikon alanları
+_KEYGEN_RECTS: list[QRect] = [
+    QRect(195, 64, 46, 32),   # K_A^- key icon (sol kutunun üstü)
+    QRect(289, 196, 54, 22),  # K_B^+ key icon (sağ kutunun altı)
 ]
 
 _RED = QColor(229, 57, 53)           # #E53935 kenarlık
@@ -60,6 +69,7 @@ class DiagramWidget(QWidget):
         self._active_step: int = -1
         self._completed_steps: set[int] = set()
         self._blink_on: bool = False
+        self._keygen_mode: bool = False
 
         self._timer = QTimer(self)
         self._timer.setInterval(_BLINK_MS)
@@ -69,8 +79,18 @@ class DiagramWidget(QWidget):
     # Genel API
     # ------------------------------------------------------------------
 
+    def show_keygen(self) -> None:
+        """Anahtar üretimi: K_A^- ve K_B^+ ikon alanlarını yanıp söndür."""
+        self._keygen_mode = True
+        self._active_step = -1
+        self._blink_on = True
+        if not self._timer.isActive():
+            self._timer.start()
+        self.update()
+
     def set_active_step(self, idx: int) -> None:
         """Idx'i aktif (yanıp sönen) adım olarak ayarla ve timer'ı başlat."""
+        self._keygen_mode = False
         self._active_step = idx
         self._blink_on = True
         if not self._timer.isActive():
@@ -86,6 +106,7 @@ class DiagramWidget(QWidget):
         """Timer'ı durdur, aktif adımı temizle."""
         self._timer.stop()
         self._active_step = -1
+        self._keygen_mode = False
         self._blink_on = False
         self.update()
 
@@ -94,6 +115,7 @@ class DiagramWidget(QWidget):
         self._timer.stop()
         self._active_step = -1
         self._completed_steps.clear()
+        self._keygen_mode = False
         self._blink_on = False
         self.update()
 
@@ -129,7 +151,14 @@ class DiagramWidget(QWidget):
                 if 0 <= idx < len(_STEP_RECTS):
                     painter.fillRect(self._scaled_rect(_STEP_RECTS[idx]), _GREEN_FILL)
 
-            if 0 <= self._active_step < len(_STEP_RECTS):
+            if self._keygen_mode:
+                for r in _KEYGEN_RECTS:
+                    sr = self._scaled_rect(r)
+                    if self._blink_on:
+                        painter.fillRect(sr, _RED_FILL)
+                    painter.setPen(QPen(_RED, 3))
+                    painter.drawRect(sr)
+            elif 0 <= self._active_step < len(_STEP_RECTS):
                 sr = self._scaled_rect(_STEP_RECTS[self._active_step])
                 if self._blink_on:
                     painter.fillRect(sr, _RED_FILL)
@@ -167,11 +196,11 @@ class BobPanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        title = QLabel("👨\u200d💻 Alıcı — Bob")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {COLORS['accent_green']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        self._title_label = QLabel("👨\u200d💻 Alıcı — Bob")
+        self._title_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        self._title_label.setStyleSheet(f"color: {COLORS['accent_green']};")
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._title_label)
 
         # --- Diyagram Container (Alice fazında görünür) ---
         self._diagram_container = QWidget()
@@ -244,8 +273,19 @@ class BobPanel(QWidget):
     # Diyagram API
     # ------------------------------------------------------------------
 
+    def show_keygen_step(self) -> None:
+        """RSA anahtar üretimi sırasında diyagramı göster, K_A^- ve K_B^+ vurgula."""
+        self._title_label.setVisible(False)
+        self._received_group.setVisible(False)
+        self._scroll_area.setVisible(False)
+        self.status_label.setVisible(False)
+        self._diagram_container.setVisible(True)
+        self._diagram_widget.show_keygen()
+
     def show_diagram(self) -> None:
-        """Alice fazı başladığında diyagramı göster, diğer içerikleri gizle."""
+        """Alice fazı başladığında diyagramı keygen'den temizle ve adım moduna geç."""
+        self._diagram_widget.reset()
+        self._title_label.setVisible(False)
         self._received_group.setVisible(False)
         self._scroll_area.setVisible(False)
         self.status_label.setVisible(False)
@@ -265,6 +305,7 @@ class BobPanel(QWidget):
         """Kapat butonuna basıldığında diyagramı gizle, Bob içeriğini geri getir."""
         self._diagram_widget.stop_blink()
         self._diagram_container.setVisible(False)
+        self._title_label.setVisible(True)
         self._received_group.setVisible(True)
         self._scroll_area.setVisible(True)
         self.status_label.setVisible(True)
@@ -273,6 +314,7 @@ class BobPanel(QWidget):
         self._diagram_widget.reset()
         self._diagram_container.setVisible(False)
         self._btn_close_diagram.setEnabled(False)
+        self._title_label.setVisible(True)
         self._received_group.setVisible(True)
         self._scroll_area.setVisible(True)
         self.status_label.setVisible(True)

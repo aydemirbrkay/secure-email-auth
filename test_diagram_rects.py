@@ -6,12 +6,12 @@ DIAGRAM_H = 283
 
 # Spec'ten koordinatlar — bob_panel.py ile senkron tutulmalı
 DIAGRAM_RECTS_RAW = [
-    (95, 78, 95, 38),    # 0: SHA-256
-    (195, 78, 80, 38),   # 1: RSA İmza
-    (268, 108, 44, 44),  # 2: Birleştir (+)
-    (330, 90, 85, 38),   # 3: AES
-    (330, 155, 85, 38),  # 4: RSA Anahtar
-    (408, 118, 158, 62), # 5: Gönder / Internet
+    (97, 127, 102, 22),   # 0: SHA-256
+    (200, 127, 42, 22),   # 1: RSA İmza
+    (231, 149, 26, 24),   # 2: Birleştir (+)
+    (306, 123, 52, 22),   # 3: AES
+    (303, 175, 54, 22),   # 4: RSA Anahtar
+    (385, 142, 138, 36),  # 5: Gönder / Internet
 ]
 
 

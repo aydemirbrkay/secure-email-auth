@@ -153,6 +153,8 @@ class BobPanel(QWidget):
         self._steps: list[StepResult] = []
         self._current_step: int = 0
         self._step_widgets: list[QGroupBox] = []
+        self._diagram_widget: DiagramWidget | None = None
+        self._btn_close_diagram: QPushButton | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -165,6 +167,31 @@ class BobPanel(QWidget):
         title.setStyleSheet(f"color: {COLORS['accent_green']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
+
+        # --- Diyagram Container (Alice fazında görünür) ---
+        self._diagram_container = QWidget()
+        self._diagram_container.setVisible(False)
+        diag_layout = QVBoxLayout(self._diagram_container)
+        diag_layout.setContentsMargins(0, 0, 0, 4)
+        diag_layout.setSpacing(4)
+
+        self._diagram_widget = DiagramWidget()
+        diag_layout.addWidget(self._diagram_widget, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        self._btn_close_diagram = QPushButton("✖  Kapat")
+        self._btn_close_diagram.setEnabled(False)
+        self._btn_close_diagram.setFixedHeight(32)
+        self._btn_close_diagram.setStyleSheet(
+            "QPushButton { background: rgba(229,57,53,0.12); border: 2px solid #E53935; "
+            "border-radius: 6px; color: #E53935; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background: rgba(229,57,53,0.28); }"
+            "QPushButton:disabled { background: #1e1e2e; border: 1px solid #45475a; color: #6c7086; }"
+        )
+        self._btn_close_diagram.clicked.connect(self._on_close_diagram)
+        diag_layout.addWidget(self._btn_close_diagram)
+
+        layout.addWidget(self._diagram_container)
+        # --- Diyagram Container sonu ---
 
         self._received_group = QGroupBox("Alınan Şifreli Paket")
         recv_layout = QVBoxLayout(self._received_group)
@@ -208,7 +235,33 @@ class BobPanel(QWidget):
         )
         layout.addWidget(self.status_label)
 
+    # ------------------------------------------------------------------
+    # Diyagram API
+    # ------------------------------------------------------------------
+
+    def show_diagram(self) -> None:
+        """Alice fazı başladığında diyagramı göster."""
+        self._diagram_container.setVisible(True)
+
+    def set_diagram_step(self, step_idx: int) -> None:
+        """Önceki adımı yeşil yap, step_idx'i kırmızı blink ile vurgula."""
+        if step_idx > 0:
+            self._diagram_widget.mark_step_done(step_idx - 1)
+        self._diagram_widget.set_active_step(step_idx)
+
+    def enable_close_button(self) -> None:
+        """Alice'in son adımı tamamlandıktan sonra Kapat butonunu aktif et."""
+        self._btn_close_diagram.setEnabled(True)
+
+    def _on_close_diagram(self) -> None:
+        """Kapat butonuna basıldığında diyagramı gizle."""
+        self._diagram_widget.stop_blink()
+        self._diagram_container.setVisible(False)
+
     def reset(self) -> None:
+        self._diagram_widget.reset()
+        self._diagram_container.setVisible(False)
+        self._btn_close_diagram.setEnabled(False)
         self._steps = []
         self._current_step = 0
         self._step_widgets.clear()

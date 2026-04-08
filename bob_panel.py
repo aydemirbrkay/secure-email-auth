@@ -5,15 +5,134 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+import os
+
+from PyQt6.QtCore import Qt, QRect, QTimer
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
+
+# ---------------------------------------------------------------------------
+# Diyagram Koordinat Haritası (alice and bob.png, 623×283 üzerinde)
+# ---------------------------------------------------------------------------
+
+_IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alice and bob.png")
+_DIAGRAM_W = 623
+_DIAGRAM_H = 283
+_BLINK_MS = 1000
+
+_STEP_RECTS: list[QRect] = [
+    QRect(95, 78, 95, 38),    # 0: SHA-256 — m → H(·)
+    QRect(195, 78, 80, 38),   # 1: RSA İmza — K_A^-(·)
+    QRect(268, 108, 44, 44),  # 2: Birleştir — (+)
+    QRect(330, 90, 85, 38),   # 3: AES — K_S(·)
+    QRect(330, 155, 85, 38),  # 4: RSA Anahtar — K_B^+(·)
+    QRect(408, 118, 158, 62), # 5: Gönder — (+) + Internet
+]
+
+_RED = QColor(229, 57, 53)           # #E53935 kenarlık
+_RED_FILL = QColor(229, 57, 53, 64)  # %25 şeffaf kırmızı dolgu
+_GREEN_FILL = QColor(76, 175, 80, 51) # %20 şeffaf yeşil dolgu
+
+
+class DiagramWidget(QWidget):
+    """623×283 alice and bob.png görseli + adım vurgulama animasyonu."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(_DIAGRAM_W, _DIAGRAM_H)
+
+        self._pixmap = QPixmap()
+        if os.path.isfile(_IMAGE_PATH):
+            self._pixmap = QPixmap(_IMAGE_PATH).scaled(
+                _DIAGRAM_W, _DIAGRAM_H,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        else:
+            print(f"[DiagramWidget] Uyarı: görsel bulunamadı → {_IMAGE_PATH}")
+
+        self._active_step: int = -1
+        self._completed_steps: set[int] = set()
+        self._blink_on: bool = False
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(_BLINK_MS)
+        self._timer.timeout.connect(self._toggle_blink)
+
+    # ------------------------------------------------------------------
+    # Genel API
+    # ------------------------------------------------------------------
+
+    def set_active_step(self, idx: int) -> None:
+        """Idx'i aktif (yanıp sönen) adım olarak ayarla ve timer'ı başlat."""
+        self._active_step = idx
+        self._blink_on = True
+        if not self._timer.isActive():
+            self._timer.start()
+        self.update()
+
+    def mark_step_done(self, idx: int) -> None:
+        """Idx'i tamamlandı (yeşil) olarak işaretle."""
+        self._completed_steps.add(idx)
+        self.update()
+
+    def stop_blink(self) -> None:
+        """Timer'ı durdur, aktif adımı temizle."""
+        self._timer.stop()
+        self._active_step = -1
+        self._blink_on = False
+        self.update()
+
+    def reset(self) -> None:
+        """Tüm durumu başa döndür."""
+        self._timer.stop()
+        self._active_step = -1
+        self._completed_steps.clear()
+        self._blink_on = False
+        self.update()
+
+    # ------------------------------------------------------------------
+    # İç Metodlar
+    # ------------------------------------------------------------------
+
+    def _toggle_blink(self) -> None:
+        self._blink_on = not self._blink_on
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+
+        # 1) Görseli çiz (veya gri arka plan)
+        if not self._pixmap.isNull():
+            painter.drawPixmap(0, 0, self._pixmap)
+        else:
+            painter.fillRect(self.rect(), QColor(40, 40, 60))
+
+        # 2) Tamamlanmış adımlar — yeşil dolgu, kenarlıksız
+        painter.setPen(Qt.PenStyle.NoPen)
+        for idx in self._completed_steps:
+            if 0 <= idx < len(_STEP_RECTS):
+                painter.fillRect(_STEP_RECTS[idx], _GREEN_FILL)
+
+        # 3) Aktif adım — kırmızı kenarlık, blink_on ise kırmızı dolgu
+        if 0 <= self._active_step < len(_STEP_RECTS):
+            rect = _STEP_RECTS[self._active_step]
+            if self._blink_on:
+                painter.fillRect(rect, _RED_FILL)
+            pen = QPen(_RED, 3)
+            painter.setPen(pen)
+            painter.drawRect(rect)
+
+        painter.end()
+
 
 from crypto_core import EncryptedPacket, StepResult
 from theme import COLORS, STEP_COLORS_BOB

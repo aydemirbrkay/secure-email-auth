@@ -496,9 +496,15 @@ class MainWindow(QMainWindow):
 
     def _on_next_step(self) -> None:
         if self._phase == "alice":
-            idx = self._alice_panel._current_step
-            if idx < len(self._alice_panel._steps):
-                next_step = self._alice_panel._steps[idx]
+            # Read step index BEFORE show_next_step() changes it
+            step_idx = self._alice_panel._current_step  # 0..5
+
+            # On first step, show the diagram on Bob's panel
+            if step_idx == 0:
+                self._bob_panel.show_diagram()
+
+            if step_idx < len(self._alice_panel._steps):
+                next_step = self._alice_panel._steps[step_idx]
                 if "SHA" in next_step.step_name:
                     hash_hex = next_step.data.get("hash_hex", "")
                     self._sha_data = (self._original_message, hash_hex)
@@ -522,8 +528,15 @@ class MainWindow(QMainWindow):
                     )
                     aes_win.show()
                     self._anim_windows.append(aes_win)
+
             self._alice_has_more = self._alice_panel.show_next_step()
+
+            # Highlight this step in the diagram
+            self._bob_panel.set_diagram_step(step_idx)
+
             if not self._alice_has_more:
+                # Last step: enable close button, transition phase
+                self._bob_panel.enable_close_button()
                 self._phase = "transit"
                 self._btn_next.setText("📨 Paketi Bob'a Gönder")
 

@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -43,19 +44,16 @@ _GREEN_FILL = QColor(76, 175, 80, 51) # %20 şeffaf yeşil dolgu
 
 
 class DiagramWidget(QWidget):
-    """623×283 alice and bob.png görseli + adım vurgulama animasyonu."""
+    """Bob panelini tamamen kaplayan alice and bob.png görseli + adım vurgulama animasyonu."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedSize(_DIAGRAM_W, _DIAGRAM_H)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumSize(300, 150)
 
         self._pixmap = QPixmap()
         if os.path.isfile(_IMAGE_PATH):
-            self._pixmap = QPixmap(_IMAGE_PATH).scaled(
-                _DIAGRAM_W, _DIAGRAM_H,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
+            self._pixmap = QPixmap(_IMAGE_PATH)
         else:
             print(f"[DiagramWidget] Uyarı: görsel bulunamadı → {_IMAGE_PATH}")
 
@@ -111,25 +109,32 @@ class DiagramWidget(QWidget):
         self._blink_on = not self._blink_on
         self.update()
 
+    def _scaled_rect(self, r: QRect) -> QRect:
+        """623×283 koordinat uzayındaki rect'i mevcut widget boyutuna ölçekler."""
+        sx = self.width() / _DIAGRAM_W
+        sy = self.height() / _DIAGRAM_H
+        return QRect(round(r.x() * sx), round(r.y() * sy),
+                     round(r.width() * sx), round(r.height() * sy))
+
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         try:
             if not self._pixmap.isNull():
-                painter.drawPixmap(0, 0, self._pixmap)
+                painter.drawPixmap(self.rect(), self._pixmap)
             else:
                 painter.fillRect(self.rect(), QColor(40, 40, 60))
 
             painter.setPen(Qt.PenStyle.NoPen)
             for idx in self._completed_steps:
                 if 0 <= idx < len(_STEP_RECTS):
-                    painter.fillRect(_STEP_RECTS[idx], _GREEN_FILL)
+                    painter.fillRect(self._scaled_rect(_STEP_RECTS[idx]), _GREEN_FILL)
 
             if 0 <= self._active_step < len(_STEP_RECTS):
-                rect = _STEP_RECTS[self._active_step]
+                sr = self._scaled_rect(_STEP_RECTS[self._active_step])
                 if self._blink_on:
-                    painter.fillRect(rect, _RED_FILL)
+                    painter.fillRect(sr, _RED_FILL)
                 painter.setPen(QPen(_RED, 3))
-                painter.drawRect(rect)
+                painter.drawRect(sr)
         finally:
             painter.end()
 
@@ -176,7 +181,7 @@ class BobPanel(QWidget):
         diag_layout.setSpacing(4)
 
         self._diagram_widget = DiagramWidget()
-        diag_layout.addWidget(self._diagram_widget, alignment=Qt.AlignmentFlag.AlignHCenter)
+        diag_layout.addWidget(self._diagram_widget)
 
         self._btn_close_diagram = QPushButton("✖  Kapat")
         self._btn_close_diagram.setEnabled(False)
@@ -190,7 +195,7 @@ class BobPanel(QWidget):
         self._btn_close_diagram.clicked.connect(self._on_close_diagram)
         diag_layout.addWidget(self._btn_close_diagram)
 
-        layout.addWidget(self._diagram_container)
+        layout.addWidget(self._diagram_container, stretch=1)
         # --- Diyagram Container sonu ---
 
         self._received_group = QGroupBox("Alınan Şifreli Paket")
@@ -212,11 +217,11 @@ class BobPanel(QWidget):
         self._cumulative_layout.addLayout(self._nested_container)
         self._cumulative_layout.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._cumulative_area)
-        scroll.setStyleSheet("background-color: transparent;")
-        layout.addWidget(scroll, stretch=1)
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setWidget(self._cumulative_area)
+        self._scroll_area.setStyleSheet("background-color: transparent;")
+        layout.addWidget(self._scroll_area, stretch=1)
 
         self._result_group = QGroupBox("Doğrulama Sonucu")
         result_layout = QVBoxLayout(self._result_group)
@@ -240,7 +245,10 @@ class BobPanel(QWidget):
     # ------------------------------------------------------------------
 
     def show_diagram(self) -> None:
-        """Alice fazı başladığında diyagramı göster."""
+        """Alice fazı başladığında diyagramı göster, diğer içerikleri gizle."""
+        self._received_group.setVisible(False)
+        self._scroll_area.setVisible(False)
+        self.status_label.setVisible(False)
         self._diagram_container.setVisible(True)
 
     def set_diagram_step(self, step_idx: int) -> None:
@@ -254,14 +262,20 @@ class BobPanel(QWidget):
         self._btn_close_diagram.setEnabled(True)
 
     def _on_close_diagram(self) -> None:
-        """Kapat butonuna basıldığında diyagramı gizle."""
+        """Kapat butonuna basıldığında diyagramı gizle, Bob içeriğini geri getir."""
         self._diagram_widget.stop_blink()
         self._diagram_container.setVisible(False)
+        self._received_group.setVisible(True)
+        self._scroll_area.setVisible(True)
+        self.status_label.setVisible(True)
 
     def reset(self) -> None:
         self._diagram_widget.reset()
         self._diagram_container.setVisible(False)
         self._btn_close_diagram.setEnabled(False)
+        self._received_group.setVisible(True)
+        self._scroll_area.setVisible(True)
+        self.status_label.setVisible(True)
         self._steps = []
         self._current_step = 0
         self._step_widgets.clear()

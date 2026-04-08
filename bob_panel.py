@@ -103,35 +103,35 @@ class DiagramWidget(QWidget):
     # İç Metodlar
     # ------------------------------------------------------------------
 
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self._timer.stop()
+        super().closeEvent(event)
+
     def _toggle_blink(self) -> None:
         self._blink_on = not self._blink_on
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
+        try:
+            if not self._pixmap.isNull():
+                painter.drawPixmap(0, 0, self._pixmap)
+            else:
+                painter.fillRect(self.rect(), QColor(40, 40, 60))
 
-        # 1) Görseli çiz (veya gri arka plan)
-        if not self._pixmap.isNull():
-            painter.drawPixmap(0, 0, self._pixmap)
-        else:
-            painter.fillRect(self.rect(), QColor(40, 40, 60))
+            painter.setPen(Qt.PenStyle.NoPen)
+            for idx in self._completed_steps:
+                if 0 <= idx < len(_STEP_RECTS):
+                    painter.fillRect(_STEP_RECTS[idx], _GREEN_FILL)
 
-        # 2) Tamamlanmış adımlar — yeşil dolgu, kenarlıksız
-        painter.setPen(Qt.PenStyle.NoPen)
-        for idx in self._completed_steps:
-            if 0 <= idx < len(_STEP_RECTS):
-                painter.fillRect(_STEP_RECTS[idx], _GREEN_FILL)
-
-        # 3) Aktif adım — kırmızı kenarlık, blink_on ise kırmızı dolgu
-        if 0 <= self._active_step < len(_STEP_RECTS):
-            rect = _STEP_RECTS[self._active_step]
-            if self._blink_on:
-                painter.fillRect(rect, _RED_FILL)
-            pen = QPen(_RED, 3)
-            painter.setPen(pen)
-            painter.drawRect(rect)
-
-        painter.end()
+            if 0 <= self._active_step < len(_STEP_RECTS):
+                rect = _STEP_RECTS[self._active_step]
+                if self._blink_on:
+                    painter.fillRect(rect, _RED_FILL)
+                painter.setPen(QPen(_RED, 3))
+                painter.drawRect(rect)
+        finally:
+            painter.end()
 
 
 from crypto_core import EncryptedPacket, StepResult

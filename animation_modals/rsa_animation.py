@@ -6,6 +6,7 @@ Demo için küçük değerler kullanılır; son adımda gerçek Base64 eşleşme
 """
 from __future__ import annotations
 import base64
+from collections.abc import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
@@ -71,7 +72,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         alice_pub_b64: str,
         bob_pub_b64: str,
         parent: QWidget | None = None,
-        on_close: "callable | None" = None,
+        on_close: Callable[[], None] | None = None,
     ) -> None:
         self._alice_b64 = alice_pub_b64
         self._bob_b64 = bob_pub_b64

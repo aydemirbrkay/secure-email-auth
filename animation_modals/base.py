@@ -1,12 +1,14 @@
 # animation_modals/base.py
 """
 CryptoAnimationWindow — Tüm animasyon pencerelerinin taban sınıfı.
-QWidget subclass, show() ile bağımsız pencere olarak açılır.
+QWidget subclass. on_close=None (varsayılan): bağımsız pencere olarak açılır, ekranın
+%85'ine yeniden boyutlandırılır. on_close verilirse: gömülü widget olarak davranır
+(pencere bayrağı ve boyut ayarı atlanır).
 manual_mode=True: kullanıcı tıklayarak ilerler (RSA, SHA, AES roundları).
 manual_mode=False: QTimer otomatik oynatır (AES intro).
-Pencere boyutu ekranın %85'i olacak şekilde ayarlanır.
 """
 from __future__ import annotations
+from collections.abc import Callable
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -74,7 +76,7 @@ class CryptoAnimationWindow(QWidget):
         total_steps: int,
         manual_mode: bool = False,
         parent: QWidget | None = None,
-        on_close: "callable | None" = None,
+        on_close: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._on_close = on_close

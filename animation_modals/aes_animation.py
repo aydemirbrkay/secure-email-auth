@@ -11,6 +11,7 @@ Yapı:
      - AddRoundKey: XOR highlight
 """
 from __future__ import annotations
+from collections.abc import Callable
 from PyQt6.QtCore import Qt, QTimer, QRect, QPoint
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygon
 from PyQt6.QtWidgets import (
@@ -710,7 +711,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         plaintext: bytes,
         expected_ct_hex: str,
         parent: QWidget | None = None,
-        on_close: "callable | None" = None,
+        on_close: Callable[[], None] | None = None,
     ) -> None:
         self._key = key
         self._plaintext = plaintext

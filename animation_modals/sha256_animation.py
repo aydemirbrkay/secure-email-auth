@@ -6,6 +6,7 @@ SHA256AnimationWindow — SHA-256 hash sürecini görselleştirir.
 • Manuel navigasyon: kullanıcı ◀ / ▶ ile ilerler
 """
 from __future__ import annotations
+from collections.abc import Callable
 from PyQt6.QtCore import Qt, QRect, QPoint, QTimer
 from PyQt6.QtGui import (
     QColor, QFont, QPainter, QPen, QBrush, QPolygon,
@@ -693,7 +694,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         message: str,
         expected_hash: str,
         parent: QWidget | None = None,
-        on_close: "callable | None" = None,
+        on_close: Callable[[], None] | None = None,
     ) -> None:
         self._message = message
         self._expected_hash = expected_hash

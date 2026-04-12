@@ -43,19 +43,19 @@ class AlicePanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        title = QLabel("👩\u200d💻 Gönderici — Alice")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {COLORS['accent_blue']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        self._title = QLabel("👩\u200d💻 Gönderici — Alice")
+        self._title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        self._title.setStyleSheet(f"color: {COLORS['accent_blue']};")
+        self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._title)
 
-        msg_group = QGroupBox("E-posta Mesajı")
-        msg_layout = QVBoxLayout(msg_group)
+        self._msg_group = QGroupBox("E-posta Mesajı")
+        msg_layout = QVBoxLayout(self._msg_group)
         self.msg_input = QTextEdit()
         self.msg_input.setPlaceholderText("Mesajınızı buraya yazın...")
         self.msg_input.setMaximumHeight(100)
         msg_layout.addWidget(self.msg_input)
-        layout.addWidget(msg_group)
+        layout.addWidget(self._msg_group)
 
         self._cumulative_area = QWidget()
         self._cumulative_layout = QVBoxLayout(self._cumulative_area)
@@ -66,11 +66,11 @@ class AlicePanel(QWidget):
         self._cumulative_layout.addLayout(self._nested_container)
         self._cumulative_layout.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._cumulative_area)
-        scroll.setStyleSheet("background-color: transparent;")
-        layout.addWidget(scroll, stretch=1)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setWidget(self._cumulative_area)
+        self._scroll.setStyleSheet("background-color: transparent;")
+        layout.addWidget(self._scroll, stretch=1)
 
         self.status_label = QLabel("🔐 Mesajınızı yazın ve şifreleme sürecini başlatın.")
         self.status_label.setWordWrap(True)
@@ -79,7 +79,48 @@ class AlicePanel(QWidget):
         )
         layout.addWidget(self.status_label)
 
+        # ── Animasyon container (başta gizli) ─────────────────────────────
+        self._anim_container = QWidget()
+        anim_layout = QVBoxLayout(self._anim_container)
+        anim_layout.setContentsMargins(0, 0, 0, 0)
+        self._anim_scroll = QScrollArea()
+        self._anim_scroll.setWidgetResizable(True)
+        self._anim_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._anim_scroll.setStyleSheet("background: transparent; border: none;")
+        anim_layout.addWidget(self._anim_scroll)
+        self._anim_container.setVisible(False)
+        layout.addWidget(self._anim_container, stretch=1)
+        # ─────────────────────────────────────────────────────────────────
+
+        self._normal_widgets: list[QWidget] = [
+            self._title, self._msg_group, self._scroll, self.status_label
+        ]
+
+    def show_animation(self, widget: QWidget) -> None:
+        """Normal içeriği gizle, animasyon widget'ını QScrollArea içinde göster."""
+        # Önceki animasyon varsa temizle
+        old = self._anim_scroll.takeWidget()
+        if old is not None:
+            old.deleteLater()
+        # Yeni widget'ı ekle ve container'ı göster
+        self._anim_scroll.setWidget(widget)
+        for w in self._normal_widgets:
+            w.setVisible(False)
+        self._anim_container.setVisible(True)
+
+    def hide_animation(self) -> None:
+        """Animasyonu temizle ve normal içeriği geri getir."""
+        old = self._anim_scroll.takeWidget()
+        if old is not None:
+            old.deleteLater()
+        self._anim_container.setVisible(False)
+        for w in self._normal_widgets:
+            w.setVisible(True)
+
     def reset(self) -> None:
+        self.hide_animation()
         self._steps = []
         self._current_step = 0
         self._step_widgets.clear()

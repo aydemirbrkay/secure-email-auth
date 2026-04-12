@@ -103,7 +103,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         card_layout.setContentsMargins(16, 12, 16, 12)
 
         self._body = QLabel()
-        self._body.setFont(QFont("Courier New", 13))
+        self._body.setFont(QFont("Courier New", 10))
         self._body.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
         self._body.setWordWrap(True)
         self._body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

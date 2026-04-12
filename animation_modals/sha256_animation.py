@@ -544,24 +544,15 @@ class _SHA256IntroWidget(QWidget):
         left_lay.addWidget(self._reg_demo, stretch=1)
         h_row.addWidget(left_frame, stretch=2)
 
-        # Sağ: akış şeması — scroll area ile sarılı konteyner
+        # Sağ: akış şeması — dış _anim_scroll zaten kaydırma sağlar, iç scroll gereksiz
         right_container = QWidget()
         right_container_lay = QVBoxLayout(right_container)
         right_container_lay.setContentsMargins(0, 0, 0, 0)
         right_container_lay.setSpacing(4)
         h_row.addWidget(right_container, stretch=3)
 
-        right_w = QWidget()
-        right_lay = QVBoxLayout(right_w)
-        right_lay.setContentsMargins(0, 0, 0, 0)
-        right_lay.setSpacing(0)
+        right_lay = right_container_lay
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-
-        right_scroll = QScrollArea()
-        right_scroll.setWidgetResizable(True)
-        right_scroll.setWidget(right_w)
-        right_scroll.setStyleSheet("background: transparent; border: none;")
-        right_container_lay.addWidget(right_scroll, stretch=1)
 
         # Akış şeması kutular + oklar
         flow_items = [
@@ -750,7 +741,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay.setContentsMargins(12, 8, 12, 8)
 
         title = QLabel("Adım 1 — Padding ve Blok Yapısı")
-        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
@@ -773,7 +764,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
                 for i in range(bc)
             )
         )
-        info.setFont(QFont("Courier New", 12))
+        info.setFont(QFont("Courier New", 10))
         info.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
         info.setWordWrap(True)
         info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -784,7 +775,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
         cl = QVBoxLayout(card)
-        cl.setContentsMargins(20, 16, 20, 16)
+        cl.setContentsMargins(10, 8, 10, 8)
         cl.addWidget(info)
 
         scroll = QScrollArea()

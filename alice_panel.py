@@ -101,11 +101,11 @@ class AlicePanel(QWidget):
 
     def show_animation(self, widget: QWidget) -> None:
         """Normal içeriği gizle, animasyon widget'ını QScrollArea içinde göster."""
-        # Önceki animasyon varsa temizle
         old = self._anim_scroll.takeWidget()
         if old is not None and old is not widget:
+            if hasattr(old, "_stop_timers"):
+                old._stop_timers()
             old.deleteLater()
-        # Yeni widget'ı ekle ve container'ı göster
         self._anim_scroll.setWidget(widget)
         for w in self._normal_widgets:
             w.setVisible(False)
@@ -115,6 +115,8 @@ class AlicePanel(QWidget):
         """Animasyonu temizle ve normal içeriği geri getir."""
         old = self._anim_scroll.takeWidget()
         if old is not None:
+            if hasattr(old, "_stop_timers"):
+                old._stop_timers()
             old.deleteLater()
         self._anim_container.setVisible(False)
         for w in self._normal_widgets:

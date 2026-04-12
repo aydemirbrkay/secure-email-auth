@@ -245,6 +245,10 @@ class CryptoAnimationWindow(QWidget):
             self._render_step(self.current_step)
             self._progress.setValue(self.current_step + 1)
 
+    def _stop_timers(self) -> None:
+        """Stop the base navigation timer. Subclasses should call super and stop their own timers."""
+        self._timer.stop()
+
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
         if self.current_step == 0:

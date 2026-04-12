@@ -74,23 +74,30 @@ class CryptoAnimationWindow(QWidget):
         total_steps: int,
         manual_mode: bool = False,
         parent: QWidget | None = None,
+        on_close: "callable | None" = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.Window)
+        self._on_close = on_close
+
+        # Standalone modda bağımsız pencere olarak aç
+        if on_close is None:
+            self.setWindowFlags(Qt.WindowType.Window)
+            self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+
         self.setWindowTitle(title)
-        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setStyleSheet(
             f"background-color: {ANIM_COLORS['bg_main']}; "
             f"color: {ANIM_COLORS['text_primary']};"
         )
 
-        # Ekranın %85'i kadar boyutlandır
-        screen = QApplication.primaryScreen()
-        if screen:
-            g = screen.availableGeometry()
-            self.resize(int(g.width() * 0.85), int(g.height() * 0.85))
-        else:
-            self.resize(1200, 800)
+        # Ekranın %85'i kadar boyutlandır — sadece standalone modda
+        if on_close is None:
+            screen = QApplication.primaryScreen()
+            if screen:
+                g = screen.availableGeometry()
+                self.resize(int(g.width() * 0.82), int(g.height() * 0.85))
+            else:
+                self.resize(1280, 860)
 
         self.manual_mode: bool = manual_mode
         self.current_step: int = 0
@@ -171,7 +178,10 @@ class CryptoAnimationWindow(QWidget):
 
         btn_close = QPushButton("✕  Kapat")
         btn_close.setStyleSheet(_CLOSE_STYLE)
-        btn_close.clicked.connect(self.close)
+        if self._on_close is not None:
+            btn_close.clicked.connect(self._on_close)
+        else:
+            btn_close.clicked.connect(self.close)
         controls.addWidget(btn_close)
 
         layout.addLayout(controls)

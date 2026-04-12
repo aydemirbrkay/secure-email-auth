@@ -6,16 +6,18 @@ SHA256AnimationWindow — SHA-256 hash sürecini görselleştirir.
 • Manuel navigasyon: kullanıcı ◀ / ▶ ile ilerler
 """
 from __future__ import annotations
-from PyQt6.QtCore import Qt, QRect, QPoint
+from PyQt6.QtCore import Qt, QRect, QPoint, QTimer
 from PyQt6.QtGui import (
     QColor, QFont, QPainter, QPen, QBrush, QPolygon,
 )
 from PyQt6.QtWidgets import (
-    QFrame, QLabel, QScrollArea, QSizePolicy,
-    QVBoxLayout, QHBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
+    QVBoxLayout, QWidget,
 )
 from .base import CryptoAnimationWindow, ANIM_COLORS
 from .sha256_pure import sha256_steps
+
+_SNAPS_PER_BLOCK = 9  # rounds 1,9,17,25,33,41,49,57,64
 
 # Renk eşlemesi — her register farklı renk
 _REG_COLORS = [
@@ -46,6 +48,15 @@ class _SHA256DiagramWidget(QWidget):
       Oklar      : A→T2, E→T1, D+T1→E', T1+T2→A'
     """
 
+    # Animasyon aşamaları:
+    # 0 = giriş registerları
+    # 1 = A→T2 vurgusu
+    # 2 = E→T1 vurgusu
+    # 3 = T2→A' vurgusu
+    # 4 = T1→E' vurgusu
+    # 5 = tüm çıkış registerları (tamamlandı)
+    _ANIM_PHASES = 6
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumHeight(340)
@@ -60,6 +71,10 @@ class _SHA256DiagramWidget(QWidget):
         self._w = "--------"
         self._k = "--------"
         self._round_no = 0
+        # Animasyon
+        self._phase = self._ANIM_PHASES  # başlangıçta statik
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._next_phase)
 
     def set_data(
         self,
@@ -78,6 +93,16 @@ class _SHA256DiagramWidget(QWidget):
         self._w = w
         self._k = k
         self._round_no = round_no
+        # Animasyonu başlat
+        self._phase = 0
+        self._anim_timer.start(380)
+        self.update()
+
+    def _next_phase(self) -> None:
+        self._phase += 1
+        if self._phase >= self._ANIM_PHASES:
+            self._phase = self._ANIM_PHASES
+            self._anim_timer.stop()
         self.update()
 
     # --- QPainter çizimi ---
@@ -86,12 +111,13 @@ class _SHA256DiagramWidget(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        ph = self._phase  # mevcut animasyon aşaması
         W = self.width()
         box_w = max(60, min(80, (W - 80) // 8))
         box_h = 44
         gap = max(3, (W - 80 - 8 * box_w) // 7)
         total = 8 * box_w + 7 * gap
-        ox = (W - total) // 2  # yatay merkez
+        ox = (W - total) // 2
 
         top_y = 12
         mid_y = top_y + box_h + 50
@@ -101,77 +127,104 @@ class _SHA256DiagramWidget(QWidget):
         font_val = QFont("Courier New", 8)
         font_mid = QFont("Courier New", 9)
 
+        # Aşamaya göre vurgu belirleme
+        # ph 0: sadece giriş
+        # ph 1: A→T2 aktif
+        # ph 2: E→T1 aktif
+        # ph 3: T2→A' aktif
+        # ph 4: T1→E' aktif
+        # ph 5+: tümü göster
+        highlight_a_in   = ph >= 1  # A giriş registerı vurgusu
+        highlight_e_in   = ph >= 2
+        highlight_t2     = ph >= 1
+        highlight_t1     = ph >= 2
+        highlight_a_out  = ph >= 3
+        highlight_e_out  = ph >= 4
+        show_out         = ph >= 3
+
         # ── Üst satır: giriş registerları ──
+        # A ve E aşamaya göre daha parlak gösterilir
+        custom_in_colors = list(_REG_COLORS)
+        if highlight_a_in:
+            custom_in_colors[0] = ANIM_COLORS["accent_blue"]  # A parlar
+        if highlight_e_in:
+            custom_in_colors[4] = ANIM_COLORS["accent_yellow"]  # E parlar
         self._draw_register_row(
             p, self._regs_in, ox, top_y, box_w, box_h, gap,
-            font_lbl, font_val, suffix=""
+            font_lbl, font_val, suffix="",
+            custom_colors=custom_in_colors,
         )
 
-        # ── T2 ve T1 kutuları ──
+        # ── T2 kutusu ──
         t2_x = ox
         t2_w = int(total * 0.38)
         t1_x = ox + total - int(total * 0.52)
         t1_w = int(total * 0.52)
 
+        t2_border = QColor(ANIM_COLORS["accent_mauve"])
+        t2_fill = QColor("#4a3b5c") if highlight_t2 else QColor("#3b3b5c")
+        self._draw_box(p, t2_x, mid_y, t2_w, 72, t2_fill, t2_border)
         p.setFont(font_mid)
-
-        # T2 kutusu
-        self._draw_box(p, t2_x, mid_y, t2_w, 72,
-                       QColor("#3b3b5c"), QColor(ANIM_COLORS["accent_mauve"]))
-        p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
+        p.setPen(t2_border)
         p.drawText(QRect(t2_x + 4, mid_y + 4, t2_w - 8, 20),
                    Qt.AlignmentFlag.AlignCenter, "T2 = Σ0(A) + Maj(A,B,C)")
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(t2_x + 4, mid_y + 26, t2_w - 8, 20),
-                   Qt.AlignmentFlag.AlignCenter, f"= {self._t2}")
+                   Qt.AlignmentFlag.AlignCenter, f"= {self._t2}" if ph >= 1 else "= ...")
 
-        # T1 kutusu
-        self._draw_box(p, t1_x, mid_y, t1_w, 72,
-                       QColor("#3b3b5c"), QColor(ANIM_COLORS["accent_yellow"]))
-        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        # ── T1 kutusu ──
+        t1_border = QColor(ANIM_COLORS["accent_yellow"])
+        t1_fill = QColor("#4a4a2c") if highlight_t1 else QColor("#3b3b5c")
+        self._draw_box(p, t1_x, mid_y, t1_w, 72, t1_fill, t1_border)
+        p.setPen(t1_border)
         p.drawText(QRect(t1_x + 4, mid_y + 4, t1_w - 8, 20),
                    Qt.AlignmentFlag.AlignCenter,
                    "T1 = Σ1(E) + Ch(E,F,G) + H + K + W")
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(t1_x + 4, mid_y + 26, t1_w - 8, 20),
-                   Qt.AlignmentFlag.AlignCenter, f"= {self._t1}")
+                   Qt.AlignmentFlag.AlignCenter, f"= {self._t1}" if ph >= 2 else "= ...")
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         p.drawText(QRect(t1_x + 4, mid_y + 48, t1_w - 8, 20),
                    Qt.AlignmentFlag.AlignCenter,
                    f"K={self._k[:6]}  W={self._w[:6]}")
 
         # ── Oklar ──
-        pen = QPen(QColor(ANIM_COLORS["accent_blue"]), 2)
-        pen.setStyle(Qt.PenStyle.SolidLine)
-        p.setPen(pen)
+        a_arrow_w = 3 if highlight_a_in else 1
+        e_arrow_w = 3 if highlight_e_in else 1
 
-        # A'nın merkezi → T2 kutusunun üstü
+        # A → T2
+        pen = QPen(QColor(ANIM_COLORS["accent_blue"]), a_arrow_w)
+        p.setPen(pen)
         a_cx = ox + box_w // 2
         p.drawLine(a_cx, top_y + box_h, a_cx, top_y + box_h + 20)
         p.drawLine(a_cx, top_y + box_h + 20, t2_x + t2_w // 2, mid_y)
         self._arrowhead(p, t2_x + t2_w // 2, mid_y)
 
-        # E'nin merkezi → T1 kutusunun üstü
+        # E → T1
+        pen = QPen(QColor(ANIM_COLORS["accent_yellow"]), e_arrow_w)
+        p.setPen(pen)
         e_cx = ox + 4 * (box_w + gap) + box_w // 2
         p.drawLine(e_cx, top_y + box_h, e_cx, top_y + box_h + 20)
         p.drawLine(e_cx, top_y + box_h + 20, t1_x + t1_w // 2, mid_y)
         self._arrowhead(p, t1_x + t1_w // 2, mid_y)
 
-        # T2 → A' (yeni A = T1 + T2)
-        pen2 = QPen(QColor(ANIM_COLORS["accent_mauve"]), 2)
+        # T2 → A'
+        t2a_w = 3 if highlight_a_out else 1
+        pen2 = QPen(QColor(ANIM_COLORS["accent_mauve"]), t2a_w)
         p.setPen(pen2)
         a_out_cx = ox + box_w // 2
         p.drawLine(t2_x + t2_w // 2, mid_y + 72, a_out_cx, bot_y)
         self._arrowhead(p, a_out_cx, bot_y)
 
-        # T1 → E' (yeni E = D + T1)
-        pen3 = QPen(QColor(ANIM_COLORS["accent_yellow"]), 2)
+        # T1 → E'
+        t1e_w = 3 if highlight_e_out else 1
+        pen3 = QPen(QColor(ANIM_COLORS["accent_yellow"]), t1e_w)
         p.setPen(pen3)
         e_out_cx = ox + 4 * (box_w + gap) + box_w // 2
         p.drawLine(t1_x + t1_w // 2, mid_y + 72, e_out_cx, bot_y)
         self._arrowhead(p, e_out_cx, bot_y)
 
-        # D → E' (D + T1 → yeni E)
+        # D → E' (kesikli)
         pen4 = QPen(QColor(ANIM_COLORS["accent_green"]), 1)
         pen4.setStyle(Qt.PenStyle.DashLine)
         p.setPen(pen4)
@@ -179,26 +232,48 @@ class _SHA256DiagramWidget(QWidget):
         p.drawLine(d_cx, top_y + box_h, d_cx, bot_y)
         p.drawLine(d_cx, bot_y, e_out_cx, bot_y)
 
-        # Kaydırma okları: B←A, C←B ... (basit sağa oklar, üst satırın altı)
+        # Kaydırma okları: B←A, C←B ... (noktalı)
         pen5 = QPen(QColor(ANIM_COLORS["text_muted"]), 1)
         pen5.setStyle(Qt.PenStyle.DotLine)
         p.setPen(pen5)
         shift_y = top_y + box_h + 8
         for i in range(1, 8):
             if i == 4:
-                continue  # E farklı hesaplanıyor, atla
+                continue
             src_cx = ox + (i - 1) * (box_w + gap) + box_w // 2
             dst_cx = ox + i * (box_w + gap) + box_w // 2
             p.drawLine(src_cx, shift_y, dst_cx, shift_y)
             self._arrowhead(p, dst_cx, shift_y, size=5)
 
         # ── Alt satır: çıkış registerları ──
+        custom_out_colors = list(_REG_COLORS)
+        if highlight_a_out:
+            custom_out_colors[0] = ANIM_COLORS["accent_mauve"]  # A' vurgusu
+        if highlight_e_out:
+            custom_out_colors[4] = ANIM_COLORS["accent_yellow"]  # E' vurgusu
+        out_vals = self._regs_out if show_out else ["--------"] * 8
         self._draw_register_row(
-            p, self._regs_out, ox, bot_y, box_w, box_h, gap,
-            font_lbl, font_val, suffix="'"
+            p, out_vals, ox, bot_y, box_w, box_h, gap,
+            font_lbl, font_val, suffix="'",
+            custom_colors=custom_out_colors,
         )
 
-        # Round numarası
+        # Aşama etiketi (sağ alt)
+        phase_labels = [
+            "Giriş registerları →",
+            "A → T2 (Σ0 + Maj) ►",
+            "E → T1 (Σ1 + Ch + H + K + W) ►",
+            "T2 + T1 → A' ►",
+            "D + T1 → E' ►",
+            "✓ Round tamamlandı",
+        ]
+        p.setPen(QColor(ANIM_COLORS["accent_blue"] if ph < 5 else ANIM_COLORS["accent_green"]))
+        p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        lbl_idx = min(ph, len(phase_labels) - 1)
+        p.drawText(QRect(0, 0, W, 16), Qt.AlignmentFlag.AlignLeft,
+                   f"  {phase_labels[lbl_idx]}")
+
+        # Round numarası (sağ)
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         p.setFont(QFont("Segoe UI", 10))
         p.drawText(QRect(0, 0, W, 14), Qt.AlignmentFlag.AlignRight,
@@ -214,9 +289,11 @@ class _SHA256DiagramWidget(QWidget):
         box_w: int, box_h: int, gap: int,
         font_lbl: QFont, font_val: QFont,
         suffix: str,
+        custom_colors: list[str] | None = None,
     ) -> None:
+        colors = custom_colors if custom_colors is not None else _REG_COLORS
         for i, (lbl, val, col) in enumerate(
-            zip(_REG_LABELS, values, _REG_COLORS)
+            zip(_REG_LABELS, values, colors)
         ):
             x = ox + i * (box_w + gap)
             self._draw_box(p, x, y, box_w, box_h,
@@ -253,6 +330,347 @@ class _SHA256DiagramWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Register demo widget — intro için SHA-256 sıkıştırma fonksiyonunu simüle eder
+# ---------------------------------------------------------------------------
+
+class _RegisterDemoWidget(QWidget):
+    """
+    SHA-256 intro ekranında gösterilen canlı A-H register animasyonu.
+    72-tick döngü (120ms):
+      0-23  : Giriş registerları sırayla parlar
+      24-47 : T2 ve T1 kutuları sırayla canlanır
+      48-71 : Çıkış registerları birer birer belirir
+    """
+
+    _PHASE_NAMES = [
+        "Giriş Değerleri  (A–H)",
+        "T1 / T2  Hesaplama",
+        "Yeni Register Değerleri  (A'–H')",
+    ]
+    _DEMO_IN  = ["6a09e667", "bb67ae85", "3c6ef372", "a54ff53a",
+                 "510e527f", "9b05688c", "1f83d9ab", "5be0cd19"]
+    _DEMO_OUT = ["5d6aebb1", "9e7c3f82", "a1b4c5d6", "7f8e9a0b",
+                 "4c3d2e1f", "8b7a6c5d", "2f1e0d9c", "b8a79685"]
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._tick = 0
+        self._round_no = 1
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._step)
+        self._timer.start(120)
+        self.setMinimumSize(240, 170)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def _step(self) -> None:
+        self._tick += 1
+        if (self._tick % 72) == 71:
+            self._round_no = (self._round_no % 64) + 1
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W, H = self.width(), self.height()
+        label_h = 26
+        margin = 10
+
+        phase = (self._tick // 24) % 3
+        sub   = self._tick % 24
+
+        # Boyutlar
+        avail_w = W - 2 * margin
+        box_w = max(34, min(56, avail_w // 8 - 4))
+        gap   = max(2, (avail_w - 8 * box_w) // 7)
+        box_h = 40
+        total_w = 8 * box_w + 7 * gap
+        ox = (W - total_w) // 2
+
+        top_y = label_h + 6
+        mid_h = 48
+        mid_y = top_y + box_h + 18
+        bot_y = mid_y + mid_h + 14
+
+        font_lbl   = QFont("Segoe UI", 8, QFont.Weight.Bold)
+        font_val   = QFont("Courier New", 7)
+        font_mid   = QFont("Courier New", 8)
+        font_phase = QFont("Segoe UI", 9, QFont.Weight.Bold)
+
+        # Phase label
+        phase_color = [
+            ANIM_COLORS["accent_blue"],
+            ANIM_COLORS["accent_yellow"],
+            ANIM_COLORS["accent_green"],
+        ][phase]
+        p.setFont(font_phase)
+        p.setPen(QColor(phase_color))
+        p.drawText(QRect(0, 2, W, label_h),
+                   Qt.AlignmentFlag.AlignCenter,
+                   f"Round {self._round_no}/64  —  {self._PHASE_NAMES[phase]}")
+
+        # ── Üst satır: giriş registerları ──
+        lit_in = sub // 3 if phase == 0 else 8
+        for i in range(8):
+            x   = ox + i * (box_w + gap)
+            col = _REG_COLORS[i]
+            active = (i == lit_in) if phase == 0 else False
+            fill   = QColor(col + "55") if active else QColor(col + "22")
+            border = QColor(col) if (phase == 0 or phase == 1) else QColor(ANIM_COLORS["border"])
+            p.setBrush(QBrush(fill))
+            p.setPen(QPen(border, 1))
+            p.drawRoundedRect(x, top_y, box_w, box_h, 4, 4)
+            p.setFont(font_lbl)
+            p.setPen(QColor(col if phase <= 1 else ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x, top_y + 2, box_w, 14),
+                       Qt.AlignmentFlag.AlignCenter, _REG_LABELS[i])
+            p.setFont(font_val)
+            p.setPen(QColor(ANIM_COLORS["text_primary"] if phase <= 1 else ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x, top_y + 18, box_w, 18),
+                       Qt.AlignmentFlag.AlignCenter, self._DEMO_IN[i])
+
+        # ── Orta: T2 ve T1 kutuları ──
+        t2_w = int(total_w * 0.36)
+        t1_w = int(total_w * 0.52)
+        t2_x = ox
+        t1_x = ox + total_w - t1_w
+        t2_lit = (phase == 1 and sub < 12)
+        t1_lit = (phase == 1 and sub >= 12)
+
+        t2_fill   = QColor("#4a3b5c" if t2_lit else "#26263a")
+        t2_border = QColor(ANIM_COLORS["accent_mauve"] if t2_lit else ANIM_COLORS["border"])
+        p.setBrush(QBrush(t2_fill))
+        p.setPen(QPen(t2_border, 2 if t2_lit else 1))
+        p.drawRoundedRect(t2_x, mid_y, t2_w, mid_h, 4, 4)
+        p.setFont(font_mid)
+        p.setPen(t2_border)
+        p.drawText(QRect(t2_x + 2, mid_y + 4, t2_w - 4, 18),
+                   Qt.AlignmentFlag.AlignCenter, "T2 = Σ0(A) + Maj(A,B,C)")
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(t2_x + 2, mid_y + 26, t2_w - 4, 16),
+                   Qt.AlignmentFlag.AlignCenter, "a1b2c3d4" if t2_lit else "...")
+
+        t1_fill   = QColor("#4a4a2c" if t1_lit else "#26263a")
+        t1_border = QColor(ANIM_COLORS["accent_yellow"] if t1_lit else ANIM_COLORS["border"])
+        p.setBrush(QBrush(t1_fill))
+        p.setPen(QPen(t1_border, 2 if t1_lit else 1))
+        p.drawRoundedRect(t1_x, mid_y, t1_w, mid_h, 4, 4)
+        p.setPen(t1_border)
+        p.drawText(QRect(t1_x + 2, mid_y + 4, t1_w - 4, 18),
+                   Qt.AlignmentFlag.AlignCenter, "T1 = Σ1(E) + Ch(E,F,G) + H + K + W")
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(t1_x + 2, mid_y + 26, t1_w - 4, 16),
+                   Qt.AlignmentFlag.AlignCenter, "e5f6a7b8" if t1_lit else "...")
+
+        # ── Alt satır: çıkış registerları ──
+        revealed = sub // 3 if phase == 2 else (-1 if phase < 2 else 8)
+        for i in range(8):
+            x   = ox + i * (box_w + gap)
+            col = _REG_COLORS[i]
+            shown = (phase == 2 and i <= revealed)
+            active = (phase == 2 and i == revealed)
+            fill   = QColor(col + "44") if active else (QColor(ANIM_COLORS["accent_green"] + "22") if shown else QColor(col + "0a"))
+            border = QColor(ANIM_COLORS["accent_green"] if shown else ANIM_COLORS["border"])
+            p.setBrush(QBrush(fill))
+            p.setPen(QPen(border, 1))
+            p.drawRoundedRect(x, bot_y, box_w, box_h, 4, 4)
+            p.setFont(font_lbl)
+            p.setPen(QColor(ANIM_COLORS["accent_green"] if shown else ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x, bot_y + 2, box_w, 14),
+                       Qt.AlignmentFlag.AlignCenter, _REG_LABELS[i] + "'")
+            p.setFont(font_val)
+            val = self._DEMO_OUT[i] if shown else "--------"
+            p.setPen(QColor(ANIM_COLORS["text_primary"] if shown else ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x, bot_y + 18, box_w, 18),
+                       Qt.AlignmentFlag.AlignCenter, val)
+
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# SHA-256 Ön Tanıtma Widget'ı
+# ---------------------------------------------------------------------------
+
+class _SHA256IntroWidget(QWidget):
+    """
+    SHA-256 ön tanıtma widget'ı.
+    Sol  : canlı A-H register animasyonu (_RegisterDemoWidget)
+    Sağ  : SHA-256 süreç akış şeması (kademeli görünüm, 500ms/adım)
+    Alt  : "Görselleştirmeyi Başlat" butonu
+    """
+
+    def __init__(self, on_start: "callable", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._on_start = on_start
+        self._phase = 0
+        self._reveal_widgets: list[QWidget] = []
+        self._reveal_timer = QTimer(self)
+        self._reveal_timer.timeout.connect(self._reveal_next)
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        main = QVBoxLayout(self)
+        main.setContentsMargins(12, 6, 12, 6)
+        main.setSpacing(4)
+
+        # Başlık
+        title = QLabel("SHA-256  Hash Algoritması")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main.addWidget(title)
+
+        # ── Yatay bölüm: sol=register demo, sağ=akış şeması ──
+        h_row = QHBoxLayout()
+        h_row.setSpacing(12)
+        main.addLayout(h_row, stretch=1)
+
+        # Sol: register animasyonu
+        left_frame = QFrame()
+        left_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
+        )
+        left_lay = QVBoxLayout(left_frame)
+        left_lay.setContentsMargins(8, 6, 8, 6)
+        left_lay.setSpacing(2)
+        demo_lbl = QLabel("Sıkıştırma Fonksiyonu Önizlemesi")
+        demo_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        demo_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        demo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_lay.addWidget(demo_lbl)
+        self._reg_demo = _RegisterDemoWidget()
+        left_lay.addWidget(self._reg_demo, stretch=1)
+        h_row.addWidget(left_frame, stretch=2)
+
+        # Sağ: akış şeması — scroll area ile sarılı konteyner
+        right_container = QWidget()
+        right_container_lay = QVBoxLayout(right_container)
+        right_container_lay.setContentsMargins(0, 0, 0, 0)
+        right_container_lay.setSpacing(4)
+        h_row.addWidget(right_container, stretch=3)
+
+        right_w = QWidget()
+        right_lay = QVBoxLayout(right_w)
+        right_lay.setContentsMargins(0, 0, 0, 0)
+        right_lay.setSpacing(0)
+        right_lay.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+
+        right_scroll = QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setWidget(right_w)
+        right_scroll.setStyleSheet("background: transparent; border: none;")
+        right_container_lay.addWidget(right_scroll, stretch=1)
+
+        # Akış şeması kutular + oklar
+        flow_items = [
+            ("plain",  "📨  Mesaj Girişi",                      ANIM_COLORS["text_secondary"],  None),
+            ("arrow",  None, None, None),
+            ("detail", "🔢  Padding  (512-bit katı)",           ANIM_COLORS["accent_peach"],
+             ["→  '1' biti eklenir",
+              "→  '0' bitleriyle 512-bit katına tamamlanır",
+              "→  Sonuna 64-bit mesaj uzunluğu yazılır"]),
+            ("arrow",  None, None, None),
+            ("detail", "📦  Blok Bölme  (N × 512-bit)",        ANIM_COLORS["accent_blue"],
+             ["→  Her blok 64 bayt / 512 bit",
+              "→  16 adet 32-bit kelime  (W0 – W15)"]),
+            ("arrow",  None, None, None),
+            ("detail", "⚙️  Sıkıştırma  (64 Round / Blok)",    ANIM_COLORS["accent_mauve"],
+             ["→  Çalışma değişkenleri: A, B, C, D, E, F, G, H",
+              "→  T1 = Σ1(E) + Ch(E,F,G) + H + Kᵢ + Wᵢ",
+              "→  T2 = Σ0(A) + Maj(A,B,C)"]),
+            ("arrow",  None, None, None),
+            ("plain",  "➕  H Değerlerini Güncelle",            ANIM_COLORS["accent_yellow"],   None),
+            ("arrow",  None, None, None),
+            ("plain",  "🔒  256-bit SHA-256 Hash",              ANIM_COLORS["accent_green"],    None),
+        ]
+
+        for kind, text, color, subs in flow_items:
+            if kind == "arrow":
+                w = self._make_arrow()
+            elif kind == "plain":
+                w = self._make_box(text, color)
+            else:
+                w = self._make_detail_box(text, subs, color)
+            right_lay.addWidget(w, alignment=Qt.AlignmentFlag.AlignHCenter)
+            w.setVisible(False)
+            self._reveal_widgets.append(w)
+
+        # Başla butonu — scroll area dışında, her zaman görünür konumda
+        self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
+        self._btn_start.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._btn_start.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: {ANIM_COLORS['bg_main']}; border: none; "
+            f"border-radius: 8px; padding: 8px 24px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
+        self._btn_start.setVisible(False)
+        self._btn_start.clicked.connect(self._on_start)
+        right_container_lay.addWidget(self._btn_start, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self._reveal_widgets.append(self._btn_start)
+
+    @staticmethod
+    def _make_box(text: str, color: str, width: int = 280) -> QFrame:
+        f = QFrame()
+        f.setFixedWidth(width)
+        f.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {color}; border-radius: 8px; }}"
+        )
+        lay = QVBoxLayout(f)
+        lay.setContentsMargins(10, 6, 10, 6)
+        lbl = QLabel(text)
+        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl.setStyleSheet(f"color: {color}; border: none;")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(lbl)
+        return f
+
+    @staticmethod
+    def _make_detail_box(title: str, items: list[str], color: str) -> QFrame:
+        f = QFrame()
+        f.setFixedWidth(370)
+        f.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {color}; border-radius: 8px; }}"
+        )
+        lay = QVBoxLayout(f)
+        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setSpacing(2)
+        t = QLabel(title)
+        t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        t.setStyleSheet(f"color: {color}; border: none;")
+        t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(t)
+        for item in items:
+            o = QLabel(item)
+            o.setFont(QFont("Segoe UI", 9))
+            o.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
+            lay.addWidget(o)
+        return f
+
+    @staticmethod
+    def _make_arrow() -> QLabel:
+        lbl = QLabel("⬇")
+        lbl.setFont(QFont("Segoe UI", 12))
+        lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; border: none;")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setFixedHeight(16)
+        return lbl
+
+    def start(self) -> None:
+        self._reveal_timer.start(500)
+
+    def _reveal_next(self) -> None:
+        if self._phase >= len(self._reveal_widgets):
+            self._reveal_timer.stop()
+            return
+        self._reveal_widgets[self._phase].setVisible(True)
+        self._phase += 1
+
+
+# ---------------------------------------------------------------------------
 # SHA-256 Animasyon Penceresi
 # ---------------------------------------------------------------------------
 
@@ -275,6 +693,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         message: str,
         expected_hash: str,
         parent: QWidget | None = None,
+        on_close: "callable | None" = None,
     ) -> None:
         self._message = message
         self._expected_hash = expected_hash
@@ -290,6 +709,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             "🔐  SHA-256 Hash Animasyonu",
             total,
             manual_mode=True,
+            on_close=on_close,
         )
         self._snaps = snaps
 
@@ -303,17 +723,24 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._stack = QStackedWidget()
         self.content_layout.addWidget(self._stack, stretch=1)
 
-        # Sayfa 0 — Padding
+        # Sayfa 0 — Ön tanıtma
+        self._page_intro = _SHA256IntroWidget(on_start=self._switch_to_content)
+        self._stack.addWidget(self._page_intro)
+
+        # Sayfa 1 — Padding
         self._page_padding = self._make_padding_page()
         self._stack.addWidget(self._page_padding)
 
-        # Sayfa 1 — Kompresyon diyagramı (tüm snapshot'lar için tek sayfa, veri güncellenir)
+        # Sayfa 2 — Kompresyon diyagramı (tüm snapshot'lar için tek sayfa, veri güncellenir)
         self._page_diagram = self._make_diagram_page()
         self._stack.addWidget(self._page_diagram)
 
-        # Sayfa 2 — Eşleşme
+        # Sayfa 3 — Eşleşme
         self._page_match = self._make_match_page()
         self._stack.addWidget(self._page_match)
+
+        # Intro animasyonunu başlat
+        self._page_intro.start()
 
     def _make_padding_page(self) -> QWidget:
         w = QWidget()
@@ -436,18 +863,18 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._stack.setCurrentWidget(self._page_diagram)
 
         # Hangi blok, hangi round?
-        snap_round = snap["round"]  # 1, 32, veya 64
-        block_no = snap_idx // 3 + 1  # 3 snapshot per block
+        snap_round = snap["round"]
+        block_no = snap_idx // _SNAPS_PER_BLOCK + 1
         self._diag_title.setText(
             f"Blok {block_no} / {self._data['blocks_count']}  —  "
             f"Sıkıştırma Round {snap_round} / 64"
         )
 
         # Mevcut register değerleri (bu snapshot'taki çıkış)
-        regs_out = snap["registers"]  # [a, b, c, d, e, f, g, h] sonrası
+        regs_out = snap["registers"]
 
         # Bir önceki snapshot'tan giriş değerleri (veya H0 sabitleri)
-        if snap_idx > 0 and snap_idx % 3 != 0:
+        if snap_idx > 0 and snap_idx % _SNAPS_PER_BLOCK != 0:
             regs_in = self._snaps[snap_idx - 1]["registers"]
         else:
             regs_in = self._data["initial_h"]
@@ -478,17 +905,78 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         icon = "✅" if match else "❌"
         color = ANIM_COLORS["accent_green"] if match else ANIM_COLORS["accent_peach"]
 
-        snaps = self._data["round_snapshots"]
-        snap_summary = "\n".join(
-            f"  Round {s['round']:>2}:  A={s['a']}  E={s['e']}"
-            for s in snaps
+        # Son blok toplama (H_önceki + çalışma değişkenleri = H_sonraki)
+        pre_h  = self._data["pre_final_h"]    # 8 değer
+        work   = self._data["final_working"]  # a,b,c,d,e,f,g,h
+        parts  = self._data["final_h_parts"]  # sonuç
+
+        reg_labels = ["A", "B", "C", "D", "E", "F", "G", "H"]
+        h_labels   = ["H0", "H1", "H2", "H3", "H4", "H5", "H6", "H7"]
+
+        bc = self._data["blocks_count"]
+
+        assembly_lines = []
+        # ── A–H'nin nereden geldiğini açıkla ──
+        assembly_lines.append("━━  A – H  ÇALIŞMA DEĞİŞKENLERİ NASIL OLUŞTU?  ━━")
+        assembly_lines.append("")
+        assembly_lines.append(
+            f"Blok {bc}/{bc} işlenmeye başlamadan önce A–H,  önceki H değerleriyle başlatıldı:"
         )
-        self._match_lbl.setText(
-            f"64-round sıkıştırma tamamlandı.\n\n"
-            f"Round anlık görüntüleri:\n{snap_summary}\n\n"
-            f"{'─' * 64}\n\n"
-            f"Animasyonun hesapladığı:\n  {computed}\n\n"
-            f"crypto_core çıktısı:\n  {self._expected_hash}\n\n"
-            f"{icon}  Eşleşme Başarılı"
+        for i in range(8):
+            assembly_lines.append(
+                f"  {reg_labels[i]}  ←  {h_labels[i]} = {pre_h[i]}"
+            )
+        assembly_lines.append("")
+        assembly_lines.append("Ardından 64 round boyunca her turda:")
+        assembly_lines.append("  T2 = Σ0(A) + Maj(A,B,C)")
+        assembly_lines.append("  T1 = Σ1(E) + Ch(E,F,G) + H + K[i] + W[i]")
+        assembly_lines.append("  yeni A = T1 + T2    yeni E = D + T1")
+        assembly_lines.append("  B←A, C←B, D←C, F←E, G←F, H←G")
+        assembly_lines.append("")
+        assembly_lines.append("64 round sonunda elde edilen çalışma değişkenleri:")
+        for i in range(8):
+            assembly_lines.append(f"  {reg_labels[i]} = {work[i]}")
+        assembly_lines.append("")
+        assembly_lines.append("─" * 60)
+        assembly_lines.append("Son adım — H_yeni = H_önceki + çalışma_değişkeni:")
+        assembly_lines.append("─" * 60)
+        assembly_lines.append(
+            f"  {'Önceki H':>10}   {'+ Çalışma':>10}   {'= Yeni H':>10}"
         )
+        for i in range(8):
+            assembly_lines.append(
+                f"  {h_labels[i]}={pre_h[i]}  +  {reg_labels[i]}={work[i]}"
+                f"  =  {parts[i]}"
+            )
+
+        assembly_lines.append("")
+        assembly_lines.append("Birleştirme: H0 ‖ H1 ‖ H2 ‖ H3 ‖ H4 ‖ H5 ‖ H6 ‖ H7")
+        assembly_lines.append("─" * 60)
+
+        # 256-bit hash'i 4 satırda göster (32 char + 32 char)
+        h = computed
+        assembly_lines.append(f"  {h[:16]}  {h[16:32]}")
+        assembly_lines.append(f"  {h[32:48]}  {h[48:64]}")
+        assembly_lines.append("")
+        assembly_lines.append(f"= {len(computed)*4}-bit SHA-256 hash")
+        assembly_lines.append("")
+        assembly_lines.append("─" * 60)
+        assembly_lines.append(f"crypto_core çıktısı: {self._expected_hash[:32]}...")
+        assembly_lines.append(f"{icon}  Eşleşme: {'Başarılı' if match else 'HATA'}")
+
+        self._match_lbl.setText("\n".join(assembly_lines))
         self._match_lbl.setStyleSheet(f"color: {color};")
+
+    # ------------------------------------------------------------------
+    # Navigasyon yardımcıları
+    # ------------------------------------------------------------------
+
+    def _switch_to_content(self) -> None:
+        """Intro'dan padding sayfasına geç ve step 0'ı render et."""
+        self._stack.setCurrentWidget(self._page_padding)
+        self._render_step(0)
+        self._progress.setValue(1)
+
+    # showEvent override — intro kendi timer'ını yönetiyor, base class'ı atla
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        QWidget.showEvent(self, event)

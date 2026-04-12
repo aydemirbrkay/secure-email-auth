@@ -5,6 +5,7 @@ Kullanıcı ◀ Geri / İleri ▶ butonlarıyla ilerler (manual_mode=True).
 Demo için küçük değerler kullanılır; son adımda gerçek Base64 eşleşmesi yapılır.
 """
 from __future__ import annotations
+import base64
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
@@ -16,6 +17,22 @@ _N = _P * _Q            # 3233
 _PHI = (_P - 1) * (_Q - 1)  # 3120
 _E = 17
 _D = pow(_E, -1, _PHI)  # 2753
+
+# Demo değerlerin gerçek DER → Base64 dönüşümü
+def _der_int(v: int) -> bytes:
+    """Bir tam sayıyı DER INTEGER olarak kodlar."""
+    b = v.to_bytes((v.bit_length() + 8) // 8, "big")
+    if b[0] >= 0x80:          # işaret biti sıfır olmalı → 0x00 öneki ekle
+        b = b"\x00" + b
+    return bytes([0x02, len(b)]) + b
+
+_DER_N   = _der_int(_N)
+_DER_E   = _der_int(_E)
+_DER_SEQ = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
+_B64_DEMO = base64.b64encode(_DER_SEQ).decode()
+
+# DER byte'larının hex gösterimi (adım 5 için)
+_DER_HEX = " ".join(f"{x:02X}" for x in _DER_SEQ)
 
 # Extended Euclidean gösterimi için adımlar (elle hesaplanmış)
 _EEA_STEPS = [
@@ -54,13 +71,15 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         alice_pub_b64: str,
         bob_pub_b64: str,
         parent: QWidget | None = None,
+        on_close: "callable | None" = None,
     ) -> None:
         self._alice_b64 = alice_pub_b64
         self._bob_b64 = bob_pub_b64
         super().__init__(
             "🔑  RSA-2048 Anahtar Üretimi",
-            len(self._TITLES),
+            len(self._TITLES) - 1,  # Son adım _show_match_result tarafından işlenir
             manual_mode=True,
+            on_close=on_close,
         )
 
     # ------------------------------------------------------------------
@@ -126,73 +145,118 @@ class RSAAnimationWindow(CryptoAnimationWindow):
 _STEP_BODIES: list[str] = [
     # Adım 0 — Asal sayı
     (
-        "Bir sayı asal ise yalnızca 1 ve kendisiyle bölünebilir.\n\n"
-        f"  p = {_P}  →  Bölenler: 1, 61          ✓ ASAL\n"
-        f"  q = {_Q}  →  Bölenler: 1, 53          ✓ ASAL\n\n"
-        "RSA-2048'de p ve q gerçekte 1024-bit (309+ haneli) asal sayılardır.\n"
-        "Bilgisayarın bunları çarpanlarına ayırması pratikte imkânsızdır;\n"
-        "RSA'nın güvenliği buraya dayanır.\n\n"
-        "Bu gösterimde eğitim amaçlı küçük değerler kullanılmaktadır."
+        "━━  ASAL SAYI NEDİR?  ━━\n\n"
+        "Asal sayı: sadece 1'e ve kendisine tam bölünebilen sayıdır.\n\n"
+        f"  p = {_P}  →  1 ve 61 dışında hiçbir sayıya bölünmez  ✓\n"
+        f"  q = {_Q}  →  1 ve 53 dışında hiçbir sayıya bölünmez  ✓\n\n"
+        "  Asal olmayan örnek:\n"
+        "  15 = 3 × 5  →  1, 3, 5, 15'e bölünür  ✗ ASAL DEĞİL\n\n"
+        "━━  NEDEN ÖNEMLİ?  ━━\n\n"
+        "Gerçek RSA-2048'de p ve q'nun her biri yaklaşık\n"
+        "309 haneli (1024-bit) kocaman asal sayılardır.\n\n"
+        "Bu iki sayıyı çarpıp n'yi elde etmek:\n"
+        "  → Saniyeler içinde hesaplanır  ⚡\n\n"
+        "Ama n'yi görüp p ve q'yu geri bulmaya çalışmak:\n"
+        "  → Dünyanın tüm bilgisayarları milyarlarca yıl\n"
+        "    uğraşsa bile bulamaz  🔒\n\n"
+        "İşte RSA'nın gücü bu 'tek yönlü yol'a dayanır."
     ),
     # Adım 1 — n = p × q
     (
-        "Modül n, iki asal sayının çarpımıdır:\n\n"
-        f"  n = p × q\n"
-        f"  n = {_P} × {_Q}\n"
-        f"  n = {_N}\n\n"
-        f"n her iki anahtarda da kullanılır (açık ve gizli).\n"
-        f"Güvenlik: n'yi {_P} ve {_Q}'ya çarpanlamak hesaplamalı olarak zordur."
+        "━━  KİLİDİN İKİ PARÇASI BİRLEŞİYOR  ━━\n\n"
+        "İki asal sayıyı çarparak herkese açık 'kilit sayısı' n'yi üretiyoruz:\n\n"
+        f"  n  =  p  ×  q\n"
+        f"  n  =  {_P}  ×  {_Q}\n"
+        f"  n  =  {_N}\n\n"
+        "━━  NE İŞE YARAR?  ━━\n\n"
+        "n, hem açık anahtarın hem de gizli anahtarın içinde bulunur.\n"
+        "Sana mesaj göndermek isteyen herkes n'yi kullanır.\n\n"
+        "━━  GÜVENLİK?  ━━\n\n"
+        f"  {_N} sayısını görüp {_P} × {_Q} diye ayrıştırmak küçük\n"
+        f"  sayılarda kolaydır — ama 617 haneli bir sayı için\n"
+        f"  bu işlem imkânsız hale gelir.\n\n"
+        "n'yi herkes görebilir; ama n'den p ve q gizli kalır."
     ),
     # Adım 2 — φ(n)
     (
-        "Euler Totient φ(n): n'den küçük, n ile aralarında asal sayıların sayısı.\n\n"
-        f"  φ(n) = (p − 1) × (q − 1)\n"
-        f"  φ(n) = ({_P} − 1) × ({_Q} − 1)\n"
-        f"  φ(n) = {_P - 1} × {_Q - 1}\n"
-        f"  φ(n) = {_PHI}\n\n"
-        f"φ(n) gizli tutulur; gizli anahtar hesabında kullanılır.\n"
-        f"p ve q bilinirse φ(n) kolayca hesaplanır — bu yüzden p ve q gizlidir."
+        "━━  GİZLİ FORMÜL: φ(n)  ━━\n\n"
+        "φ(n) (phi), gizli anahtarı hesaplamak için kullanılan\n"
+        "ara bir değerdir. Hiçbir zaman paylaşılmaz.\n\n"
+        "Hesabı çok basit — sadece p ve q bilinirse:\n\n"
+        f"  φ(n)  =  (p − 1)  ×  (q − 1)\n"
+        f"  φ(n)  =  ({_P} − 1)  ×  ({_Q} − 1)\n"
+        f"  φ(n)  =  {_P - 1}  ×  {_Q - 1}\n"
+        f"  φ(n)  =  {_PHI}\n\n"
+        "━━  NEDEN GİZLİ?  ━━\n\n"
+        "φ(n) bilinirse gizli anahtar d kolayca hesaplanabilir.\n"
+        "φ(n) bilinmezse (yani p ve q bilinmezse) d'yi bulmak\n"
+        "matematiksel olarak neredeyse imkânsızdır.\n\n"
+        "Kısacası:\n"
+        "  p ve q  →  φ(n) kolayca bulunur\n"
+        "  Ama  n  →  φ(n) bulunamaz  (çünkü p,q gizli)"
     ),
     # Adım 3 — e seçimi
     (
-        f"Açık üs e şu koşulları sağlamalıdır:\n\n"
-        f"  1 < e < φ(n)\n"
-        f"  gcd(e, φ(n)) = 1   (e ile φ(n) aralarında asal)\n\n"
-        f"Seçilen:  e = {_E}\n\n"
-        f"Kontrol:\n"
-        f"  gcd({_E}, {_PHI}) = ?\n"
-        f"  {_PHI} = {_PHI // _E} × {_E} + {_PHI % _E}\n"
-        f"  {_E}   = {_E // (_PHI % _E)} × {_PHI % _E} + {_E % (_PHI % _E)}\n"
-        f"  ...  → gcd = 1  ✓\n\n"
-        f"Gerçek RSA'da e genellikle 65537 seçilir (Fermat sayısı F4)."
+        "━━  HERKESİN BİLDİĞİ ŞİFRELEME GÜCÜ: e  ━━\n\n"
+        "e, açık anahtarın bir parçasıdır — herkesle paylaşılır.\n"
+        "Sana mesaj göndermek isteyen herkes e'yi kullanır.\n\n"
+        f"  Seçilen:  e = {_E}\n\n"
+        "━━  KURALI  ━━\n\n"
+        f"  · e, 1 ile {_PHI} arasında olmalı\n"
+        f"  · e ile {_PHI} 'aralarında asal' olmalı\n"
+        f"    (başka bir deyişle, aralarındaki ortak bölen sadece 1)\n\n"
+        f"  Kontrol:  OBEB({_E}, {_PHI}) = 1  ✓\n\n"
+        "━━  GERÇEK HAYATTA  ━━\n\n"
+        "Gerçek RSA'da e için neredeyse hep 65537 seçilir.\n"
+        "Bu sayı hem küçük olduğundan şifreleme hızlıdır,\n"
+        "hem de güvenlik açısından herhangi bir zayıflık içermez.\n\n"
+        "Açık anahtar = (e, n) çifti\n"
+        f"  →  (e={_E},  n={_N})"
     ),
     # Adım 4 — d hesabı (EEA)
     (
-        f"d = e⁻¹ mod φ(n)  →  e × d ≡ 1 (mod φ(n))\n\n"
-        "Genişletilmiş Öklid Algoritması:\n\n"
+        "━━  SADECE SENİN ANAHTARIN: d  ━━\n\n"
+        "d, gizli anahtarın çekirdeğidir. Kimseyle paylaşılmaz.\n\n"
+        "d şu özelliği sağlamalı:\n\n"
+        f"  e × d  ≡  1  (mod φ(n))\n\n"
+        "Bu şu anlama gelir:\n"
+        f"  {_E} ile şifrelediğin bir mesajı, sadece {_D} ile çözebilirsin.\n\n"
+        "━━  NASIL BULUNUR?  ━━\n\n"
+        "Genişletilmiş Öklid Algoritması adım adım:\n\n"
         + "\n".join(f"  {a}   {b}" for a, b in _EEA_STEPS)
-        + f"\n\n  Sonuç:  d = {_D}\n\n"
-        f"Doğrulama:  {_E} × {_D} mod {_PHI} = "
-        f"{(_E * _D) % _PHI}  ✓"
+        + f"\n\n  Bulunan:  d = {_D}\n\n"
+        "━━  DOĞRULAMA  ━━\n\n"
+        f"  {_E} × {_D}  mod  {_PHI}  =  {(_E * _D) % _PHI}  ✓\n\n"
+        "Gizli anahtar = (d, n) çifti\n"
+        f"  →  (d={_D},  n={_N})"
     ),
-    # Adım 5 — Anahtar kodlama
+    # Adım 5 — Anahtar kodlama (gerçek byte dönüşümü)
     (
-        "Matematiksel değerler nasıl uzun bir Base64 dizisine dönüşür?\n\n"
-        "Adım A — Tamsayıdan byte dizisine:\n"
-        f"  n = {_N}  →  hex: 0x{_N:04x}  →  bytes: {_N.to_bytes(2, 'big').hex()}\n"
-        f"  e = {_E}   →  hex: 0x{_E:02x}    →  bytes: {_E.to_bytes(1, 'big').hex()}\n\n"
-        "Adım B — ASN.1 / DER şeması:\n"
-        "  SEQUENCE {\n"
-        "    INTEGER  n  (modulus)\n"
-        "    INTEGER  e  (publicExponent)\n"
-        "  }\n"
-        "  Bu yapısal sarma, birkaç byte başlık ekler.\n\n"
-        "Adım C — SubjectPublicKeyInfo (PKCS#8 / X.509):\n"
-        "  Algoritma tanımlayıcı OID'i (rsaEncryption) + yukarıdaki DER\n\n"
-        "Adım D — Base64 kodlama:\n"
-        "  Her 3 byte → 4 ASCII karakter\n"
-        "  DER verisi ~270 byte → ~360 Base64 karakter\n\n"
-        "PEM formatı = '-----BEGIN PUBLIC KEY-----' + Base64 + '-----END...'"
+        "━━  SAYILARDAN ANAHTAR DOSYASINA: ADIM ADIM  ━━\n\n"
+        "Elimizde iki sayı var: e ve n\n"
+        f"  e = {_E}   →  şifreleme gücü\n"
+        f"  n = {_N}  →  kilit sayısı\n\n"
+        "━━  ADIM 1 — Sayıları byte'a çevir  ━━\n\n"
+        f"  n = {_N}  →  hex: {_N:04X}  →  byte: {' '.join(f'{b:02X}' for b in _N.to_bytes(2,'big'))}\n"
+        f"  e = {_E}   →  hex: {_E:02X}    →  byte: {_E:02X}\n\n"
+        "━━  ADIM 2 — DER etiketleri ekle (ASN.1 yapısı)  ━━\n\n"
+        "  02 = INTEGER etiketi\n"
+        "  30 = SEQUENCE etiketi\n\n"
+        f"  DER(n) = 02 {len(_DER_N)-2:02X} {' '.join(f'{b:02X}' for b in _DER_N[2:])}\n"
+        f"  DER(e) = 02 {len(_DER_E)-2:02X} {' '.join(f'{b:02X}' for b in _DER_E[2:])}\n"
+        f"  SEQUENCE = 30 {len(_DER_SEQ)-2:02X} DER(n) DER(e)\n\n"
+        f"  Tüm byte'lar: {_DER_HEX}\n\n"
+        "━━  ADIM 3 — Base64'e çevir  ━━\n\n"
+        "  Her 3 byte → 4 ASCII karakter\n\n"
+        f"  Demo sonucu:  {_B64_DEMO}\n\n"
+        "━━  GERÇEK ANAHTAR  ━━\n\n"
+        "Gerçek RSA-2048'de n = 256 byte (2048-bit) olduğundan\n"
+        "DER verisi ~270 byte → ~360 Base64 karakter olur.\n\n"
+        "PEM formatı:\n"
+        "  -----BEGIN PUBLIC KEY-----\n"
+        "  [Base64 satırları]\n"
+        "  -----END PUBLIC KEY-----\n\n"
+        "→ Sonraki adımda gerçek anahtarların eşleşmesini göreceksiniz."
     ),
     # Adım 6 — Eşleşme (_show_match_result tarafından işlenir)
     "",

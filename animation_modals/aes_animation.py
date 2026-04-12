@@ -30,6 +30,136 @@ _COLORS_OP = {
 
 
 # ---------------------------------------------------------------------------
+# Canlı matris demo widget'ı — intro için AES operasyonlarını simüle eder
+# ---------------------------------------------------------------------------
+
+class _MatrixDemoWidget(QWidget):
+    """
+    AES intro ekranında gösterilen canlı 4×4 matris animasyonu.
+    QTimer ile SubBytes → ShiftRows → MixColumns → AddRoundKey döngüsü yapar.
+    """
+
+    _OP_COLORS = [
+        ANIM_COLORS["accent_yellow"],   # SubBytes
+        ANIM_COLORS["accent_blue"],     # ShiftRows
+        ANIM_COLORS["accent_mauve"],    # MixColumns
+        ANIM_COLORS["accent_peach"],    # AddRoundKey
+    ]
+    _OP_NAMES = ["SubBytes", "ShiftRows", "MixColumns", "AddRoundKey"]
+
+    # Başlangıç demo değerleri (görsel amaçlı)
+    _INIT_VALS = [
+        ["19", "a0", "9a", "e9"],
+        ["3d", "f4", "c6", "f8"],
+        ["e3", "e2", "8d", "48"],
+        ["be", "2b", "2a", "08"],
+    ]
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._tick = 0
+        self._cells = [row[:] for row in self._INIT_VALS]
+        self._bg_colors = [[ANIM_COLORS["bg_card"]] * 4 for _ in range(4)]
+        self._op_idx = 0      # hangi operasyon (0-3)
+        self._op_tick = 0     # operasyon içi adım
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._step)
+        self._timer.start(110)
+        self.setMinimumSize(220, 220)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def _step(self) -> None:
+        self._tick += 1
+        t = self._tick
+
+        # Her operasyon 24 tick sürer
+        op = (t // 24) % 4
+        sub = t % 24
+        self._op_idx = op
+
+        if op == 0:  # SubBytes: hücreleri sırayla highlight et
+            r, c = divmod(sub % 16, 4)
+            self._bg_colors = [[ANIM_COLORS["bg_card"]] * 4 for _ in range(4)]
+            self._bg_colors[r][c] = self._OP_COLORS[0]
+            self._cells[r][c] = f"{(self._tick * 37 + r * 4 + c) % 256:02x}"
+
+        elif op == 1:  # ShiftRows: satır satır highlight
+            row = sub // 6
+            row = min(row, 3)
+            self._bg_colors = [[ANIM_COLORS["bg_card"]] * 4 for _ in range(4)]
+            row_colors = [
+                ANIM_COLORS["text_muted"],
+                ANIM_COLORS["accent_blue"],
+                ANIM_COLORS["accent_mauve"],
+                ANIM_COLORS["accent_peach"],
+            ]
+            for c in range(4):
+                self._bg_colors[row][c] = row_colors[row]
+
+        elif op == 2:  # MixColumns: sütun sütun highlight
+            col = sub // 6
+            col = min(col, 3)
+            self._bg_colors = [[ANIM_COLORS["bg_card"]] * 4 for _ in range(4)]
+            col_colors = [
+                ANIM_COLORS["accent_blue"],
+                ANIM_COLORS["accent_mauve"],
+                ANIM_COLORS["accent_yellow"],
+                ANIM_COLORS["accent_peach"],
+            ]
+            for r in range(4):
+                self._bg_colors[r][col] = col_colors[col]
+
+        else:  # AddRoundKey: tümü yanıp söner
+            lit = (sub % 6) < 3
+            color = self._OP_COLORS[3] if lit else ANIM_COLORS["bg_card"]
+            self._bg_colors = [[color] * 4 for _ in range(4)]
+
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W, H = self.width(), self.height()
+        margin = 12
+        label_h = 28
+        avail_w = W - 2 * margin
+        avail_h = H - label_h - margin
+        cell_size = min(avail_w // 4, avail_h // 4) - 4
+        gap = 4
+        grid_w = 4 * cell_size + 3 * gap
+        grid_h = 4 * cell_size + 3 * gap
+        ox = (W - grid_w) // 2
+        oy = label_h + (avail_h - grid_h) // 2
+
+        # Operasyon etiketi
+        op_color = self._OP_COLORS[self._op_idx]
+        p.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        p.setPen(QColor(op_color))
+        p.drawText(QRect(0, 4, W, label_h - 4),
+                   Qt.AlignmentFlag.AlignCenter,
+                   self._OP_NAMES[self._op_idx])
+
+        # Hücreler
+        font_val = QFont("Courier New", max(9, cell_size // 4), QFont.Weight.Bold)
+        for r in range(4):
+            for c in range(4):
+                x = ox + c * (cell_size + gap)
+                y = oy + r * (cell_size + gap)
+                bg = QColor(self._bg_colors[r][c])
+                border = QColor(bg).lighter(150)
+                p.setBrush(QBrush(bg))
+                p.setPen(QPen(border, 1))
+                p.drawRoundedRect(x, y, cell_size, cell_size, 5, 5)
+                p.setFont(font_val)
+                p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                p.drawText(QRect(x, y, cell_size, cell_size),
+                           Qt.AlignmentFlag.AlignCenter, self._cells[r][c])
+
+        p.end()
+
+
+# ---------------------------------------------------------------------------
 # AES Giriş Animasyonu Widget'ı
 # ---------------------------------------------------------------------------
 
@@ -51,90 +181,113 @@ class _AESIntroWidget(QWidget):
 
     def _init_ui(self) -> None:
         main = QVBoxLayout(self)
-        main.setContentsMargins(40, 20, 40, 20)
-        main.setSpacing(0)
-        main.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        main.setContentsMargins(24, 12, 24, 12)
+        main.setSpacing(8)
 
         title = QLabel("AES-256  Şifreleme Süreci")
         title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(title)
-        main.addSpacing(16)
+
+        # ── Yatay bölüm: sol=canlı matris, sağ=akış şeması ──
+        h_row = QHBoxLayout()
+        h_row.setSpacing(24)
+        main.addLayout(h_row, stretch=1)
+
+        # Sol: canlı matris animasyonu
+        left_frame = QFrame()
+        left_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
+        )
+        left_lay = QVBoxLayout(left_frame)
+        left_lay.setContentsMargins(12, 8, 12, 8)
+        left_lay.setSpacing(4)
+        demo_title = QLabel("Canlı Şifreleme Önizlemesi")
+        demo_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        demo_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_lay.addWidget(demo_title)
+        self._matrix_demo = _MatrixDemoWidget()
+        left_lay.addWidget(self._matrix_demo, stretch=1)
+        h_row.addWidget(left_frame, stretch=2)
+
+        # Sağ: akış şeması
+        right_w = QWidget()
+        right_lay = QVBoxLayout(right_w)
+        right_lay.setContentsMargins(0, 0, 0, 0)
+        right_lay.setSpacing(0)
+        right_lay.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        h_row.addWidget(right_w, stretch=3)
+
+        # ── Sağ taraf: akış şeması widget'ları ──
 
         # Giriş kutusu
         self._intro_plain = self._make_box(
-            "📄  Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"], width=320
+            "📄  Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"], width=340
         )
-        main.addWidget(self._intro_plain, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._intro_plain, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._intro_plain.setVisible(False)
         self._widgets.append(self._intro_plain)
 
-        # Ok aşağı
         arr0 = self._make_arrow()
-        main.addWidget(arr0, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr0, alignment=Qt.AlignmentFlag.AlignHCenter)
         arr0.setVisible(False)
         self._widgets.append(arr0)
 
-        # Initial round
         self._box_r0 = self._make_round_box(
             "🔑  Initial Round  (Round 0)",
             ["AddRoundKey"],
             ANIM_COLORS["accent_peach"],
         )
-        main.addWidget(self._box_r0, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._box_r0, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._box_r0.setVisible(False)
         self._widgets.append(self._box_r0)
 
-        # Ok aşağı
         arr1 = self._make_arrow()
-        main.addWidget(arr1, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr1, alignment=Qt.AlignmentFlag.AlignHCenter)
         arr1.setVisible(False)
         self._widgets.append(arr1)
 
-        # Main rounds
         self._box_main = self._make_round_box(
             "🔄  Ana Roundlar  (R1 – R13)",
             ["1-SubBytes", "2-ShiftRows", "3-MixColumns", "4-AddRoundKey"],
             ANIM_COLORS["accent_blue"],
         )
-        main.addWidget(self._box_main, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._box_main, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._box_main.setVisible(False)
         self._widgets.append(self._box_main)
 
-        # Ok aşağı
         arr2 = self._make_arrow()
-        main.addWidget(arr2, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr2, alignment=Qt.AlignmentFlag.AlignHCenter)
         arr2.setVisible(False)
         self._widgets.append(arr2)
 
-        # Final round
         self._box_r14 = self._make_round_box(
             "🏁  Son Round  (R14)",
             ["1-SubBytes", "2-ShiftRows", "3-AddRoundKey  (MixColumns yok)"],
             ANIM_COLORS["accent_green"],
         )
-        main.addWidget(self._box_r14, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._box_r14, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._box_r14.setVisible(False)
         self._widgets.append(self._box_r14)
 
-        # Ok aşağı
         arr3 = self._make_arrow()
-        main.addWidget(arr3, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr3, alignment=Qt.AlignmentFlag.AlignHCenter)
         arr3.setVisible(False)
         self._widgets.append(arr3)
 
-        # Şifreli metin
         self._intro_cipher = self._make_box(
-            "🔒  Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"], width=320
+            "🔒  Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"], width=340
         )
-        main.addWidget(self._intro_cipher, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._intro_cipher, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._intro_cipher.setVisible(False)
         self._widgets.append(self._intro_cipher)
 
-        main.addSpacing(20)
+        right_lay.addSpacing(16)
 
-        # Başla butonu (başlangıçta gizli)
+        # Başla butonu
         self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
         self._btn_start.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
@@ -145,8 +298,9 @@ class _AESIntroWidget(QWidget):
         )
         self._btn_start.setVisible(False)
         self._btn_start.clicked.connect(self._on_complete)
-        main.addWidget(self._btn_start, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._btn_start, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._widgets.append(self._btn_start)
+        right_lay.addStretch()
 
     @staticmethod
     def _make_box(text: str, color: str, width: int = 300) -> QFrame:
@@ -209,75 +363,288 @@ class _AESIntroWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
-# ShiftRows ok göstergesi
+# ShiftRows animasyonlu ok widget'ı
 # ---------------------------------------------------------------------------
 
-class _ShiftRowsArrowWidget(QWidget):
-    """Satırların kaç bayt kaydığını gösteren ok etiketi sütunu."""
+class _ShiftRowsAnimWidget(QWidget):
+    """
+    ShiftRows görselleştirmesi: her satır için 'önce → sonra' ve
+    kaydırma yönünü gösteren renkli animasyonlu oklar.
+    QTimer ile satırlar birer birer ortaya çıkar.
+    """
 
-    _SHIFTS = [
-        ("Satır 1", "kaymaz",    ANIM_COLORS["text_muted"]),
-        ("Satır 2", "← 1 bayt", ANIM_COLORS["accent_blue"]),
-        ("Satır 3", "← 2 bayt", ANIM_COLORS["accent_mauve"]),
-        ("Satır 4", "← 3 bayt", ANIM_COLORS["accent_peach"]),
+    _ROW_COLORS = [
+        ANIM_COLORS["text_muted"],    # Satır 0: sabit
+        ANIM_COLORS["accent_blue"],   # Satır 1: ← 1
+        ANIM_COLORS["accent_mauve"],  # Satır 2: ← 2
+        ANIM_COLORS["accent_peach"],  # Satır 3: ← 3
+    ]
+    _SHIFTS = [0, 1, 2, 3]
+    _SHIFT_LABELS = ["sabit", "← 1 bayt", "← 2 bayt", "← 3 bayt"]
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._before: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._after: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._revealed = 0   # kaç satır animasyonda gösterildi
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._advance)
+        self.setMinimumHeight(340)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    def set_data(self, before: list[list[str]], after: list[list[str]]) -> None:
+        self._before = before
+        self._after = after
+        self._revealed = 0
+        self._anim_timer.start(420)
+        self.update()
+
+    def _advance(self) -> None:
+        self._revealed += 1
+        if self._revealed >= 4:
+            self._revealed = 4
+            self._anim_timer.stop()
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W = self.width()
+        cell_w = max(38, min(52, (W - 24) // 4 - 4))
+        cell_h = 30
+        gap = 4
+        grid_w = 4 * cell_w + 3 * gap
+        x0 = max(4, (W - grid_w) // 2)
+        row_section = 84  # height per row (before + arrow area + after)
+
+        font_val = QFont("Courier New", 8, QFont.Weight.Bold)
+        font_lbl = QFont("Segoe UI", 8)
+
+        # Header
+        p.setFont(font_lbl)
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(x0, 0, grid_w, 14), Qt.AlignmentFlag.AlignCenter,
+                   "ÖNCEKİ  →  SONRAKI")
+
+        for row in range(4):
+            y_top = 18 + row * row_section
+            color = self._ROW_COLORS[row]
+            shift = self._SHIFTS[row]
+            revealed = row < self._revealed
+
+            # ── Önce (before) hücreleri ──
+            for c in range(4):
+                x = x0 + c * (cell_w + gap)
+                bg = QColor(color + ("55" if revealed else "22"))
+                border = QColor(color if revealed else ANIM_COLORS["border"])
+                p.setBrush(QBrush(bg))
+                p.setPen(QPen(border, 1))
+                p.drawRoundedRect(x, y_top, cell_w, cell_h, 3, 3)
+                p.setFont(font_val)
+                p.setPen(QColor(ANIM_COLORS["text_primary"] if revealed else ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(x, y_top, cell_w, cell_h),
+                           Qt.AlignmentFlag.AlignCenter, self._before[row][c])
+
+            # ── Ok ve shift etiketi ──
+            arr_y = y_top + cell_h + 6
+            lbl_y = arr_y + 2
+            if revealed:
+                if shift == 0:
+                    # Kesikli çizgi: sabit
+                    pen_d = QPen(QColor(ANIM_COLORS["text_muted"]), 1, Qt.PenStyle.DashLine)
+                    p.setPen(pen_d)
+                    p.drawLine(x0, arr_y + 8, x0 + grid_w, arr_y + 8)
+                    p.setFont(font_lbl)
+                    p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                    p.drawText(QRect(x0, lbl_y, grid_w, 14),
+                               Qt.AlignmentFlag.AlignCenter, "──  sabit  ──")
+                else:
+                    # Sol ok: kaydırma yönü
+                    ax_end = x0
+                    ax_start = x0 + grid_w
+                    pen_a = QPen(QColor(color), 2)
+                    p.setPen(pen_a)
+                    mid_arr = arr_y + 8
+                    p.drawLine(ax_start, mid_arr, ax_end + 8, mid_arr)
+                    # Ok ucu (sola)
+                    pts = QPolygon([
+                        QPoint(ax_end, mid_arr),
+                        QPoint(ax_end + 9, mid_arr - 5),
+                        QPoint(ax_end + 9, mid_arr + 5),
+                    ])
+                    p.setBrush(QBrush(QColor(color)))
+                    p.drawPolygon(pts)
+                    # Shift miktarı etiketi
+                    p.setFont(font_lbl)
+                    p.setPen(QColor(color))
+                    p.drawText(QRect(x0, lbl_y, grid_w, 14),
+                               Qt.AlignmentFlag.AlignCenter,
+                               self._SHIFT_LABELS[row])
+
+            # ── Sonra (after) hücreleri ──
+            y_bot = arr_y + 22
+            for c in range(4):
+                x = x0 + c * (cell_w + gap)
+                if revealed:
+                    bg = QColor(color + "33")
+                    border = QColor(color)
+                    txt_color = QColor(ANIM_COLORS["text_primary"])
+                    val = self._after[row][c]
+                else:
+                    bg = QColor(ANIM_COLORS["bg_input"])
+                    border = QColor(ANIM_COLORS["border"])
+                    txt_color = QColor(ANIM_COLORS["text_muted"])
+                    val = "--"
+                p.setBrush(QBrush(bg))
+                p.setPen(QPen(border, 1))
+                p.drawRoundedRect(x, y_bot, cell_w, cell_h, 3, 3)
+                p.setFont(font_val)
+                p.setPen(txt_color)
+                p.drawText(QRect(x, y_bot, cell_w, cell_h),
+                           Qt.AlignmentFlag.AlignCenter, val)
+
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# MixColumns animasyonlu sütun widget'ı
+# ---------------------------------------------------------------------------
+
+class _MixColumnsAnimWidget(QWidget):
+    """
+    MixColumns görselleştirmesi: dört sütun sırayla vurgulanır.
+    Her sütunun 4 baytı ⊕ sembolleriyle birleştirildiği gösterilir.
+    QTimer ile sütunlar sırayla canlanır.
+    """
+
+    _COL_COLORS = [
+        ANIM_COLORS["accent_blue"],
+        ANIM_COLORS["accent_mauve"],
+        ANIM_COLORS["accent_yellow"],
+        ANIM_COLORS["accent_peach"],
     ]
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(4, 8, 4, 8)
-        lay.setSpacing(12)
-        for row_lbl, shift_lbl, color in self._SHIFTS:
-            row = QHBoxLayout()
-            r = QLabel(row_lbl)
-            r.setFont(QFont("Segoe UI", 10))
-            r.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-            r.setFixedWidth(50)
-            row.addWidget(r)
-            s = QLabel(shift_lbl)
-            s.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
-            s.setStyleSheet(f"color: {color};")
-            row.addWidget(s)
-            lay.addLayout(row)
-        self.setFixedWidth(130)
+        self._before: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._after: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._active_col = -1   # -1 = başlamadı, 0-3 = aktif sütun, 4 = hepsi tamam
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._advance)
+        self.setMinimumHeight(300)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
+    def set_data(self, before: list[list[str]], after: list[list[str]]) -> None:
+        self._before = before
+        self._after = after
+        self._active_col = 1  # ilk sütunu hemen göster
+        self._anim_timer.start(600)
+        self.update()
 
-# ---------------------------------------------------------------------------
-# MixColumns açıklama widget'ı
-# ---------------------------------------------------------------------------
+    def _advance(self) -> None:
+        self._active_col += 1
+        if self._active_col >= 4:
+            self._active_col = 4
+            self._anim_timer.stop()
+        self.update()
 
-class _MixColumnsWidget(QWidget):
-    """Her sütunun 4 byte'ının GF(2^8)'de nasıl karıştığını gösterir."""
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(4, 4, 4, 4)
-        lay.setSpacing(6)
+        W = self.width()
+        n_cols = 4
+        col_section_w = (W - 12) // n_cols
+        cell_w = col_section_w - 8
+        cell_h = 28
+        gap_y = 3
 
-        title = QLabel("Her sütun kendi içinde karışır:")
-        title.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        lay.addWidget(title)
+        font_val = QFont("Courier New", 8, QFont.Weight.Bold)
+        font_lbl = QFont("Segoe UI", 8, QFont.Weight.Bold)
+        font_sym = QFont("Segoe UI", 12)
 
-        for c in range(4):
-            col_lbl = QLabel(
-                f"Sütun {c+1}:  [S[0][{c}] ⊕ S[1][{c}] ⊕ S[2][{c}] ⊕ S[3][{c}]]"
-            )
-            col_lbl.setFont(QFont("Courier New", 9))
-            col_lbl.setStyleSheet(
-                f"color: {ANIM_COLORS['accent_mauve']};"
-                f"background: {ANIM_COLORS['bg_input']};"
-                "border-radius: 3px; padding: 2px 4px;"
-            )
-            lay.addWidget(col_lbl)
+        # Başlık
+        p.setFont(font_lbl)
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 2, W, 14), Qt.AlignmentFlag.AlignCenter,
+                   "GF(2⁸)  Matris Çarpımı  —  Sütun Karıştırma")
 
-        note = QLabel("GF(2⁸) çarpımı — difüzyon sağlar")
-        note.setFont(QFont("Segoe UI", 8))
-        note.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        lay.addWidget(note)
+        for col in range(4):
+            x_col = 6 + col * col_section_w
+            color = self._COL_COLORS[col]
+            is_done = col < self._active_col
+            is_active = col == self._active_col - 1
+            alpha = "88" if is_done else ("55" if is_active else "22")
+            border_w = 2 if is_active else 1
 
-        self.setFixedWidth(280)
+            # Sütun etiketi
+            p.setFont(font_lbl)
+            lbl_color = QColor(color) if (is_active or is_done) else QColor(ANIM_COLORS["text_muted"])
+            p.setPen(lbl_color)
+            p.drawText(QRect(x_col, 18, col_section_w, 14),
+                       Qt.AlignmentFlag.AlignCenter, f"S{col+1}")
+
+            y_start = 36
+            # Önce (before) hücreleri — 4 satır
+            for row in range(4):
+                y = y_start + row * (cell_h + gap_y)
+                bg = QColor(color + alpha)
+                border = QColor(color)
+                p.setBrush(QBrush(bg))
+                p.setPen(QPen(border, border_w))
+                p.drawRoundedRect(x_col + 2, y, cell_w, cell_h, 3, 3)
+                p.setFont(font_val)
+                p.setPen(QColor(ANIM_COLORS["text_primary"] if (is_active or is_done) else ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(x_col + 2, y, cell_w, cell_h),
+                           Qt.AlignmentFlag.AlignCenter, self._before[row][col])
+
+                # ⊕ sembolü satırlar arasında (ilk 3 satırın altında)
+                if row < 3:
+                    sym_y = y + cell_h
+                    p.setFont(font_sym)
+                    p.setPen(QColor(color if (is_active or is_done) else ANIM_COLORS["text_muted"]))
+                    p.drawText(QRect(x_col, sym_y, col_section_w, gap_y + 2),
+                               Qt.AlignmentFlag.AlignCenter, "⊕")
+
+            # Ok: aşağı
+            arr_top = y_start + 4 * (cell_h + gap_y) + 4
+            arr_bot = arr_top + 18
+            if is_active or is_done:
+                p.setPen(QPen(QColor(color), 2))
+                mid_x = x_col + col_section_w // 2
+                p.drawLine(mid_x, arr_top, mid_x, arr_bot - 6)
+                pts = QPolygon([
+                    QPoint(mid_x, arr_bot),
+                    QPoint(mid_x - 5, arr_bot - 8),
+                    QPoint(mid_x + 5, arr_bot - 8),
+                ])
+                p.setBrush(QBrush(QColor(color)))
+                p.drawPolygon(pts)
+
+            # Sonra (after) hücreleri
+            y2_start = arr_bot + 2
+            for row in range(4):
+                y = y2_start + row * (cell_h + gap_y)
+                if is_active or is_done:
+                    bg = QColor(color + "33")
+                    border = QColor(color)
+                    val = self._after[row][col]
+                    txt = QColor(ANIM_COLORS["text_primary"])
+                else:
+                    bg = QColor(ANIM_COLORS["bg_input"])
+                    border = QColor(ANIM_COLORS["border"])
+                    val = "--"
+                    txt = QColor(ANIM_COLORS["text_muted"])
+                p.setBrush(QBrush(bg))
+                p.setPen(QPen(border, 1))
+                p.drawRoundedRect(x_col + 2, y, cell_w, cell_h, 3, 3)
+                p.setFont(font_val)
+                p.setPen(txt)
+                p.drawText(QRect(x_col + 2, y, cell_w, cell_h),
+                           Qt.AlignmentFlag.AlignCenter, val)
+
+        p.end()
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +710,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         plaintext: bytes,
         expected_ct_hex: str,
         parent: QWidget | None = None,
+        on_close: "callable | None" = None,
     ) -> None:
         self._key = key
         self._plaintext = plaintext
@@ -364,6 +732,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             "🔒  AES-256-GCM Şifreleme Animasyonu",
             len(self._steps_data),
             manual_mode=True,
+            on_close=on_close,
         )
 
     # ------------------------------------------------------------------
@@ -452,20 +821,26 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         # Sağ panel — operasyona göre değişir
         self._side_stack = QStackedWidget()
-        self._side_stack.setFixedWidth(300)
+        self._side_stack.setMinimumWidth(320)
+        self._side_stack.setMaximumWidth(430)
 
         empty = QWidget()  # boş panel (AddRoundKey ve SubBytes için)
-        self._side_stack.addWidget(empty)             # index 0
+        self._side_stack.addWidget(empty)                    # index 0
 
-        self._shift_widget = _ShiftRowsArrowWidget()  # ShiftRows için
-        self._side_stack.addWidget(self._shift_widget)  # index 1
+        # ShiftRows: scroll area içinde (4 satır × 84px = ~360px gerektirir)
+        from PyQt6.QtWidgets import QScrollArea
+        self._shift_widget = _ShiftRowsAnimWidget()
+        shift_scroll = QScrollArea()
+        shift_scroll.setWidget(self._shift_widget)
+        shift_scroll.setWidgetResizable(True)
+        shift_scroll.setStyleSheet("background: transparent; border: none;")
+        self._side_stack.addWidget(shift_scroll)             # index 1
 
-        self._mix_widget = _MixColumnsWidget()         # MixColumns için
-        self._side_stack.addWidget(self._mix_widget)    # index 2
+        self._mix_widget = _MixColumnsAnimWidget()           # MixColumns için
+        self._side_stack.addWidget(self._mix_widget)         # index 2
 
         content_row.addWidget(self._side_stack)
-        lay.addLayout(content_row)
-        lay.addStretch()
+        lay.addLayout(content_row, stretch=1)   # stretch=1: content_row fills remaining height
         return w
 
     def _make_match_page(self) -> QWidget:
@@ -556,61 +931,111 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         op = step["operation"]
 
+        # Bir önceki adımın matrisi (before state)
+        before = (
+            self._steps_data[step_idx - 1]["matrix"]
+            if step_idx > 0
+            else step["matrix"]
+        )
+        after = step["matrix"]
+
         if op == "SubBytes":
             self._side_stack.setCurrentIndex(0)
-            # Hücre-hücre animasyon; ana timer durdurulur, bitince yeniden başlatılır
-            # (manual modda timer zaten çalışmıyor; sadece matris güncellenir)
-            ops = [(r, c, step["matrix"][r][c]) for r in range(4) for c in range(4)]
+            ops = [(r, c, after[r][c]) for r in range(4) for c in range(4)]
             self._matrix.highlight_cells_sequential(
                 ops, step["color"], interval_ms=60, callback=None
             )
 
         elif op == "ShiftRows":
             self._side_stack.setCurrentIndex(1)
+            # Sağ panel: animasyonlu ok diyagramı (önce → sonra)
+            self._shift_widget.set_data(before, after)
+            # Ana matris: satır kaydırma animasyonu
             for row_idx, shift in enumerate([0, 1, 2, 3]):
                 if shift > 0:
                     self._matrix.animate_row_shift(row_idx, shift, step["color"])
                 else:
                     for c in range(4):
-                        self._matrix.update_cell(
-                            row_idx, c, step["matrix"][row_idx][c]
-                        )
+                        self._matrix.update_cell(row_idx, c, after[row_idx][c])
 
         elif op == "MixColumns":
             self._side_stack.setCurrentIndex(2)
-            # Her sütunu sırayla highlight et
+            # Sağ panel: animasyonlu sütun karıştırma diyagramı
+            self._mix_widget.set_data(before, after)
+            # Ana matris: sütun renkleriyle güncelle
+            col_colors = [
+                ANIM_COLORS["accent_blue"],
+                ANIM_COLORS["accent_mauve"],
+                ANIM_COLORS["accent_yellow"],
+                ANIM_COLORS["accent_peach"],
+            ]
             for col in range(4):
-                col_color = [
-                    ANIM_COLORS["accent_blue"],
-                    ANIM_COLORS["accent_mauve"],
-                    ANIM_COLORS["accent_yellow"],
-                    ANIM_COLORS["accent_peach"],
-                ][col]
                 for row in range(4):
-                    self._matrix.update_cell(
-                        row, col, step["matrix"][row][col], col_color
-                    )
+                    self._matrix.update_cell(row, col, after[row][col], col_colors[col])
 
         else:  # AddRoundKey
             self._side_stack.setCurrentIndex(0)
-            self._matrix.set_matrix(step["matrix"], step["color"])
+            self._matrix.set_matrix(after, step["color"])
             QTimer.singleShot(250, self._matrix.reset_colors)
 
     def _show_match_result(self) -> None:
         self._stack.setCurrentWidget(self._match_page)
         self._update_round_bar(14)
         last = self._steps_data[-1]
-        self._matrix.set_matrix(last["matrix"], ANIM_COLORS["accent_green"])
-        self._match_lbl.setText(
-            f"14 Round tamamlandı.\n\n"
-            f"Animasyonun ürettiği (ECB ilk blok):\n"
-            f"  {self._final_block_hex}\n\n"
-            f"crypto_core AES-256-GCM çıktısı (preview):\n"
-            f"  {self._expected_ct_hex}\n\n"
-            f"Not: AES-256-GCM, AES-CTR + GHASH authentication kullanır.\n"
-            f"Yukarıdaki round animasyonu AES-256'nın blok dönüşümünü gösterir.\n\n"
-            f"✅  Eşleşme Başarılı"
-        )
+        mat = last["matrix"]   # 4×4 liste
+        self._matrix.set_matrix(mat, ANIM_COLORS["accent_green"])
+
+        # ── Final state matrisi → şifreli metin byte sırası ──
+        # AES, state matrisini sütun-öncelikli (column-major) okur
+        col_bytes: list[list[str]] = [
+            [mat[r][c] for r in range(4)] for c in range(4)
+        ]
+        hex_out = "".join("".join(col) for col in col_bytes)
+
+        col_lines = []
+        for c in range(4):
+            vals = " ".join(col_bytes[c])
+            col_lines.append(f"  Sütun {c+1}: [{vals}]")
+
+        lines = [
+            "━━  14 ROUND TAMAMLANDI  ━━",
+            "",
+            "Final State Matrisi (Round 14 çıkışı):",
+            "  ┌────────────────────────┐",
+        ]
+        for r in range(4):
+            lines.append(f"  │  {' '.join(mat[r])}  │")
+        lines += [
+            "  └────────────────────────┘",
+            "",
+            "━━  MATRİS → ŞİFRELİ ÇIKIŞ  ━━",
+            "",
+            "AES, matrisi sütun-öncelikli okur (Column-Major):",
+            "",
+        ]
+        lines += col_lines
+        lines += [
+            "",
+            "Birleştirme: Sütun1 ‖ Sütun2 ‖ Sütun3 ‖ Sütun4",
+            f"  → {hex_out[:16]}",
+            f"     {hex_out[16:32]}",
+            "",
+            "━━  GCM MODU  ━━",
+            "",
+            "AES-256-GCM'de bu 16-byte blok doğrudan şifreli metin değil,",
+            "CTR sayacının şifrelenmiş halidir (keystream).",
+            "",
+            "keystream ⊕ plaintext = ciphertext",
+            "",
+            "GHASH fonksiyonu da ayrıca kimlik doğrulama etiketi üretir.",
+            "",
+            "─" * 54,
+            f"Animasyon çıktısı (ECB blok):  {self._final_block_hex}",
+            f"crypto_core GCM çıktısı:       {self._expected_ct_hex}",
+            "",
+            "✅  AES-256 Blok Dönüşümü Başarılı",
+        ]
+        self._match_lbl.setText("\n".join(lines))
         self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
 
     # showEvent override — intro başlatılmış, timer başlatma

@@ -36,6 +36,7 @@ class AlicePanel(QWidget):
         self._current_step: int = 0
         self._step_widgets: list[QGroupBox] = []
         self._outermost_box: Optional[QGroupBox] = None
+        self._normal_widgets: list[QWidget] = []  # populated by _init_ui
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -102,7 +103,7 @@ class AlicePanel(QWidget):
         """Normal içeriği gizle, animasyon widget'ını QScrollArea içinde göster."""
         # Önceki animasyon varsa temizle
         old = self._anim_scroll.takeWidget()
-        if old is not None:
+        if old is not None and old is not widget:
             old.deleteLater()
         # Yeni widget'ı ekle ve container'ı göster
         self._anim_scroll.setWidget(widget)

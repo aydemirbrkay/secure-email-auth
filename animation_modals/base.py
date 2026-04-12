@@ -42,7 +42,7 @@ _SPEED_MAP: dict[str, int] = {"Yavaş": 2000, "Normal": 1500, "Hızlı": 800}
 _BTN_STYLE = (
     f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
     f"color: {ANIM_COLORS['bg_main']}; border: none; "
-    f"border-radius: 6px; padding: 8px 22px; font-weight: bold; font-size: 13px; }}"
+    f"border-radius: 5px; padding: 5px 14px; font-weight: bold; font-size: 11px; }}"
     f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
     f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
     f"color: {ANIM_COLORS['text_muted']}; }}"
@@ -51,7 +51,7 @@ _BTN_STYLE = (
 _CLOSE_STYLE = (
     f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
     f"color: {ANIM_COLORS['text_secondary']}; border: 1px solid {ANIM_COLORS['border']}; "
-    f"border-radius: 6px; padding: 8px 18px; font-weight: bold; }}"
+    f"border-radius: 5px; padding: 5px 12px; font-size: 11px; }}"
     f"QPushButton:hover {{ background: {ANIM_COLORS['accent_peach']}; "
     f"color: {ANIM_COLORS['bg_main']}; }}"
 )
@@ -118,11 +118,11 @@ class CryptoAnimationWindow(QWidget):
 
     def _init_base_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
 
         header = QLabel(self.windowTitle())
-        header.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        header.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         header.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)

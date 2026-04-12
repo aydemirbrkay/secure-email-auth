@@ -89,7 +89,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
 
     def _init_content(self) -> None:
         self._step_lbl = QLabel()
-        self._step_lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        self._step_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._step_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content_layout.addWidget(self._step_lbl)
@@ -100,7 +100,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
         )
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(28, 20, 28, 20)
+        card_layout.setContentsMargins(16, 12, 16, 12)
 
         self._body = QLabel()
         self._body.setFont(QFont("Courier New", 13))

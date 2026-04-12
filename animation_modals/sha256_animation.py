@@ -599,11 +599,11 @@ class _SHA256IntroWidget(QWidget):
 
         # Başla butonu — scroll area dışında, her zaman görünür konumda
         self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
-        self._btn_start.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._btn_start.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: {ANIM_COLORS['bg_main']}; border: none; "
-            f"border-radius: 8px; padding: 8px 24px; }}"
+            f"border-radius: 6px; padding: 6px 18px; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
         )
         self._btn_start.setVisible(False)
@@ -614,30 +614,31 @@ class _SHA256IntroWidget(QWidget):
     @staticmethod
     def _make_box(text: str, color: str, width: int = 280) -> QFrame:
         f = QFrame()
-        f.setFixedWidth(width)
+        f.setMaximumWidth(width)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 2px solid {color}; border-radius: 8px; }}"
+            f"border: 2px solid {color}; border-radius: 6px; }}"
         )
         lay = QVBoxLayout(f)
-        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setContentsMargins(8, 5, 8, 5)
         lbl = QLabel(text)
         lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {color}; border: none;")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setWordWrap(True)
         lay.addWidget(lbl)
         return f
 
     @staticmethod
     def _make_detail_box(title: str, items: list[str], color: str) -> QFrame:
         f = QFrame()
-        f.setFixedWidth(370)
+        f.setMaximumWidth(340)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 2px solid {color}; border-radius: 8px; }}"
+            f"border: 2px solid {color}; border-radius: 6px; }}"
         )
         lay = QVBoxLayout(f)
-        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setContentsMargins(8, 5, 8, 5)
         lay.setSpacing(2)
         t = QLabel(title)
         t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))

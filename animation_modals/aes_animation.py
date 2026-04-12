@@ -182,18 +182,18 @@ class _AESIntroWidget(QWidget):
 
     def _init_ui(self) -> None:
         main = QVBoxLayout(self)
-        main.setContentsMargins(24, 12, 24, 12)
-        main.setSpacing(8)
+        main.setContentsMargins(10, 6, 10, 6)
+        main.setSpacing(4)
 
         title = QLabel("AES-256  Şifreleme Süreci")
-        title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(title)
 
         # ── Yatay bölüm: sol=canlı matris, sağ=akış şeması ──
         h_row = QHBoxLayout()
-        h_row.setSpacing(24)
+        h_row.setSpacing(12)
         main.addLayout(h_row, stretch=1)
 
         # Sol: canlı matris animasyonu
@@ -290,11 +290,11 @@ class _AESIntroWidget(QWidget):
 
         # Başla butonu
         self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
-        self._btn_start.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        self._btn_start.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: {ANIM_COLORS['bg_main']}; border: none; "
-            f"border-radius: 8px; padding: 12px 32px; }}"
+            f"border-radius: 6px; padding: 6px 18px; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
         )
         self._btn_start.setVisible(False)
@@ -306,39 +306,40 @@ class _AESIntroWidget(QWidget):
     @staticmethod
     def _make_box(text: str, color: str, width: int = 300) -> QFrame:
         f = QFrame()
-        f.setFixedWidth(width)
+        f.setMaximumWidth(width)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 2px solid {color}; border-radius: 8px; }}"
+            f"border: 2px solid {color}; border-radius: 6px; }}"
         )
         lay = QVBoxLayout(f)
-        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setContentsMargins(8, 6, 8, 6)
         lbl = QLabel(text)
-        lbl.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {color}; border: none;")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setWordWrap(True)
         lay.addWidget(lbl)
         return f
 
     @staticmethod
     def _make_round_box(title: str, ops: list[str], color: str) -> QFrame:
         f = QFrame()
-        f.setFixedWidth(400)
+        f.setMaximumWidth(360)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 2px solid {color}; border-radius: 8px; }}"
+            f"border: 2px solid {color}; border-radius: 6px; }}"
         )
         lay = QVBoxLayout(f)
-        lay.setContentsMargins(14, 10, 14, 10)
-        lay.setSpacing(4)
+        lay.setContentsMargins(10, 8, 10, 8)
+        lay.setSpacing(3)
         t = QLabel(title)
-        t.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         t.setStyleSheet(f"color: {color}; border: none;")
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(t)
         for op in ops:
             o = QLabel(f"  →  {op}")
-            o.setFont(QFont("Segoe UI", 10))
+            o.setFont(QFont("Segoe UI", 9))
             o.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
             lay.addWidget(o)
         return f
@@ -346,10 +347,10 @@ class _AESIntroWidget(QWidget):
     @staticmethod
     def _make_arrow() -> QLabel:
         lbl = QLabel("⬇")
-        lbl.setFont(QFont("Segoe UI", 20))
+        lbl.setFont(QFont("Segoe UI", 14))
         lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; border: none;")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setFixedHeight(28)
+        lbl.setFixedHeight(20)
         return lbl
 
     def start(self) -> None:

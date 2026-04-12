@@ -56,7 +56,6 @@ class MainWindow(QMainWindow):
 
         self._crypto = CryptoCore()
         self._packet: Optional[EncryptedPacket] = None
-        self._anim_windows: list = []
         self._rsa_data: tuple | None = None
         self._sha_data: tuple | None = None
         self._aes_data: tuple | None = None
@@ -412,25 +411,33 @@ class MainWindow(QMainWindow):
         if self._rsa_data is None:
             return
         alice_b64, bob_b64 = self._rsa_data
-        win = RSAAnimationWindow(alice_b64, bob_b64)
-        win.show()
-        self._anim_windows.append(win)
+        win = RSAAnimationWindow(
+            alice_b64, bob_b64,
+            on_close=self._alice_panel.hide_animation,
+        )
+        self._alice_panel.show_animation(win)
 
     def _reopen_sha(self) -> None:
         if self._sha_data is None:
             return
         message, hash_hex = self._sha_data
-        win = SHA256AnimationWindow(message, hash_hex)
-        win.show()
-        self._anim_windows.append(win)
+        win = SHA256AnimationWindow(
+            message, hash_hex,
+            on_close=self._alice_panel.hide_animation,
+        )
+        self._alice_panel.show_animation(win)
 
     def _reopen_aes(self) -> None:
         if self._aes_data is None:
             return
         key_bytes, plaintext, ct_hex = self._aes_data
-        win = AESAnimationWindow(key=key_bytes, plaintext=plaintext, expected_ct_hex=ct_hex)
-        win.show()
-        self._anim_windows.append(win)
+        win = AESAnimationWindow(
+            key=key_bytes,
+            plaintext=plaintext,
+            expected_ct_hex=ct_hex,
+            on_close=self._alice_panel.hide_animation,
+        )
+        self._alice_panel.show_animation(win)
 
     def _toggle_bottom(self) -> None:
         self._bottom_body.setVisible(not self._bottom_body.isVisible())
@@ -470,9 +477,11 @@ class MainWindow(QMainWindow):
         self._btn_start.setEnabled(True)
         self._btn_keygen.setEnabled(False)
         self._phase = "ready"
-        rsa_win = RSAAnimationWindow(alice_b64, bob_b64)
-        rsa_win.show()
-        self._anim_windows.append(rsa_win)
+        rsa_win = RSAAnimationWindow(
+            alice_b64, bob_b64,
+            on_close=self._alice_panel.hide_animation,
+        )
+        self._alice_panel.show_animation(rsa_win)
         self._bob_panel.show_keygen_step()
 
     def _on_start(self) -> None:
@@ -511,9 +520,11 @@ class MainWindow(QMainWindow):
                     self._sha_data = (self._original_message, hash_hex)
                     self._btn_anim_sha.setEnabled(True)
                     self._update_toggle_label()
-                    sha_win = SHA256AnimationWindow(self._original_message, hash_hex)
-                    sha_win.show()
-                    self._anim_windows.append(sha_win)
+                    sha_win = SHA256AnimationWindow(
+                        self._original_message, hash_hex,
+                        on_close=self._alice_panel.hide_animation,
+                    )
+                    self._alice_panel.show_animation(sha_win)
                 elif "AES" in next_step.step_name:
                     key_hex = next_step.data.get("session_key_hex", "")
                     ct_preview = next_step.data.get("ciphertext_hex_preview", "")
@@ -526,9 +537,9 @@ class MainWindow(QMainWindow):
                         key=key_bytes,
                         plaintext=plaintext,
                         expected_ct_hex=ct_preview,
+                        on_close=self._alice_panel.hide_animation,
                     )
-                    aes_win.show()
-                    self._anim_windows.append(aes_win)
+                    self._alice_panel.show_animation(aes_win)
 
             self._alice_has_more = self._alice_panel.show_next_step()
 
@@ -639,7 +650,6 @@ class MainWindow(QMainWindow):
         self._btn_anim_aes.setEnabled(False)
         self._bottom_body.setVisible(False)
         self._bottom_section.setVisible(False)
-        self._anim_windows.clear()
 
 
 # ---------------------------------------------------------------------------

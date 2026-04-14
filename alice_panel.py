@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QScrollArea,
     QTextEdit,
@@ -18,7 +19,7 @@ from PyQt6.QtWidgets import (
 
 from crypto_core import StepResult
 from theme import COLORS, STEP_COLORS_ALICE
-from utils import _build_step_content, _make_step_box
+from utils import _build_step_content, _make_step_box, _svg_pixmap
 
 
 class AlicePanel(QWidget):
@@ -44,11 +45,20 @@ class AlicePanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        self._title = QLabel("👩\u200d💻 Gönderici — Alice")
-        self._title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        self._title.setStyleSheet(f"color: {COLORS['accent_blue']};")
-        self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._title)
+        self._title_widget = QWidget()
+        _th = QHBoxLayout(self._title_widget)
+        _th.setContentsMargins(0, 0, 0, 0)
+        _th.setSpacing(8)
+        _th.addStretch()
+        _icon_lbl = QLabel()
+        _icon_lbl.setPixmap(_svg_pixmap("alice_sender.svg", COLORS["accent_mauve"], 26))
+        _th.addWidget(_icon_lbl)
+        self._title = QLabel("Gönderici — Alice")
+        self._title.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
+        self._title.setStyleSheet(f"color: {COLORS['accent_mauve']};")
+        _th.addWidget(self._title)
+        _th.addStretch()
+        layout.addWidget(self._title_widget)
 
         self._msg_group = QGroupBox("E-posta Mesajı")
         msg_layout = QVBoxLayout(self._msg_group)
@@ -73,10 +83,10 @@ class AlicePanel(QWidget):
         self._scroll.setStyleSheet("background-color: transparent;")
         layout.addWidget(self._scroll, stretch=1)
 
-        self.status_label = QLabel("🔐 Mesajınızı yazın ve şifreleme sürecini başlatın.")
+        self.status_label = QLabel("Mesajınızı yazın ve şifreleme sürecini başlatın.")
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet(
-            f"color: {COLORS['text_muted']}; font-size: 12px; padding: 4px;"
+            f"color: {COLORS['text_secondary']}; font-size: 12px; padding: 4px;"
         )
         layout.addWidget(self.status_label)
 
@@ -96,7 +106,7 @@ class AlicePanel(QWidget):
         # ─────────────────────────────────────────────────────────────────
 
         self._normal_widgets: list[QWidget] = [
-            self._title, self._msg_group, self._scroll, self.status_label
+            self._title_widget, self._msg_group, self._scroll, self.status_label
         ]
 
     def show_animation(self, widget: QWidget) -> None:
@@ -133,7 +143,7 @@ class AlicePanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         self.status_label.setText(
-            "🔐 Mesajınızı yazın ve şifreleme sürecini başlatın."
+            "Mesajınızı yazın ve şifreleme sürecini başlatın."
         )
 
     def set_steps(self, steps: list[StepResult]) -> None:

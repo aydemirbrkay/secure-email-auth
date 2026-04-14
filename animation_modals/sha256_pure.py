@@ -89,7 +89,7 @@ def sha256_steps(message: bytes) -> dict:
             b = a
             a = (temp1 + temp2) & 0xFFFFFFFF
 
-            if i in (0, 31, 63):
+            if i % 8 == 0 or i == 63:  # rounds 1,9,17,25,33,41,49,57,64
                 round_snapshots.append({
                     "round": i + 1,
                     "a": f"{a:08x}",
@@ -101,7 +101,9 @@ def sha256_steps(message: bytes) -> dict:
                     "t2": f"{temp2:08x}",
                 })
 
-        h = [(x + y) & 0xFFFFFFFF for x, y in zip(h, [a, b, c, d, e, f, g, hh])]
+        h_before = list(h)  # son bloğun eklenmesinden önceki H değerleri
+        last_working = [a, b, c, d, e, f, g, hh]  # son bloğun çalışma değişkenleri
+        h = [(x + y) & 0xFFFFFFFF for x, y in zip(h, last_working)]
 
     final_hash = "".join(f"{v:08x}" for v in h)
 
@@ -112,4 +114,8 @@ def sha256_steps(message: bytes) -> dict:
         "initial_h": [f"{v:08x}" for v in H0],
         "round_snapshots": round_snapshots,
         "final_hash": final_hash,
+        # Son blok toplama adımı için
+        "pre_final_h":      [f"{v:08x}" for v in h_before],
+        "final_working":    [f"{v:08x}" for v in last_working],
+        "final_h_parts":    [f"{v:08x}" for v in h],
     }

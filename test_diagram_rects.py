@@ -4,14 +4,14 @@
 DIAGRAM_W = 623
 DIAGRAM_H = 283
 
-# Spec'ten koordinatlar — bob_panel.py ile senkron tutulmalı
+# bob_panel.py _STEP_RECTS ile senkron tutulmalı — piksel kalibrasyonu 2752×1536 görselinden
 DIAGRAM_RECTS_RAW = [
-    (97, 127, 102, 22),   # 0: SHA-256
-    (200, 127, 42, 22),   # 1: RSA İmza
-    (231, 149, 26, 24),   # 2: Birleştir (+)
-    (306, 123, 52, 22),   # 3: AES
-    (303, 175, 54, 22),   # 4: RSA Anahtar
-    (385, 142, 138, 36),  # 5: Gönder / Internet
+    (178, 100, 39, 19),   # 0: SHA-256 H(.)
+    (223, 100, 39, 18),   # 1: RSA İmza K_A^-(.)
+    (250, 124, 34, 23),   # 2: Birleştir sol ⊕
+    (363, 124, 39, 19),   # 3: AES K_S(.)
+    (363, 174, 40, 22),   # 4: RSA Anahtar K_B^+(.)
+    (437, 133, 178, 52),  # 5: Gönder sağ ⊕ + Internet
 ]
 
 

@@ -39,7 +39,7 @@ class VerificationToast(QWidget):
         title = "DOĞRULAMA BAŞARILI" if is_valid else "DOĞRULAMA BAŞARISIZ"
 
         self.setStyleSheet(
-            f"QWidget {{ background: {COLORS['bg_card']}; "
+            f"QWidget {{ background: {COLORS['bg_panel']}; "
             f"border: 2px solid {color}; border-radius: 12px; }}"
         )
         self.setFixedWidth(440)
@@ -49,13 +49,8 @@ class VerificationToast(QWidget):
         lay.setSpacing(12)
 
         hdr = QHBoxLayout()
-        icon_lbl = QLabel(icon)
-        icon_lbl.setFont(QFont("Segoe UI", 36))
-        icon_lbl.setStyleSheet("border: none;")
-        icon_lbl.setFixedWidth(52)
-        hdr.addWidget(icon_lbl)
         title_lbl = QLabel(title)
-        title_lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        title_lbl.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
         title_lbl.setStyleSheet(f"color: {color}; border: none;")
         title_lbl.setWordWrap(True)
         hdr.addWidget(title_lbl, stretch=1)
@@ -80,7 +75,7 @@ class VerificationToast(QWidget):
             ]
         for c, text in items:
             lbl = QLabel(text)
-            lbl.setFont(QFont("Segoe UI", 12))
+            lbl.setFont(QFont("IBM Plex Sans", 12))
             lbl.setStyleSheet(f"color: {c}; border: none;")
             lbl.setWordWrap(True)
             lay.addWidget(lbl)

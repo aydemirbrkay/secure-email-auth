@@ -22,14 +22,14 @@ _SNAPS_PER_BLOCK = 9  # rounds 1,9,17,25,33,41,49,57,64
 
 # Renk eşlemesi — her register farklı renk
 _REG_COLORS = [
-    "#89b4fa",  # A — blue
-    "#cba6f7",  # B — mauve
-    "#a6e3a1",  # C — green
-    "#f9e2af",  # D — yellow
-    "#fab387",  # E — peach
-    "#94e2d5",  # F — teal
-    "#f38ba8",  # G — red
-    "#74c7ec",  # H — sky
+    "#3B6FA0",  # A — blue
+    "#7B5EA7",  # B — mauve
+    "#4E8B60",  # C — green
+    "#B8860B",  # D — yellow
+    "#B87333",  # E — peach
+    "#3D8B80",  # F — teal
+    "#B94A4A",  # G — red
+    "#2E86AB",  # H — sky
 ]
 _REG_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"]
 
@@ -124,7 +124,7 @@ class _SHA256DiagramWidget(QWidget):
         mid_y = top_y + box_h + 50
         bot_y = mid_y + 90
 
-        font_lbl = QFont("Segoe UI", 9, QFont.Weight.Bold)
+        font_lbl = QFont("Georgia", 9, QFont.Weight.Bold)
         font_val = QFont("Courier New", 8)
         font_mid = QFont("Courier New", 9)
 
@@ -163,7 +163,7 @@ class _SHA256DiagramWidget(QWidget):
         t1_w = int(total * 0.52)
 
         t2_border = QColor(ANIM_COLORS["accent_mauve"])
-        t2_fill = QColor("#4a3b5c") if highlight_t2 else QColor("#3b3b5c")
+        t2_fill = QColor("#3D2F56") if highlight_t2 else QColor("#536070")
         self._draw_box(p, t2_x, mid_y, t2_w, 72, t2_fill, t2_border)
         p.setFont(font_mid)
         p.setPen(t2_border)
@@ -175,7 +175,7 @@ class _SHA256DiagramWidget(QWidget):
 
         # ── T1 kutusu ──
         t1_border = QColor(ANIM_COLORS["accent_yellow"])
-        t1_fill = QColor("#4a4a2c") if highlight_t1 else QColor("#3b3b5c")
+        t1_fill = QColor("#3D3119") if highlight_t1 else QColor("#536070")
         self._draw_box(p, t1_x, mid_y, t1_w, 72, t1_fill, t1_border)
         p.setPen(t1_border)
         p.drawText(QRect(t1_x + 4, mid_y + 4, t1_w - 8, 20),
@@ -269,14 +269,14 @@ class _SHA256DiagramWidget(QWidget):
             "✓ Round tamamlandı",
         ]
         p.setPen(QColor(ANIM_COLORS["accent_blue"] if ph < 5 else ANIM_COLORS["accent_green"]))
-        p.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
         lbl_idx = min(ph, len(phase_labels) - 1)
         p.drawText(QRect(0, 0, W, 16), Qt.AlignmentFlag.AlignLeft,
                    f"  {phase_labels[lbl_idx]}")
 
         # Round numarası (sağ)
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.setFont(QFont("Segoe UI", 10))
+        p.setFont(QFont("IBM Plex Sans", 10))
         p.drawText(QRect(0, 0, W, 14), Qt.AlignmentFlag.AlignRight,
                    f"Round {self._round_no}/64  ")
 
@@ -360,7 +360,7 @@ class _RegisterDemoWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._step)
         self._timer.start(120)
-        self.setMinimumSize(240, 170)
+        self.setMinimumSize(160, 150)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def _step(self) -> None:
@@ -374,29 +374,31 @@ class _RegisterDemoWidget(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         W, H = self.width(), self.height()
-        label_h = 26
-        margin = 10
+        label_h = 22
+        margin = 4
 
         phase = (self._tick // 24) % 3
         sub   = self._tick % 24
 
-        # Boyutlar
+        # Boyutlar — dar alana uyum sağlar
         avail_w = W - 2 * margin
-        box_w = max(34, min(56, avail_w // 8 - 4))
-        gap   = max(2, (avail_w - 8 * box_w) // 7)
-        box_h = 40
+        box_w = max(18, min(56, avail_w // 8 - 2))
+        gap   = max(1, (avail_w - 8 * box_w) // 7)
+        box_h = max(26, min(40, H // 6))
         total_w = 8 * box_w + 7 * gap
         ox = (W - total_w) // 2
 
-        top_y = label_h + 6
-        mid_h = 48
-        mid_y = top_y + box_h + 18
-        bot_y = mid_y + mid_h + 14
+        top_y = label_h + 4
+        mid_h = max(36, min(48, H // 5))
+        mid_y = top_y + box_h + 10
+        bot_y = mid_y + mid_h + 8
 
-        font_lbl   = QFont("Segoe UI", 8, QFont.Weight.Bold)
-        font_val   = QFont("Courier New", 7)
-        font_mid   = QFont("Courier New", 8)
-        font_phase = QFont("Segoe UI", 9, QFont.Weight.Bold)
+        # Dar genişlikte küçük fontlar
+        compact = box_w < 34
+        font_lbl   = QFont("Georgia", 6 if compact else 8, QFont.Weight.Bold)
+        font_val   = QFont("Courier New", 5 if compact else 7)
+        font_mid   = QFont("Courier New", 6 if compact else 8)
+        font_phase = QFont("Georgia", 7 if compact else 9, QFont.Weight.Bold)
 
         # Phase label
         phase_color = [
@@ -423,12 +425,12 @@ class _RegisterDemoWidget(QWidget):
             p.drawRoundedRect(x, top_y, box_w, box_h, 4, 4)
             p.setFont(font_lbl)
             p.setPen(QColor(col if phase <= 1 else ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(x, top_y + 2, box_w, 14),
+            p.drawText(QRect(x, top_y + 1, box_w, box_h // 2),
                        Qt.AlignmentFlag.AlignCenter, _REG_LABELS[i])
             p.setFont(font_val)
             p.setPen(QColor(ANIM_COLORS["text_primary"] if phase <= 1 else ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(x, top_y + 18, box_w, 18),
-                       Qt.AlignmentFlag.AlignCenter, self._DEMO_IN[i])
+            p.drawText(QRect(x, top_y + box_h // 2, box_w, box_h // 2),
+                       Qt.AlignmentFlag.AlignCenter, self._DEMO_IN[i][:max(4, box_w // 6)])
 
         # ── Orta: T2 ve T1 kutuları ──
         t2_w = int(total_w * 0.36)
@@ -438,29 +440,29 @@ class _RegisterDemoWidget(QWidget):
         t2_lit = (phase == 1 and sub < 12)
         t1_lit = (phase == 1 and sub >= 12)
 
-        t2_fill   = QColor("#4a3b5c" if t2_lit else "#26263a")
+        t2_fill   = QColor("#3D2F56" if t2_lit else "#536070")
         t2_border = QColor(ANIM_COLORS["accent_mauve"] if t2_lit else ANIM_COLORS["border"])
         p.setBrush(QBrush(t2_fill))
         p.setPen(QPen(t2_border, 2 if t2_lit else 1))
         p.drawRoundedRect(t2_x, mid_y, t2_w, mid_h, 4, 4)
         p.setFont(font_mid)
         p.setPen(t2_border)
-        p.drawText(QRect(t2_x + 2, mid_y + 4, t2_w - 4, 18),
-                   Qt.AlignmentFlag.AlignCenter, "T2 = Σ0(A) + Maj(A,B,C)")
+        p.drawText(QRect(t2_x + 2, mid_y + 2, t2_w - 4, mid_h // 2),
+                   Qt.AlignmentFlag.AlignCenter, "Σ0(A) + Maj(A,.." if compact else "T2 = Σ0(A) + Maj(A,B,C)")
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(t2_x + 2, mid_y + 26, t2_w - 4, 16),
+        p.drawText(QRect(t2_x + 2, mid_y + mid_h // 2, t2_w - 4, mid_h // 2),
                    Qt.AlignmentFlag.AlignCenter, "a1b2c3d4" if t2_lit else "...")
 
-        t1_fill   = QColor("#4a4a2c" if t1_lit else "#26263a")
+        t1_fill   = QColor("#3D3119" if t1_lit else "#536070")
         t1_border = QColor(ANIM_COLORS["accent_yellow"] if t1_lit else ANIM_COLORS["border"])
         p.setBrush(QBrush(t1_fill))
         p.setPen(QPen(t1_border, 2 if t1_lit else 1))
         p.drawRoundedRect(t1_x, mid_y, t1_w, mid_h, 4, 4)
         p.setPen(t1_border)
-        p.drawText(QRect(t1_x + 2, mid_y + 4, t1_w - 4, 18),
-                   Qt.AlignmentFlag.AlignCenter, "T1 = Σ1(E) + Ch(E,F,G) + H + K + W")
+        p.drawText(QRect(t1_x + 2, mid_y + 2, t1_w - 4, mid_h // 2),
+                   Qt.AlignmentFlag.AlignCenter, "Σ1(E) + Ch(E,F,G) + .." if compact else "T1 = Σ1(E) + Ch(E,F,G) + H + K + W")
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(t1_x + 2, mid_y + 26, t1_w - 4, 16),
+        p.drawText(QRect(t1_x + 2, mid_y + mid_h // 2, t1_w - 4, mid_h // 2),
                    Qt.AlignmentFlag.AlignCenter, "e5f6a7b8" if t1_lit else "...")
 
         # ── Alt satır: çıkış registerları ──
@@ -477,12 +479,13 @@ class _RegisterDemoWidget(QWidget):
             p.drawRoundedRect(x, bot_y, box_w, box_h, 4, 4)
             p.setFont(font_lbl)
             p.setPen(QColor(ANIM_COLORS["accent_green"] if shown else ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(x, bot_y + 2, box_w, 14),
+            p.drawText(QRect(x, bot_y + 1, box_w, box_h // 2),
                        Qt.AlignmentFlag.AlignCenter, _REG_LABELS[i] + "'")
             p.setFont(font_val)
-            val = self._DEMO_OUT[i] if shown else "--------"
+            raw_val = self._DEMO_OUT[i] if shown else "----"
+            val = raw_val[:max(4, box_w // 6)]
             p.setPen(QColor(ANIM_COLORS["text_primary"] if shown else ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(x, bot_y + 18, box_w, 18),
+            p.drawText(QRect(x, bot_y + box_h // 2, box_w, box_h // 2),
                        Qt.AlignmentFlag.AlignCenter, val)
 
         p.end()
@@ -516,7 +519,7 @@ class _SHA256IntroWidget(QWidget):
 
         # Başlık
         title = QLabel("SHA-256  Hash Algoritması")
-        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(title)
@@ -524,7 +527,7 @@ class _SHA256IntroWidget(QWidget):
         # ── Yatay bölüm: sol=register demo, sağ=akış şeması ──
         h_row = QHBoxLayout()
         h_row.setSpacing(12)
-        main.addLayout(h_row, stretch=1)
+        main.addLayout(h_row)
 
         # Sol: register animasyonu
         left_frame = QFrame()
@@ -536,7 +539,7 @@ class _SHA256IntroWidget(QWidget):
         left_lay.setContentsMargins(8, 6, 8, 6)
         left_lay.setSpacing(2)
         demo_lbl = QLabel("Sıkıştırma Fonksiyonu Önizlemesi")
-        demo_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        demo_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         demo_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         demo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         left_lay.addWidget(demo_lbl)
@@ -552,7 +555,7 @@ class _SHA256IntroWidget(QWidget):
         h_row.addWidget(right_container, stretch=3)
 
         right_lay = right_container_lay
-        right_lay.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Akış şeması kutular + oklar
         flow_items = [
@@ -584,16 +587,16 @@ class _SHA256IntroWidget(QWidget):
                 w = self._make_box(text, color)
             else:
                 w = self._make_detail_box(text, subs, color)
-            right_lay.addWidget(w, alignment=Qt.AlignmentFlag.AlignHCenter)
+            right_lay.addWidget(w)
             w.setVisible(False)
             self._reveal_widgets.append(w)
 
         # Başla butonu — scroll area dışında, her zaman görünür konumda
         self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
-        self._btn_start.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._btn_start.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: {ANIM_COLORS['bg_main']}; border: none; "
+            f"color: #FFFFFF; border: none; "
             f"border-radius: 6px; padding: 6px 18px; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
         )
@@ -603,9 +606,8 @@ class _SHA256IntroWidget(QWidget):
         self._reveal_widgets.append(self._btn_start)
 
     @staticmethod
-    def _make_box(text: str, color: str, width: int = 280) -> QFrame:
+    def _make_box(text: str, color: str) -> QFrame:
         f = QFrame()
-        f.setMaximumWidth(width)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -613,7 +615,7 @@ class _SHA256IntroWidget(QWidget):
         lay = QVBoxLayout(f)
         lay.setContentsMargins(8, 5, 8, 5)
         lbl = QLabel(text)
-        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {color}; border: none;")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setWordWrap(True)
@@ -623,7 +625,6 @@ class _SHA256IntroWidget(QWidget):
     @staticmethod
     def _make_detail_box(title: str, items: list[str], color: str) -> QFrame:
         f = QFrame()
-        f.setMaximumWidth(340)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -632,14 +633,16 @@ class _SHA256IntroWidget(QWidget):
         lay.setContentsMargins(8, 5, 8, 5)
         lay.setSpacing(2)
         t = QLabel(title)
-        t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        t.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         t.setStyleSheet(f"color: {color}; border: none;")
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        t.setWordWrap(True)
         lay.addWidget(t)
         for item in items:
             o = QLabel(item)
             o.setFont(QFont("Segoe UI", 9))
             o.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
+            o.setWordWrap(True)
             lay.addWidget(o)
         return f
 
@@ -741,7 +744,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay.setContentsMargins(12, 8, 12, 8)
 
         title = QLabel("Adım 1 — Padding ve Blok Yapısı")
-        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
@@ -791,7 +794,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay.setContentsMargins(8, 4, 8, 4)
 
         self._diag_title = QLabel()
-        self._diag_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._diag_title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         self._diag_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._diag_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._diag_title)

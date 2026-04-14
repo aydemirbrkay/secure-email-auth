@@ -23,25 +23,25 @@ from PyQt6.QtWidgets import (
 )
 
 ANIM_COLORS = {
-    "bg_main":        "#1e1e2e",
-    "bg_card":        "#313150",
-    "bg_input":       "#3b3b5c",
-    "text_primary":   "#cdd6f4",
-    "text_secondary": "#a6adc8",
-    "text_muted":     "#6c7086",
-    "accent_blue":    "#89b4fa",
-    "accent_green":   "#a6e3a1",
-    "accent_yellow":  "#f9e2af",
-    "accent_mauve":   "#cba6f7",
-    "accent_peach":   "#fab387",
-    "border":         "#45475a",
+    "bg_main":        "#3D4451",
+    "bg_card":        "#536070",
+    "bg_input":       "#4D5769",
+    "text_primary":   "#F1F3F7",
+    "text_secondary": "#CBD5E0",
+    "text_muted":     "#8896A8",
+    "accent_blue":    "#5B8EC2",
+    "accent_green":   "#6FC28C",
+    "accent_yellow":  "#C99B24",
+    "accent_mauve":   "#9B7EC7",
+    "accent_peach":   "#C4834A",
+    "border":         "#5A6272",
 }
 
 _SPEED_MAP: dict[str, int] = {"Yavaş": 2000, "Normal": 1500, "Hızlı": 800}
 
 _BTN_STYLE = (
     f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-    f"color: {ANIM_COLORS['bg_main']}; border: none; "
+    f"color: #FFFFFF; border: none; "
     f"border-radius: 5px; padding: 5px 14px; font-weight: bold; font-size: 11px; }}"
     f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
     f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
@@ -53,7 +53,7 @@ _CLOSE_STYLE = (
     f"color: {ANIM_COLORS['text_secondary']}; border: 1px solid {ANIM_COLORS['border']}; "
     f"border-radius: 5px; padding: 5px 12px; font-size: 11px; }}"
     f"QPushButton:hover {{ background: {ANIM_COLORS['accent_peach']}; "
-    f"color: {ANIM_COLORS['bg_main']}; }}"
+    f"color: #FFFFFF; }}"
 )
 
 
@@ -122,7 +122,7 @@ class CryptoAnimationWindow(QWidget):
         layout.setSpacing(6)
 
         header = QLabel(self.windowTitle())
-        header.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        header.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         header.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)

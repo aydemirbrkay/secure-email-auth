@@ -77,7 +77,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         self._alice_b64 = alice_pub_b64
         self._bob_b64 = bob_pub_b64
         super().__init__(
-            "🔑  RSA-2048 Anahtar Üretimi",
+            "RSA-2048 Anahtar Üretimi",
             len(self._TITLES) - 1,  # Son adım _show_match_result tarafından işlenir
             manual_mode=True,
             on_close=on_close,
@@ -89,7 +89,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
 
     def _init_content(self) -> None:
         self._step_lbl = QLabel()
-        self._step_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._step_lbl.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._step_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.content_layout.addWidget(self._step_lbl)
@@ -127,17 +127,19 @@ class RSAAnimationWindow(CryptoAnimationWindow):
 
     def _show_match_result(self) -> None:
         self._step_lbl.setText(self._TITLES[6])
-        self._body.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        self._body.setTextFormat(Qt.TextFormat.RichText)
+        self._body.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
+        green = ANIM_COLORS['accent_green']
         self._body.setText(
-            f"Demo Açık Anahtar:   (e={_E},  n={_N})\n"
-            f"Demo Gizli Anahtar:  (d={_D},  n={_N})\n\n"
-            f"{'─' * 60}\n\n"
-            f"Alice Açık Anahtarı — crypto_core (Base64):\n"
-            f"  {self._alice_b64}\n\n"
-            f"Bob Açık Anahtarı — crypto_core (Base64):\n"
-            f"  {self._bob_b64}\n\n"
-            f"✅  Eşleşme Başarılı\n\n"
-            f"Matematiksel yapı (e, n) → ASN.1 DER → Base64 dönüşümü\n"
+            f"Demo Açık Anahtar:   (e={_E},  n={_N})<br>"
+            f"Demo Gizli Anahtar:  (d={_D},  n={_N})<br><br>"
+            f"{'─' * 60}<br><br>"
+            f"Alice Açık Anahtarı — crypto_core (Base64):<br>"
+            f"&nbsp;&nbsp;{self._alice_b64}<br><br>"
+            f"Bob Açık Anahtarı — crypto_core (Base64):<br>"
+            f"&nbsp;&nbsp;{self._bob_b64}<br><br>"
+            f"<span style='color: {green}; font-weight: bold;'>✅&nbsp;&nbsp;Eşleşme Başarılı</span><br><br>"
+            f"Matematiksel yapı (e, n) → ASN.1 DER → Base64 dönüşümü<br>"
             f"yukarıdaki uzun anahtarı üretir."
         )
 

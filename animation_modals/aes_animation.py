@@ -135,7 +135,7 @@ class _MatrixDemoWidget(QWidget):
 
         # Operasyon etiketi
         op_color = self._OP_COLORS[self._op_idx]
-        p.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         p.setPen(QColor(op_color))
         p.drawText(QRect(0, 4, W, label_h - 4),
                    Qt.AlignmentFlag.AlignCenter,
@@ -186,7 +186,7 @@ class _AESIntroWidget(QWidget):
         main.setSpacing(4)
 
         title = QLabel("AES-256  Şifreleme Süreci")
-        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title.setFont(QFont("Georgia", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(title)
@@ -194,7 +194,7 @@ class _AESIntroWidget(QWidget):
         # ── Yatay bölüm: sol=canlı matris, sağ=akış şeması ──
         h_row = QHBoxLayout()
         h_row.setSpacing(12)
-        main.addLayout(h_row, stretch=1)
+        main.addLayout(h_row)
 
         # Sol: canlı matris animasyonu
         left_frame = QFrame()
@@ -206,7 +206,7 @@ class _AESIntroWidget(QWidget):
         left_lay.setContentsMargins(12, 8, 12, 8)
         left_lay.setSpacing(4)
         demo_title = QLabel("Canlı Şifreleme Önizlemesi")
-        demo_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        demo_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         demo_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         left_lay.addWidget(demo_title)
@@ -219,21 +219,21 @@ class _AESIntroWidget(QWidget):
         right_lay = QVBoxLayout(right_w)
         right_lay.setContentsMargins(0, 0, 0, 0)
         right_lay.setSpacing(0)
-        right_lay.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
         h_row.addWidget(right_w, stretch=3)
 
         # ── Sağ taraf: akış şeması widget'ları ──
 
         # Giriş kutusu
         self._intro_plain = self._make_box(
-            "📄  Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"], width=340
+            "📄  Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"]
         )
-        right_lay.addWidget(self._intro_plain, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._intro_plain)
         self._intro_plain.setVisible(False)
         self._widgets.append(self._intro_plain)
 
         arr0 = self._make_arrow()
-        right_lay.addWidget(arr0, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr0)
         arr0.setVisible(False)
         self._widgets.append(arr0)
 
@@ -242,12 +242,12 @@ class _AESIntroWidget(QWidget):
             ["AddRoundKey"],
             ANIM_COLORS["accent_peach"],
         )
-        right_lay.addWidget(self._box_r0, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._box_r0)
         self._box_r0.setVisible(False)
         self._widgets.append(self._box_r0)
 
         arr1 = self._make_arrow()
-        right_lay.addWidget(arr1, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr1)
         arr1.setVisible(False)
         self._widgets.append(arr1)
 
@@ -256,12 +256,12 @@ class _AESIntroWidget(QWidget):
             ["1-SubBytes", "2-ShiftRows", "3-MixColumns", "4-AddRoundKey"],
             ANIM_COLORS["accent_blue"],
         )
-        right_lay.addWidget(self._box_main, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._box_main)
         self._box_main.setVisible(False)
         self._widgets.append(self._box_main)
 
         arr2 = self._make_arrow()
-        right_lay.addWidget(arr2, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr2)
         arr2.setVisible(False)
         self._widgets.append(arr2)
 
@@ -270,19 +270,19 @@ class _AESIntroWidget(QWidget):
             ["1-SubBytes", "2-ShiftRows", "3-AddRoundKey  (MixColumns yok)"],
             ANIM_COLORS["accent_green"],
         )
-        right_lay.addWidget(self._box_r14, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._box_r14)
         self._box_r14.setVisible(False)
         self._widgets.append(self._box_r14)
 
         arr3 = self._make_arrow()
-        right_lay.addWidget(arr3, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(arr3)
         arr3.setVisible(False)
         self._widgets.append(arr3)
 
         self._intro_cipher = self._make_box(
-            "🔒  Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"], width=340
+            "🔒  Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"]
         )
-        right_lay.addWidget(self._intro_cipher, alignment=Qt.AlignmentFlag.AlignHCenter)
+        right_lay.addWidget(self._intro_cipher)
         self._intro_cipher.setVisible(False)
         self._widgets.append(self._intro_cipher)
 
@@ -290,10 +290,10 @@ class _AESIntroWidget(QWidget):
 
         # Başla butonu
         self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
-        self._btn_start.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self._btn_start.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: {ANIM_COLORS['bg_main']}; border: none; "
+            f"color: #FFFFFF; border: none; "
             f"border-radius: 6px; padding: 6px 18px; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
         )
@@ -304,9 +304,8 @@ class _AESIntroWidget(QWidget):
         right_lay.addStretch()
 
     @staticmethod
-    def _make_box(text: str, color: str, width: int = 300) -> QFrame:
+    def _make_box(text: str, color: str) -> QFrame:
         f = QFrame()
-        f.setMaximumWidth(width)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -314,7 +313,7 @@ class _AESIntroWidget(QWidget):
         lay = QVBoxLayout(f)
         lay.setContentsMargins(8, 6, 8, 6)
         lbl = QLabel(text)
-        lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {color}; border: none;")
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setWordWrap(True)
@@ -324,7 +323,6 @@ class _AESIntroWidget(QWidget):
     @staticmethod
     def _make_round_box(title: str, ops: list[str], color: str) -> QFrame:
         f = QFrame()
-        f.setMaximumWidth(360)
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -333,14 +331,16 @@ class _AESIntroWidget(QWidget):
         lay.setContentsMargins(10, 8, 10, 8)
         lay.setSpacing(3)
         t = QLabel(title)
-        t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        t.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         t.setStyleSheet(f"color: {color}; border: none;")
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        t.setWordWrap(True)
         lay.addWidget(t)
         for op in ops:
             o = QLabel(f"  →  {op}")
             o.setFont(QFont("Segoe UI", 9))
             o.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
+            o.setWordWrap(True)
             lay.addWidget(o)
         return f
 
@@ -421,7 +421,7 @@ class _ShiftRowsAnimWidget(QWidget):
         row_section = 84  # height per row (before + arrow area + after)
 
         font_val = QFont("Courier New", 8, QFont.Weight.Bold)
-        font_lbl = QFont("Segoe UI", 8)
+        font_lbl = QFont("IBM Plex Sans", 8)
 
         # Header
         p.setFont(font_lbl)
@@ -563,8 +563,8 @@ class _MixColumnsAnimWidget(QWidget):
         gap_y = 3
 
         font_val = QFont("Courier New", 8, QFont.Weight.Bold)
-        font_lbl = QFont("Segoe UI", 8, QFont.Weight.Bold)
-        font_sym = QFont("Segoe UI", 12)
+        font_lbl = QFont("IBM Plex Sans", 8, QFont.Weight.Bold)
+        font_sym = QFont("IBM Plex Sans", 12)
 
         # Başlık
         p.setFont(font_lbl)
@@ -788,14 +788,14 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         # Operasyon başlığı
         self._op_title = QLabel()
-        self._op_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._op_title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         self._op_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._op_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._op_title)
 
         # Açıklama
         self._desc_lbl = QLabel()
-        self._desc_lbl.setFont(QFont("Segoe UI", 10))
+        self._desc_lbl.setFont(QFont("IBM Plex Sans", 10))
         self._desc_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         self._desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._desc_lbl.setWordWrap(True)
@@ -815,7 +815,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._matrix = MatrixWidget(parent=self)
         mat_lay.addWidget(self._matrix, alignment=Qt.AlignmentFlag.AlignCenter)
         mat_lbl = QLabel("State Matrisi  (4×4 byte, hex)")
-        mat_lbl.setFont(QFont("Segoe UI", 9))
+        mat_lbl.setFont(QFont("IBM Plex Sans", 9))
         mat_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         mat_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         mat_lay.addWidget(mat_lbl)

@@ -8,8 +8,8 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QGridLayout, QLabel, QWidget
 
-_DEFAULT_BG = "#313150"
-_DEFAULT_FG = "#cdd6f4"
+_DEFAULT_BG = "#536070"
+_DEFAULT_FG = "#F1F3F7"
 
 
 class MatrixWidget(QWidget):
@@ -99,7 +99,7 @@ class MatrixWidget(QWidget):
         self._sub_timer.timeout.connect(_tick)
         self._sub_timer.start(interval_ms)
 
-    def animate_row_shift(self, row: int, shift: int, color: str = "#89b4fa") -> None:
+    def animate_row_shift(self, row: int, shift: int, color: str = "#3B6FA0") -> None:
         """Bir satırı shift kadar sola kaydırır ve renklendirir."""
         texts = [self._cells[row][c].text() for c in range(self._cols)]
         shifted = texts[shift:] + texts[:shift]

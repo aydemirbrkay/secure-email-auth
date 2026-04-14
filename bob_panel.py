@@ -32,24 +32,25 @@ _DIAGRAM_H = 283
 _BLINK_MS = 1000
 
 # Alice'in 6 gönderme adımı için vurgulama alanları
+# Koordinatlar 623×283 sanal uzayında; piksel kalibrasyonu 2752×1536 görselinden hesaplandı.
 _STEP_RECTS: list[QRect] = [
-    QRect(97, 127, 102, 22),   # 0: SHA-256 — m → H(·)
-    QRect(200, 127, 42, 22),   # 1: RSA İmza — K_A^-(·)
-    QRect(231, 149, 26, 24),   # 2: Birleştir — (+) sol daire
-    QRect(306, 123, 52, 22),   # 3: AES — K_S(·)
-    QRect(303, 175, 54, 22),   # 4: RSA Anahtar — K_B^+(·)
-    QRect(385, 142, 138, 36),  # 5: Gönder — (+) sağ + Internet
+    QRect(178, 100, 39, 19),  # 0: SHA-256 — H(·) kutusu
+    QRect(223, 100, 39, 18),  # 1: RSA İmza — K_A^-(·) kutusu
+    QRect(250, 124, 34, 23),  # 2: Birleştir — sol ⊕ dairesi
+    QRect(363, 124, 39, 19),  # 3: AES — K_S(·) kutusu
+    QRect(363, 174, 40, 22),  # 4: RSA Anahtar — K_B^+(·) kutusu
+    QRect(437, 133, 178, 52), # 5: Gönder — sağ ⊕ + Internet bulutu
 ]
 
 # Anahtar üretimi adımı için K_A^- ve K_B^+ ikon alanları
 _KEYGEN_RECTS: list[QRect] = [
-    QRect(195, 64, 46, 32),   # K_A^- key icon (sol kutunun üstü)
-    QRect(289, 196, 54, 22),  # K_B^+ key icon (sağ kutunun altı)
+    QRect(210, 73, 62, 28),  # K_A^- etiket + anahtar ikonu (K_A^-(·) kutusunun üstü)
+    QRect(354, 194, 62, 26), # K_B^+ etiket + anahtar ikonu (K_B^+(·) kutusunun altı)
 ]
 
-_RED = QColor(229, 57, 53)           # #E53935 kenarlık
-_RED_FILL = QColor(229, 57, 53, 64)  # %25 şeffaf kırmızı dolgu
-_GREEN_FILL = QColor(76, 175, 80, 51) # %20 şeffaf yeşil dolgu
+_RED = QColor(198, 40, 40)            # #C62828 kenarlık (açık arka planda daha net)
+_RED_FILL = QColor(198, 40, 40, 50)  # %20 şeffaf kırmızı dolgu
+_GREEN_FILL = QColor(78, 139, 96, 50) # %20 şeffaf adaçayı dolgu
 
 
 class DiagramWidget(QWidget):
@@ -170,7 +171,7 @@ class DiagramWidget(QWidget):
 
 from crypto_core import EncryptedPacket, StepResult
 from theme import COLORS, STEP_COLORS_BOB
-from utils import _build_step_content, _make_step_box
+from utils import _build_step_content, _make_step_box, _svg_pixmap
 
 
 class BobPanel(QWidget):
@@ -196,11 +197,20 @@ class BobPanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        self._title_label = QLabel("👨\u200d💻 Alıcı — Bob")
-        self._title_label.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        self._title_widget = QWidget()
+        _th = QHBoxLayout(self._title_widget)
+        _th.setContentsMargins(0, 0, 0, 0)
+        _th.setSpacing(8)
+        _th.addStretch()
+        _icon_lbl = QLabel()
+        _icon_lbl.setPixmap(_svg_pixmap("shield_check.svg", COLORS["accent_green"], 24))
+        _th.addWidget(_icon_lbl)
+        self._title_label = QLabel("Alıcı — Bob")
+        self._title_label.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
         self._title_label.setStyleSheet(f"color: {COLORS['accent_green']};")
-        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._title_label)
+        _th.addWidget(self._title_label)
+        _th.addStretch()
+        layout.addWidget(self._title_widget)
 
         # --- Diyagram Container (Alice fazında görünür) ---
         self._diagram_container = QWidget()
@@ -216,10 +226,10 @@ class BobPanel(QWidget):
         self._btn_close_diagram.setEnabled(False)
         self._btn_close_diagram.setFixedHeight(32)
         self._btn_close_diagram.setStyleSheet(
-            "QPushButton { background: rgba(229,57,53,0.12); border: 2px solid #E53935; "
-            "border-radius: 6px; color: #E53935; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background: rgba(229,57,53,0.28); }"
-            "QPushButton:disabled { background: #1e1e2e; border: 1px solid #45475a; color: #6c7086; }"
+            "QPushButton { background: rgba(198,40,40,0.12); border: 2px solid #C62828; "
+            "border-radius: 6px; color: #C62828; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background: rgba(198,40,40,0.28); }"
+            "QPushButton:disabled { background: #536070; border: 1px solid #5A6272; color: #8896A8; }"
         )
         self._btn_close_diagram.clicked.connect(self._on_close_diagram)
         diag_layout.addWidget(self._btn_close_diagram)
@@ -229,10 +239,10 @@ class BobPanel(QWidget):
 
         self._received_group = QGroupBox("Alınan Şifreli Paket")
         recv_layout = QVBoxLayout(self._received_group)
-        self._received_label = QLabel("⏳ Henüz bir paket alınmadı.")
+        self._received_label = QLabel("Henüz bir paket alınmadı.")
         self._received_label.setWordWrap(True)
         self._received_label.setStyleSheet(
-            f"color: {COLORS['text_muted']}; font-size: 12px;"
+            f"color: {COLORS['text_secondary']}; font-size: 12px;"
         )
         recv_layout.addWidget(self._received_label)
         layout.addWidget(self._received_group)
@@ -262,10 +272,10 @@ class BobPanel(QWidget):
         self._result_group.setVisible(False)
         layout.addWidget(self._result_group)
 
-        self.status_label = QLabel("📬 Alice'den paket bekleniyor...")
+        self.status_label = QLabel("Alice'den paket bekleniyor...")
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet(
-            f"color: {COLORS['text_muted']}; font-size: 12px; padding: 4px;"
+            f"color: {COLORS['text_secondary']}; font-size: 12px; padding: 4px;"
         )
         layout.addWidget(self.status_label)
 
@@ -275,7 +285,7 @@ class BobPanel(QWidget):
 
     def show_keygen_step(self) -> None:
         """RSA anahtar üretimi sırasında diyagramı göster, K_A^- ve K_B^+ vurgula."""
-        self._title_label.setVisible(False)
+        self._title_widget.setVisible(False)
         self._received_group.setVisible(False)
         self._scroll_area.setVisible(False)
         self.status_label.setVisible(False)
@@ -285,7 +295,7 @@ class BobPanel(QWidget):
     def show_diagram(self) -> None:
         """Alice fazı başladığında diyagramı keygen'den temizle ve adım moduna geç."""
         self._diagram_widget.reset()
-        self._title_label.setVisible(False)
+        self._title_widget.setVisible(False)
         self._received_group.setVisible(False)
         self._scroll_area.setVisible(False)
         self.status_label.setVisible(False)
@@ -305,7 +315,7 @@ class BobPanel(QWidget):
         """Kapat butonuna basıldığında diyagramı gizle, Bob içeriğini geri getir."""
         self._diagram_widget.stop_blink()
         self._diagram_container.setVisible(False)
-        self._title_label.setVisible(True)
+        self._title_widget.setVisible(True)
         self._received_group.setVisible(True)
         self._scroll_area.setVisible(True)
         self.status_label.setVisible(True)
@@ -314,7 +324,7 @@ class BobPanel(QWidget):
         self._diagram_widget.reset()
         self._diagram_container.setVisible(False)
         self._btn_close_diagram.setEnabled(False)
-        self._title_label.setVisible(True)
+        self._title_widget.setVisible(True)
         self._received_group.setVisible(True)
         self._scroll_area.setVisible(True)
         self.status_label.setVisible(True)
@@ -325,16 +335,16 @@ class BobPanel(QWidget):
             item = self._nested_container.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        self._received_label.setText("⏳ Henüz bir paket alınmadı.")
+        self._received_label.setText("Henüz bir paket alınmadı.")
         self._result_label.setText("")
         self._result_group.setVisible(False)
-        self.status_label.setText("📬 Alice'den paket bekleniyor...")
+        self.status_label.setText("Alice'den paket bekleniyor...")
 
     def set_packet_info(self, packet: EncryptedPacket) -> None:
         info = (
-            f"📦 Şifreli mesaj boyutu: {len(packet.encrypted_message)} byte\n"
-            f"🔑 Şifreli oturum anahtarı: {len(packet.encrypted_session_key)} byte\n"
-            f"🎲 Rastgele Sayı (Nonce): {packet.nonce.hex()[:32]}…"
+            f"Şifreli mesaj boyutu: {len(packet.encrypted_message)} byte\n"
+            f"Şifreli oturum anahtarı: {len(packet.encrypted_session_key)} byte\n"
+            f"Rastgele Sayı (Nonce): {packet.nonce.hex()[:32]}…"
         )
         self._received_label.setText(info)
         self._received_label.setStyleSheet(

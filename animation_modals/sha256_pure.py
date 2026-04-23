@@ -45,8 +45,17 @@ def sha256_steps(message: bytes) -> dict:
       padded_len      : padding sonrası toplam uzunluk (byte)
       blocks_count    : 512-bit (64 byte) blok sayısı
       initial_h       : H0-H7 başlangıç değerleri (hex string listesi)
-      round_snapshots : round 1, 32 ve 64'teki A-H register değerleri
+      round_snapshots : her blok için 9 snapshot — round
+                        1, 9, 17, 25, 33, 41, 49, 57 ve 64'teki
+                        A-H register değerleri ve ara terimler
+                        (W, K, T1, T2)
+      w_expansion     : ilk blok için W[16..31] tablosu — her satırda
+                        operand (W[i-15], W[i-2]) ve σ0/σ1 sonuçları
+                        ayrı alanlar olarak döner
       final_hash      : 64 karakterlik hex özet (hashlib ile aynı)
+      pre_final_h     : son bloğun eklenmesinden önceki H[0..7]
+      final_working   : son bloğun çalışma değişkenleri (A..H)
+      final_h_parts   : final H[0..7] (hex string listesi)
     """
     msg_len_bits = len(message) * 8
     padded = bytearray(message)
@@ -80,9 +89,11 @@ def sha256_steps(message: bytes) -> dict:
                 w_expansion_sample.append({
                     "i": i,
                     "w_i16": f"{w[i-16]:08x}",
-                    "s0": f"{s0:08x}",
+                    "w_i15": f"{w[i-15]:08x}",   # σ0 için operand
+                    "s0": f"{s0:08x}",           # σ0(W[i-15]) sonucu
                     "w_i7": f"{w[i-7]:08x}",
-                    "s1": f"{s1:08x}",
+                    "w_i2": f"{w[i-2]:08x}",     # σ1 için operand
+                    "s1": f"{s1:08x}",           # σ1(W[i-2]) sonucu
                     "result": f"{w[i]:08x}",
                 })
 
@@ -105,7 +116,9 @@ def sha256_steps(message: bytes) -> dict:
             b = a
             a = (temp1 + temp2) & 0xFFFFFFFF
 
-            if i % 8 == 0 or i == 63:  # rounds 1,9,17,25,33,41,49,57,64
+            # i değerleri 0,8,16,...,56 ve 63 → round numaraları
+            # 1, 9, 17, 25, 33, 41, 49, 57, 64 (toplam 9 snapshot)
+            if i % 8 == 0 or i == 63:
                 round_snapshots.append({
                     "round": i + 1,
                     "a": f"{a:08x}",

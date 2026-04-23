@@ -5,8 +5,11 @@ SHA-256, RSA-2048 ve AES-256-GCM tabanlı hibrit kriptografik
 iş akışının birim testleri.
 """
 
+import copy
 import os
 import unittest
+
+from cryptography.exceptions import InvalidTag
 
 from crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
 
@@ -265,6 +268,177 @@ class TestFullWorkflow(unittest.TestCase):
             self.assertIsInstance(step.step_name, str)
             self.assertIsInstance(step.description, str)
             self.assertIsInstance(step.data, dict)
+
+
+class TestSignatureSemantics(unittest.TestCase):
+    """İmza semantiği (H(m) üzerinde Prehashed PSS) testleri."""
+
+    def setUp(self) -> None:
+        self.crypto = CryptoCore()
+        self.crypto.setup_keys()
+
+    def test_sign_requires_32_byte_digest(self) -> None:
+        """rsa_sign yalnızca 32 byte (SHA-256 özeti) kabul etmeli."""
+        # 32 byte olmayan bir girdi ValueError üretmeli
+        with self.assertRaises(ValueError):
+            self.crypto.rsa_sign(
+                self.crypto.alice_keys.private_key, b"too short"
+            )
+
+    def test_signature_is_over_hash_not_double_hash(self) -> None:
+        """
+        İmza H(m) üzerinde olmalı; H(H(m)) üzerinde DEĞİL.
+        Dolayısıyla imza H(m) ile doğrulanır, H(H(m)) ile doğrulanmaz.
+        """
+        msg = "merhaba dünya".encode("utf-8")
+        msg_hash = self.crypto.sha256_hash(msg)
+
+        sig = self.crypto.rsa_sign(
+            self.crypto.alice_keys.private_key, msg_hash
+        )
+
+        # H(m) ile doğrulanmalı
+        self.assertTrue(self.crypto.rsa_verify(
+            self.crypto.alice_keys.public_key, sig, msg_hash
+        ))
+
+        # H(H(m)) ile doğrulanmamalı (çift-hash değil)
+        double_hash = self.crypto.sha256_hash(msg_hash)
+        self.assertFalse(self.crypto.rsa_verify(
+            self.crypto.alice_keys.public_key, sig, double_hash
+        ))
+
+
+class TestNegativeSecurityScenarios(unittest.TestCase):
+    """
+    Negatif güvenlik senaryoları — paket / nonce / tag / imza
+    manipülasyonları beklenen hataları üretmeli, replay senaryosunun
+    mevcut tasarımda engellenmediği açıkça belgelenir.
+    """
+
+    def setUp(self) -> None:
+        self.crypto = CryptoCore()
+        self.crypto.setup_keys()
+        self.packet, _ = self.crypto.alice_send("gizli mesaj")
+
+    # --- Tamper: şifreli mesaj ------------------------------------------------
+
+    def test_tamper_ciphertext_byte_raises_invalid_tag(self) -> None:
+        """Şifreli mesajın tek byte'ının değiştirilmesi GCM tag'ini bozmalı."""
+        tampered_ct = bytearray(self.packet.encrypted_message)
+        tampered_ct[0] ^= 0x01
+        bad = EncryptedPacket(
+            encrypted_message=bytes(tampered_ct),
+            encrypted_session_key=self.packet.encrypted_session_key,
+            nonce=self.packet.nonce,
+        )
+        with self.assertRaises(InvalidTag):
+            self.crypto.bob_receive(bad)
+
+    def test_tamper_auth_tag_byte_raises_invalid_tag(self) -> None:
+        """
+        AES-GCM çıktısının son 16 byte'ı tag'tir; bu aralıkta
+        yapılan tek bit'lik değişiklik kimlik doğrulamayı bozmalı.
+        """
+        tampered_ct = bytearray(self.packet.encrypted_message)
+        # son byte (tag içi) bit-flip
+        tampered_ct[-1] ^= 0x80
+        bad = EncryptedPacket(
+            encrypted_message=bytes(tampered_ct),
+            encrypted_session_key=self.packet.encrypted_session_key,
+            nonce=self.packet.nonce,
+        )
+        with self.assertRaises(InvalidTag):
+            self.crypto.bob_receive(bad)
+
+    # --- Tamper: nonce --------------------------------------------------------
+
+    def test_tamper_nonce_raises_invalid_tag(self) -> None:
+        """Nonce'un değiştirilmesi deşifre adımında başarısız olmalı."""
+        tampered_nonce = bytearray(self.packet.nonce)
+        tampered_nonce[0] ^= 0xFF
+        bad = EncryptedPacket(
+            encrypted_message=self.packet.encrypted_message,
+            encrypted_session_key=self.packet.encrypted_session_key,
+            nonce=bytes(tampered_nonce),
+        )
+        with self.assertRaises(InvalidTag):
+            self.crypto.bob_receive(bad)
+
+    # --- Tamper: şifreli oturum anahtarı --------------------------------------
+
+    def test_tamper_encrypted_session_key_raises(self) -> None:
+        """
+        RSA-OAEP şifreli oturum anahtarının değiştirilmesi OAEP çözme
+        aşamasında istisna üretmeli (ValueError tabanlı).
+        """
+        tampered_key = bytearray(self.packet.encrypted_session_key)
+        tampered_key[0] ^= 0x01
+        bad = EncryptedPacket(
+            encrypted_message=self.packet.encrypted_message,
+            encrypted_session_key=bytes(tampered_key),
+            nonce=self.packet.nonce,
+        )
+        # OAEP çözme başarısız olursa bir istisna (genelde ValueError) oluşur
+        with self.assertRaises(Exception):
+            self.crypto.bob_receive(bad)
+
+    # --- Tamper: imza (AES altında bile) --------------------------------------
+
+    def test_tamper_message_plaintext_before_encrypt_breaks_signature(
+        self,
+    ) -> None:
+        """
+        Aynı oturum anahtarıyla farklı bir mesaj imzalanıp eski paketin
+        oturum anahtarıyla yeniden paketlense bile, imza mesaj özeti
+        üzerinden oluştuğu için farklı mesajla doğrulanmamalı.
+        Senaryo: Alice dürüst, saldırgan oturum anahtarını çözmüş
+        varsayımı altında bile imza bütünlüğü korunmalı.
+        """
+        # Bob'un K_S'yi çözdüğünü varsayalım:
+        session_key = self.crypto.rsa_decrypt_key(
+            self.crypto.bob_keys.private_key,
+            self.packet.encrypted_session_key,
+        )
+        combined = self.crypto.aes_gcm_decrypt(
+            session_key, self.packet.nonce, self.packet.encrypted_message
+        )
+        msg_bytes, signature = combined.split(self.crypto.SEPARATOR, 1)
+
+        # Saldırgan: mesajı değiştir, imzayı aynı tutmaya çalışsın.
+        forged_msg = msg_bytes + b" (ekleme)"
+        forged_hash = self.crypto.sha256_hash(forged_msg)
+        self.assertFalse(self.crypto.rsa_verify(
+            self.crypto.alice_keys.public_key, signature, forged_hash
+        ))
+
+    # --- Replay: tasarımın sınırı ---------------------------------------------
+
+    def test_replay_is_not_blocked_by_design(self) -> None:
+        """
+        BELGELEME: Mevcut tasarımda durum/timestamp tutulmadığı için
+        aynı paketin tekrar iletilmesi (replay) Bob tarafında yine
+        başarıyla çözülür. Bu koruma için ayrıca bir replay cache /
+        sıra numarası mekanizması eklenmelidir.
+        """
+        msg1, valid1, _ = self.crypto.bob_receive(self.packet)
+        msg2, valid2, _ = self.crypto.bob_receive(copy.copy(self.packet))
+        self.assertEqual(msg1, msg2)
+        self.assertTrue(valid1)
+        self.assertTrue(valid2)
+
+
+class TestEncryptedPacketShape(unittest.TestCase):
+    """EncryptedPacket veri modelinin sadeleştirilmiş hâlini doğrular."""
+
+    def test_packet_has_no_tag_field(self) -> None:
+        """GCM tag ayrı alan olarak taşınmıyor — sadece 3 alan olmalı."""
+        from dataclasses import fields
+        field_names = {f.name for f in fields(EncryptedPacket)}
+        self.assertEqual(
+            field_names,
+            {"encrypted_message", "encrypted_session_key", "nonce"},
+        )
 
 
 if __name__ == "__main__":

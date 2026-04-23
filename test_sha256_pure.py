@@ -45,5 +45,32 @@ class TestSHA256Pure(unittest.TestCase):
         self.assertEqual(len(snap["w"]), 8)
         self.assertEqual(len(snap["k"]), 8)
 
+    def test_round_snapshots_are_at_expected_rounds(self):
+        """Snapshot round numaraları kod ile docstring tutarlı olmalı."""
+        result = sha256_steps(b"Hello World")
+        rounds = [s["round"] for s in result["round_snapshots"]]
+        self.assertEqual(rounds, [1, 9, 17, 25, 33, 41, 49, 57, 64])
+
+    def test_w_expansion_exposes_operand_and_result(self):
+        """
+        W[16..31] gösteriminde σ0/σ1 için hem operand (W[i-15], W[i-2])
+        hem de sonuç (s0, s1) ayrı alanlar olarak dönmeli — aksi hâlde
+        animasyon 'σ0(sonuç)' gibi yanıltıcı görünüm üretir.
+        """
+        result = sha256_steps(b"Hello World")
+        exp = result["w_expansion"]
+        self.assertIsNotNone(exp)
+        self.assertEqual(len(exp), 16)  # 16..31 arası 16 satır
+        required = {"i", "w_i16", "w_i15", "s0", "w_i7", "w_i2", "s1", "result"}
+        for row in exp:
+            self.assertTrue(required.issubset(row.keys()), row)
+            # Hepsi 8 karakterlik hex string (32-bit) olmalı
+            for k in ("w_i16", "w_i15", "s0", "w_i7", "w_i2", "s1", "result"):
+                self.assertEqual(len(row[k]), 8)
+                int(row[k], 16)
+        # En az bir satırda σ fonksiyonunun operanddan farklı sonuç
+        # üretmesi beklenir (aksi hâlde operand/sonuç ayrımı kaybolmuştur).
+        self.assertTrue(any(row["w_i15"] != row["s0"] for row in exp))
+
 if __name__ == "__main__":
     unittest.main()

@@ -773,7 +773,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
     Parametreler:
       key             : 32 byte session key
       plaintext       : şifrelenecek veri (ilk 16 byte kullanılır)
-      expected_ct_hex : crypto_core AES-GCM çıktısının hex preview'u
+      expected_ct_hex : crypto_core AES-GCM çıktısının (ciphertext ‖ 16 byte
+                        kimlik doğrulama etiketi) ilk 32 byte'ına ait hex
+                        önizlemedir. Kısa mesajlarda bu önizleme tag
+                        baytlarını da içerebilir; uzun mesajlarda ise
+                        yalnızca ciphertext'in başlangıcı görünür.
     """
 
     def __init__(
@@ -1104,7 +1108,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             "",
             "─" * 54,
             f"Animasyon çıktısı (AES-ECB blok dönüşümü):  {self._final_block_hex}",
-            f"crypto_core GCM çıktısı (gerçek şifreli metin):  {self._expected_ct_hex}",
+            f"crypto_core AES-GCM çıktısı — ct(‖tag) ilk 32 byte kesiti:  {self._expected_ct_hex}",
             "",
         ]
 
@@ -1117,9 +1121,15 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
         plain_lines = [
             "",
-            "  Animasyon: plaintext'in 14 round AES-ECB çıktısı",
+            "  Animasyon: plaintext'in 14 round AES-ECB çıktısı (tek blok, tag yok)",
             "  GCM modu:  CTR sayacı şifrelenir → plaintext ⊕ keystream → ciphertext",
+            "             ardından GHASH ile 16 byte kimlik doğrulama etiketi (tag)",
+            "             ciphertext'in sonuna eklenir.",
             "             Aynı anahtar, farklı IV ve counter → farklı çıktı",
+            "",
+            "  Not: Yukarıdaki \"GCM çıktısı\" tam şifreli metin değil, yalnızca",
+            "  ciphertext‖tag değerinin ilk 32 byte'ının hex ÖNİZLEMESİDİR.",
+            "  Kısa mesajlarda bu önizleme tag baytlarını da içerir.",
             "",
             "✅  AES-256-GCM Şifreleme Doğru Çalıştı",
         ]

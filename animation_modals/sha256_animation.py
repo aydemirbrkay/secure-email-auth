@@ -826,17 +826,24 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             "  σ0(x) = ROTR(x,7)  ⊕  ROTR(x,18)  ⊕  SHR(x,3)",
             "  σ1(x) = ROTR(x,17) ⊕  ROTR(x,19)  ⊕  SHR(x,10)",
             "",
-            "─" * 56,
+            "Gösterim: σ0(W[i-15]=operand) → sonuç   (σ1 için de aynı)",
+            "─" * 72,
             "Örnek — İlk blok W[16..31]:",
             "",
         ]
         for entry in exp:
             i = entry["i"]
             lines.append(
-                f"  W[{i:2d}] = W[{i-16:2d}]({entry['w_i16']}) + σ0({entry['s0']}) "
-                f"+ W[{i-7:2d}]({entry['w_i7']}) + σ1({entry['s1']}) = {entry['result']}"
+                f"  W[{i:2d}] = W[{i-16:2d}]({entry['w_i16']})"
+                f" + σ0(W[{i-15:2d}]={entry['w_i15']})→{entry['s0']}"
+                f" + W[{i-7:2d}]({entry['w_i7']})"
+                f" + σ1(W[{i-2:2d}]={entry['w_i2']})→{entry['s1']}"
+                f" = {entry['result']}"
             )
         lines += [
+            "",
+            "Not: σ0(…) ve σ1(…) içindeki değer fonksiyonun GİRDİSİDİR;",
+            "ok (→) işaretinden sonraki 32-bit kelime ise fonksiyonun ÇIKTISIDIR.",
             "",
             "64 round boyunca Compression fonksiyonu W[0..63] kullanır.",
         ]

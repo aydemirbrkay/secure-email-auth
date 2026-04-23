@@ -9,7 +9,9 @@ import copy
 import os
 import unittest
 
-from cryptography.exceptions import InvalidTag
+from cryptography.exceptions import InvalidSignature, InvalidTag
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 from crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
 
@@ -289,6 +291,11 @@ class TestSignatureSemantics(unittest.TestCase):
         """
         İmza H(m) üzerinde olmalı; H(H(m)) üzerinde DEĞİL.
         Dolayısıyla imza H(m) ile doğrulanır, H(H(m)) ile doğrulanmaz.
+
+        Not: Bu test tek başına "Prehashed kullanılıyor mu?" sorusunu
+        ayırt edemez (hem Prehashed hem non-Prehashed yol bu iki
+        koşulu sağlar). Kesin ayırt edici ispat için
+        ``test_signature_is_definitively_prehashed`` testine bakın.
         """
         msg = "merhaba dünya".encode("utf-8")
         msg_hash = self.crypto.sha256_hash(msg)
@@ -307,6 +314,90 @@ class TestSignatureSemantics(unittest.TestCase):
         self.assertFalse(self.crypto.rsa_verify(
             self.crypto.alice_keys.public_key, sig, double_hash
         ))
+
+    def test_signature_is_definitively_prehashed(self) -> None:
+        """
+        Kesin ayırt edici ispat: rsa_sign GERÇEKTEN Prehashed semantiğinde
+        çalışıyor, yani verilen H(m)'i *yeniden hashlemiyor*, doğrudan
+        imzalıyor.
+
+        Yöntem:
+          1. raw_msg → msg_hash = SHA256(raw_msg)
+          2. sig = rsa_sign(priv, msg_hash)
+          3. Kütüphanenin non-Prehashed verify'ı ile sig'i **ham mesaj**
+             üzerinde doğrula (verify içinde SHA256(raw_msg) hesaplanır).
+
+        Beklenen: Başarılı doğrulama.
+
+        Neden ayırt edicidir:
+          - Prehashed doğru çalışıyorsa: sig, msg_hash üzerinedir.
+            non-Prehashed verify ham mesajı hashleyip msg_hash elde eder
+            → eşleşir → SUCCESS.
+          - rsa_sign içeride yanlışlıkla tekrar hashleseydi: sig,
+            H(msg_hash) = H(H(raw_msg)) üzerinde olurdu. non-Prehashed
+            verify yine msg_hash ile karşılaştırır → eşleşmez → FAIL.
+        Dolayısıyla bu testin geçmesi Prehashed semantiğini kanıtlar.
+        """
+        raw_msg = b"ayirt edici Prehashed semantik kaniti"
+        msg_hash = self.crypto.sha256_hash(raw_msg)
+
+        sig = self.crypto.rsa_sign(
+            self.crypto.alice_keys.private_key, msg_hash
+        )
+
+        try:
+            self.crypto.alice_keys.public_key.verify(
+                sig,
+                raw_msg,                 # ham mesaj
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),         # non-Prehashed: kütüphane hashler
+            )
+        except InvalidSignature:
+            self.fail(
+                "Prehashed semantik bozulmuş: rsa_sign verilen H(m)'i "
+                "tekrar hashliyor (imza beklenenin iki kat hash'i üzerinde)."
+            )
+
+    def test_verify_is_definitively_prehashed(self) -> None:
+        """
+        Simetrik ayırt edici ispat: rsa_verify de Prehashed semantiğinde
+        çalışıyor, yani verilen H(m)'i yeniden hashlemeden doğrudan
+        imzaya karşı kontrol ediyor.
+
+        Yöntem:
+          1. raw_msg → msg_hash
+          2. Kütüphanenin non-Prehashed sign'ı ile ham mesajı imzala
+             (imza gerçekte msg_hash üzerinde oluşur).
+          3. rsa_verify(sig, msg_hash) çağır.
+
+        Beklenen: True (imza H(m) üzerindedir ve rsa_verify Prehashed
+        olduğu için H(m)'i yeniden hashlemeyip doğrudan kullanır).
+
+        Eğer rsa_verify içeride tekrar hashleseydi, sağlamayı H(H(m))'e
+        karşı yapar ve False dönerdi.
+        """
+        raw_msg = b"rsa_verify Prehashed tarafi icin kanit"
+        msg_hash = self.crypto.sha256_hash(raw_msg)
+
+        sig = self.crypto.alice_keys.private_key.sign(
+            raw_msg,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),             # non-Prehashed sign → imza H(raw_msg) üzerinde
+        )
+
+        self.assertTrue(
+            self.crypto.rsa_verify(
+                self.crypto.alice_keys.public_key, sig, msg_hash
+            ),
+            "rsa_verify Prehashed değil gibi davrandı: H(m)'i "
+            "yeniden hashlemiş görünüyor.",
+        )
 
 
 class TestNegativeSecurityScenarios(unittest.TestCase):

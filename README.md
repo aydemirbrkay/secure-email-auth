@@ -158,19 +158,20 @@ FIPS 180-4 standardında tanımlı SHA-256, herhangi bir boyuttaki girdi için s
 **Kullanıldığı Yer:** `crypto_core.py` — `rsa_sign()`, `rsa_verify()`
 
 ```python
+# rsa_sign: zaten hesaplanmış H(m) (32 byte) imzalanır
 private_key.sign(
-    message_hash,
+    message_hash,                       # önceden hesaplanmış SHA-256 özeti
     padding.PSS(
         mgf=padding.MGF1(hashes.SHA256()),
         salt_length=padding.PSS.MAX_LENGTH,
     ),
-    hashes.SHA256(),
+    Prehashed(hashes.SHA256()),         # "H(m) ver, tekrar hashleme"
 )
 ```
 
 PSS (Probabilistic Signature Scheme) dolgusu, rastgele tuz kullanarak aynı mesajın her imzasını farklı kılar. 2048-bit modulus 112-bit güvenlik gücüne karşılık gelir (NIST SP 800-131A).
 
-> **İmza girdisi hakkında not:** `rsa_sign(...)` fonksiyonuna mesaj değil, *önceden hesaplanmış* `H(m)` (32 byte) geçilir. Bu yüzden PyCA `cryptography` kütüphanesinde `Prehashed(SHA256())` ile imzalama yapılır; aksi hâlde kütüphane verilen 32 byte'lık özeti tekrar hashleyip **H(H(m))** imzalardı. Projedeki akış ve animasyon metinleri "H(m) imzalanır" şeklindedir ve kod buna birebir uyacak şekilde düzenlenmiştir.
+> **İmza girdisi hakkında not:** `rsa_sign(...)` fonksiyonuna mesaj değil, *önceden hesaplanmış* `H(m)` (32 byte) geçilir. Bu yüzden PyCA `cryptography` kütüphanesinde `Prehashed(SHA256())` ile imzalama yapılır; aksi hâlde kütüphane verilen 32 byte'lık özeti tekrar hashleyip **H(H(m))** imzalardı. Projedeki akış ve animasyon metinleri "H(m) imzalanır" şeklindedir; `rsa_sign` girdisinin uzunluğu 32 byte olarak doğrulanır (aksi hâlde `ValueError`). Sign ve verify birebir aynı `Prehashed(SHA256())` semantiğini kullanır; testler (`test_signature_is_over_hash_not_double_hash`) imzanın `H(m)` üzerinde olduğunu ve `H(H(m))` ile doğrulanmadığını garanti eder.
 
 **Kaynak:** [RFC 8017 — PKCS #1 v2.2](https://www.rfc-editor.org/rfc/rfc8017.html)
 

@@ -75,10 +75,10 @@ Mesaj (m)
 ## Proje Yapısı
 
 ```
-bitirme_odevi/
+secure-email-auth/
 ├── main_gui.py                     # Ana uygulama penceresi ve iş akışı yöneticisi
 ├── alice_panel.py                  # Alice (gönderici) paneli ve animasyon konteyneri
-├── bob_panel.py                    # Bob (alıcı) paneli ve diyagram bileşeni
+├── bob_panel.py                    # Bob (alıcı) paneli ve deşifre diyagram bileşeni
 ├── crypto_core.py                  # Kriptografik iş mantığı (backend)
 ├── theme.py                        # Renk paleti ve tema sabitleri
 ├── toast.py                        # Doğrulama bildirimi bileşeni (VerificationToast)
@@ -86,13 +86,15 @@ bitirme_odevi/
 ├── animation_modals/
 │   ├── base.py                     # CryptoAnimationWindow temel sınıfı
 │   ├── matrix_widget.py            # AES durum matrisi görselleştirme bileşeni
-│   ├── aes_animation.py            # AES-256 adım adım animasyon penceresi
+│   ├── aes_animation.py            # AES-256-GCM adım adım animasyon penceresi
 │   ├── aes_pure.py                 # Saf Python AES-256 (14 turlu durum verisi)
-│   ├── rsa_animation.py            # RSA animasyon penceresi (7 eğitim adımı)
-│   ├── sha256_animation.py         # SHA-256 animasyon penceresi (diyagram + blok zinciri)
-│   └── sha256_pure.py              # Saf Python SHA-256 (adım verisi)
+│   ├── rsa_animation.py            # RSA-2048 animasyon penceresi (7 eğitim adımı)
+│   ├── sha256_animation.py         # SHA-256 animasyon penceresi (padding, W_i, sıkıştırma)
+│   └── sha256_pure.py              # Saf Python SHA-256 (adım ve W_i verisi)
 ├── icons/                          # SVG ve PNG ikon dosyaları
-├── crypto_core.py                  # Kriptografik arka uç
+├── docs/                           # Planlama ve tasarım spec dokümanları
+├── alice and bob.png               # Alice tarafı şifreleme akış diyagramı
+├── bob-tarafi-sifre-cozme.png      # Bob tarafı deşifre akış diyagramı
 ├── test_crypto_core.py             # Birim testleri (26 test senaryosu)
 ├── test_aes_pure.py                # Saf AES implementasyonu testleri
 ├── test_sha256_pure.py             # Saf SHA-256 implementasyonu testleri
@@ -105,23 +107,34 @@ bitirme_odevi/
 
 ## Animasyon Modülleri
 
-Proje, her kriptografik algoritmanın iç işleyişini görselleştiren bağımsız animasyon pencereleri içerir. Bu pencereler Alice panelinin içine gömülü olarak çalışır.
+Proje, her kriptografik algoritmanın iç işleyişini adım adım görselleştiren bağımsız animasyon pencereleri içerir. Bu pencereler Alice panelinin içine gömülü olarak çalışır ve her pencere **kriptografik standartlara uygun, pedagojik olarak doğru** gösterimler sunar.
 
-### AES-256 Animasyonu (`animation_modals/aes_animation.py`)
-- Giriş animasyonu ve tıklanabilir tur çubuğu
+### AES-256-GCM Animasyonu (`animation_modals/aes_animation.py`)
+- Giriş animasyonu ve tıklanabilir tur çubuğu (Round 0 – Round 14)
 - 14 tura ait durum matrisi görselleştirmesi (`MatrixWidget`)
-- ShiftRows ve MixColumns adımları için ok gösterimi
-- İleri/geri manuel navigasyon
+- **SubBytes**: S-Box ile byte değiştirme, hücre hücre animasyon
+- **ShiftRows**: Satır kaydırma (0, 1, 2, 3 bayt sola) için renkli ok gösterimi
+- **MixColumns**: GF(2⁸) sabit matris çarpımı `[[02,03,01,01],[01,02,03,01],[01,01,02,03],[03,01,01,02]]` ve her sütun için formül gösterimi (`02·s₀ ⊕ 03·s₁ ⊕ s₂ ⊕ s₃` …)
+- **AddRoundKey**: XOR ile tur anahtarı karıştırma
+- Eşleşme ekranı: ECB blok çıktısı ile GCM şifreli metninin neden farklı olduğunu açıklar (CTR sayacı + keystream ⊕ plaintext)
 
-### RSA Animasyonu (`animation_modals/rsa_animation.py`)
-- 7 adımlı manuel eğitim akışı
-- Anahtar üretimi, imzalama ve doğrulama adımları
+### RSA-2048 Animasyonu (`animation_modals/rsa_animation.py`)
+- 7 adımlı manuel eğitim akışı: asal sayılar → n → φ(n) → e → d (EEA) → DER/Base64 → gerçek anahtar
 - Her adımda matematiksel formül gösterimi
+- **Genişletilmiş Öklid Algoritması**: İleri Öklid ve geri iz adımları kaynak satır referansları ile açıklanır
+  (ör. `← satır 3'ten: 9 = 1×8 + 1 → 1 = 9 − 8`)
+- **Şifreleme/Deşifreleme doğrulaması**: Demo değerler üzerinde `m=65 → c = 65¹⁷ mod 3233 = 2790 → m = 2790²⁷⁵³ mod 3233 = 65`
+- Gerçek DER→Base64 dönüşümü (p=61, q=53 demo değerleriyle), demo ve gerçek 2048-bit anahtar farkı vurgulanır
 
 ### SHA-256 Animasyonu (`animation_modals/sha256_animation.py`)
+- Padding görselleştirmesi (0x80 biti + 0 bitleri + 64-bit uzunluk)
+- **Mesaj Genişletme (Message Schedule)**: W[0..15] bloktan, W[16..63] için `σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)` ve `σ1(x) = ROTR(x,17) ⊕ ROTR(x,19) ⊕ SHR(x,10)` formülleri ile ilk bloğun W[16..31] tablosu
 - QPainter tabanlı sıkıştırma diyagramı
-- W, K, T1, T2 değerleriyle tur anlık görüntüleri
-- Blok zinciri görünümü
+  - 8 register (A–H) giriş ve çıkış kutuları
+  - T1 = Σ1(E) + Ch(E,F,G) + H + K + W ve T2 = Σ0(A) + Maj(A,B,C) kutuları
+  - D → E' bağlantısı ve kaydırma legend'i (`B'=A  C'=B  D'=C  F'=E  G'=F  H'=G`)
+- Her blok için 9 snapshot (round 1, 9, 17, 25, 33, 41, 49, 57, 64)
+- Son blok toplama ve H0..H7 + çalışma değişkenleri → 256-bit hash üretimi
 
 ---
 

@@ -182,6 +182,10 @@ class AlicePanel(QWidget):
         """Bob'un son adımı tamamlandıktan sonra Kapat butonunu aktif et."""
         self._btn_close_bob_diag.setEnabled(True)
 
+    def show_bob_verification_result(self, is_valid: bool) -> None:
+        """Bob'un 5 kripto adımından sonra karşılaştırma kutusunu sonuç rengiyle vurgula."""
+        self._bob_diag_widget.show_comparison_result(is_valid)
+
     def _on_close_bob_diagram(self) -> None:
         """Kapat butonuna basıldığında diyagramı gizle, Alice içeriğini geri getir."""
         self._bob_diag_widget.stop_blink()

@@ -589,6 +589,8 @@ class MainWindow(QMainWindow):
                 self._phase = "done"
                 self._btn_next.setEnabled(False)
                 self._btn_next.setText("Tamamlandı")
+                # Karşılaştırma kutusunu (diyagramın son adımı) doğrulama sonucuna göre vurgula
+                self._alice_panel.show_bob_verification_result(self._is_valid)
                 self._alice_panel.enable_bob_close_button()
                 self._show_comparison(self._original_message, self._decoded_message)
                 toast = VerificationToast(self._is_valid, parent=self)

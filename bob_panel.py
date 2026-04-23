@@ -179,7 +179,7 @@ _BOB_IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bob-
 _BOB_DIAGRAM_W = 546
 _BOB_DIAGRAM_H = 307
 
-# Bob'un 5 deşifreleme adımı için vurgulama alanları
+# Bob'un 6 deşifreleme + doğrulama adımı için vurgulama alanları
 # Piksel ölçümleri kenar tespitiyle doğrulanmıştır (bkz. bob-tarafi-sifre-cozme.png).
 _BOB_STEP_RECTS: list[QRect] = [
     QRect(195, 118, 34, 20),  # 0: RSA Oturum Anahtarı Çözme — K_B^-(·) kutusu    (a)   px(976, 590, 170, 102)
@@ -187,7 +187,12 @@ _BOB_STEP_RECTS: list[QRect] = [
     QRect(283, 163, 17, 18),  # 2: Mesaj ve İmza Ayrıştırma  — + dairesi          (b alt) px(1415, 815, 85, 90)
     QRect(319, 135, 34, 20),  # 3: SHA-256 Yeniden Hesaplama — H(·) kutusu         (d)   px(1593, 673, 168, 102)
     QRect(319, 188, 34, 21),  # 4: RSA İmza Doğrulama        — K_A^+(·) kutusu    (c)   px(1596, 942, 171, 103)
+    QRect(386, 158, 31, 27),  # 5: H(m) = H(m) Karşılaştırma — karşılaştırma kutusu      px(1927, 789, 154, 135)
 ]
+
+# Karşılaştırma sonucuna göre dolgu renkleri — yeşil: geçerli, kırmızı: geçersiz
+_SUCCESS_FILL = QColor(78, 139, 96, 110)   # koyu yeşil dolgu (başarı)
+_FAILURE_FILL = QColor(198, 40, 40, 110)   # koyu kırmızı dolgu (başarısız)
 
 
 class BobDecryptDiagramWidget(QWidget):
@@ -207,6 +212,9 @@ class BobDecryptDiagramWidget(QWidget):
         self._active_step: int = -1
         self._completed_steps: set[int] = set()
         self._blink_on: bool = False
+        # Karşılaştırma adımının (index 5) sonuç rengini ayrı tut:
+        # None → henüz gösterilmedi, True → başarılı (yeşil), False → başarısız (kırmızı)
+        self._comparison_result: bool | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(_BLINK_MS)
@@ -223,6 +231,20 @@ class BobDecryptDiagramWidget(QWidget):
         self._completed_steps.add(idx)
         self.update()
 
+    def show_comparison_result(self, is_valid: bool) -> None:
+        """Karşılaştırma adımını (index 5) sonuç rengine göre kalıcı vurgula.
+
+        Önceki aktif adımı (genellikle index 4) yeşil olarak tamamlanmış işaretler,
+        karşılaştırma kutusunu başarılıysa yeşil, değilse kırmızı renkle boyar.
+        Yanıp sönme durur ve kutu durağan bir sonuç göstergesine dönüşür.
+        """
+        self._timer.stop()
+        self._active_step = -1
+        self._blink_on = False
+        self._completed_steps.add(4)
+        self._comparison_result = bool(is_valid)
+        self.update()
+
     def stop_blink(self) -> None:
         self._timer.stop()
         self._active_step = -1
@@ -234,6 +256,7 @@ class BobDecryptDiagramWidget(QWidget):
         self._active_step = -1
         self._completed_steps.clear()
         self._blink_on = False
+        self._comparison_result = None
         self.update()
 
     def closeEvent(self, event) -> None:  # noqa: N802
@@ -262,6 +285,16 @@ class BobDecryptDiagramWidget(QWidget):
             for idx in self._completed_steps:
                 if 0 <= idx < len(_BOB_STEP_RECTS):
                     painter.fillRect(self._scaled_rect(_BOB_STEP_RECTS[idx]), _GREEN_FILL)
+
+            # Karşılaştırma sonucu (adım 5) — durağan, sonuç rengiyle boya
+            if self._comparison_result is not None:
+                cmp_rect = self._scaled_rect(_BOB_STEP_RECTS[5])
+                fill = _SUCCESS_FILL if self._comparison_result else _FAILURE_FILL
+                border = QColor(78, 139, 96) if self._comparison_result else _RED
+                painter.fillRect(cmp_rect, fill)
+                painter.setPen(QPen(border, 3))
+                painter.drawRect(cmp_rect)
+                painter.setPen(Qt.PenStyle.NoPen)
 
             if 0 <= self._active_step < len(_BOB_STEP_RECTS):
                 sr = self._scaled_rect(_BOB_STEP_RECTS[self._active_step])

@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.6%2B-green?style=for-the-badge&logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
 [![Cryptography](https://img.shields.io/badge/cryptography-44.0%2B-red?style=for-the-badge&logo=letsencrypt&logoColor=white)](https://cryptography.io/)
-[![License](https://img.shields.io/badge/Lisans-Akademik-yellow?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/Lisans-MIT-yellow?style=for-the-badge)](LICENSE)
 
 **Erciyes Üniversitesi — Bilgisayar Mühendisliği Bölümü**
 **Bitirme Projesi • 2025**
@@ -92,7 +92,6 @@ secure-email-auth/
 │   ├── sha256_animation.py         # SHA-256 animasyon penceresi (padding, W_i, sıkıştırma)
 │   └── sha256_pure.py              # Saf Python SHA-256 (adım ve W_i verisi)
 ├── icons/                          # SVG ve PNG ikon dosyaları
-├── docs/                           # Planlama ve tasarım spec dokümanları
 ├── alice and bob.png               # Alice tarafı şifreleme akış diyagramı
 ├── bob-tarafi-sifre-cozme.png      # Bob tarafı deşifre akış diyagramı
 ├── test_crypto_core.py             # Birim testleri (26 test senaryosu)
@@ -241,23 +240,45 @@ Maske Üretim Fonksiyonu  : MGF1(SHA-256) (RFC 8017 §B.2.1)
 
 ### Gereksinimler
 
-- Python 3.9+
+- Python 3.9 – 3.12 (PyQt6 6.6+ ile uyumlu)
 - pip
+- Masaüstü ortamı (GUI için)
+
+> **Not:** Proje yerel olarak Python 3.11 üzerinde geliştirilmiş ve doğrulanmıştır.
 
 ### Kurulum
 
+**1. Repoyu klonlayın**
+
 ```bash
-# Repoyu klonlayın
 git clone https://github.com/aydemirbrkay/secure-email-auth.git
 cd secure-email-auth
+```
 
-# Sanal ortam oluşturun (önerilir)
+**2. Sanal ortam oluşturun (önerilir)**
+
+Windows (PowerShell / CMD):
+
+```bat
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux/macOS
+.venv\Scripts\activate
+```
 
-# Bağımlılıkları yükleyin
+Linux / macOS (bash / zsh):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+**3. Bağımlılıkları yükleyin**
+
+```bash
+# Sadece uygulamayı çalıştırmak için:
 pip install -r requirements.txt
+
+# Testleri de çalıştırmak istiyorsanız:
+pip install -r requirements-dev.txt
 ```
 
 ### Çalıştırma
@@ -268,9 +289,22 @@ python main_gui.py
 
 ### Testleri Çalıştırma
 
+Tüm test dosyalarını tek seferde çalıştırmak için:
+
+```bash
+python -m pytest -v
+```
+
+Yalnızca belirli test dosyalarını çalıştırmak için:
+
 ```bash
 python -m pytest test_crypto_core.py test_aes_pure.py test_sha256_pure.py test_diagram_rects.py -v
 ```
+
+### Olası Sorunlar
+
+- **PyQt6 DLL / kütüphane hatası:** Anaconda / Miniconda ortamlarında PyQt6 binaries çakışması yaşanabilir. Bu durumda resmi **python.org** dağıtımı ile oluşturulmuş bir `venv` kullanmak sorunu çözer.
+- **Linux'ta eksik Qt bağımlılıkları:** Bazı dağıtımlarda `libxcb-xinerama0`, `libxkbcommon-x11-0` gibi sistem paketlerinin kurulması gerekebilir.
 
 ---
 
@@ -319,7 +353,7 @@ python -m pytest test_crypto_core.py test_aes_pure.py test_sha256_pure.py test_d
 
 ## Lisans
 
-Bu proje **Erciyes Üniversitesi Bilgisayar Mühendisliği Bitirme Projesi** kapsamında hazırlanmıştır. Akademik kullanım için serbesttir.
+Bu proje **Erciyes Üniversitesi Bilgisayar Mühendisliği Bitirme Projesi** kapsamında hazırlanmıştır ve [MIT Lisansı](LICENSE) ile dağıtılmaktadır. Akademik, eğitimsel ve kişisel kullanım için serbesttir.
 
 ---
 

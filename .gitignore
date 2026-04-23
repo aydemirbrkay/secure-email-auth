@@ -12,12 +12,24 @@ build/
 venv/
 env/
 .venv/
+ENV/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-workspace
+*.sublime-project
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
 
 # PyInstaller
 *.spec
@@ -25,6 +37,12 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Byte-compiled
 *.pyc
+
+# Local env / secrets
+.env
+.env.*
+!.env.example

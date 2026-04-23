@@ -169,6 +169,110 @@ class DiagramWidget(QWidget):
             painter.end()
 
 
+# ---------------------------------------------------------------------------
+# Bob Deşifreleme Diyagramı — alice panelinde gösterilir
+# Koordinatlar 546×307 sanal uzayında; paintEvent widget boyutuna ölçekler.
+# Gerçek görsel: 2730×1536 — ölçek: x/5, y/5
+# ---------------------------------------------------------------------------
+
+_BOB_IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bob-tarafi-sifre-cozme.png")
+_BOB_DIAGRAM_W = 546
+_BOB_DIAGRAM_H = 307
+
+# Bob'un 5 deşifreleme adımı için vurgulama alanları
+# Piksel ölçümleri kenar tespitiyle doğrulanmıştır (bkz. bob-tarafi-sifre-cozme.png).
+_BOB_STEP_RECTS: list[QRect] = [
+    QRect(195, 118, 34, 20),  # 0: RSA Oturum Anahtarı Çözme — K_B^-(·) kutusu    (a)   px(976, 590, 170, 102)
+    QRect(234, 163, 34, 20),  # 1: AES-256-GCM Deşifreleme   — K_S(·) kutusu      (b üst) px(1171, 815, 170, 102)
+    QRect(283, 163, 17, 18),  # 2: Mesaj ve İmza Ayrıştırma  — + dairesi          (b alt) px(1415, 815, 85, 90)
+    QRect(319, 135, 34, 20),  # 3: SHA-256 Yeniden Hesaplama — H(·) kutusu         (d)   px(1593, 673, 168, 102)
+    QRect(319, 188, 34, 21),  # 4: RSA İmza Doğrulama        — K_A^+(·) kutusu    (c)   px(1596, 942, 171, 103)
+]
+
+
+class BobDecryptDiagramWidget(QWidget):
+    """Alice panelinde gösterilen bob-tarafi-sifre-cozme.png + adım vurgulama animasyonu."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumSize(300, 150)
+
+        self._pixmap = QPixmap()
+        if os.path.isfile(_BOB_IMAGE_PATH):
+            self._pixmap = QPixmap(_BOB_IMAGE_PATH)
+        else:
+            print(f"[BobDecryptDiagramWidget] Uyarı: görsel bulunamadı → {_BOB_IMAGE_PATH}")
+
+        self._active_step: int = -1
+        self._completed_steps: set[int] = set()
+        self._blink_on: bool = False
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(_BLINK_MS)
+        self._timer.timeout.connect(self._toggle_blink)
+
+    def set_active_step(self, idx: int) -> None:
+        self._active_step = idx
+        self._blink_on = True
+        if not self._timer.isActive():
+            self._timer.start()
+        self.update()
+
+    def mark_step_done(self, idx: int) -> None:
+        self._completed_steps.add(idx)
+        self.update()
+
+    def stop_blink(self) -> None:
+        self._timer.stop()
+        self._active_step = -1
+        self._blink_on = False
+        self.update()
+
+    def reset(self) -> None:
+        self._timer.stop()
+        self._active_step = -1
+        self._completed_steps.clear()
+        self._blink_on = False
+        self.update()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self._timer.stop()
+        super().closeEvent(event)
+
+    def _toggle_blink(self) -> None:
+        self._blink_on = not self._blink_on
+        self.update()
+
+    def _scaled_rect(self, r: QRect) -> QRect:
+        sx = self.width() / _BOB_DIAGRAM_W
+        sy = self.height() / _BOB_DIAGRAM_H
+        return QRect(round(r.x() * sx), round(r.y() * sy),
+                     round(r.width() * sx), round(r.height() * sy))
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        try:
+            if not self._pixmap.isNull():
+                painter.drawPixmap(self.rect(), self._pixmap)
+            else:
+                painter.fillRect(self.rect(), QColor(40, 40, 60))
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            for idx in self._completed_steps:
+                if 0 <= idx < len(_BOB_STEP_RECTS):
+                    painter.fillRect(self._scaled_rect(_BOB_STEP_RECTS[idx]), _GREEN_FILL)
+
+            if 0 <= self._active_step < len(_BOB_STEP_RECTS):
+                sr = self._scaled_rect(_BOB_STEP_RECTS[self._active_step])
+                if self._blink_on:
+                    painter.fillRect(sr, _RED_FILL)
+                painter.setPen(QPen(_RED, 3))
+                painter.drawRect(sr)
+        finally:
+            painter.end()
+
+
 from crypto_core import EncryptedPacket, StepResult
 from theme import COLORS, STEP_COLORS_BOB
 from utils import _build_step_content, _make_step_box, _svg_pixmap

@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QTextEdit,
     QVBoxLayout,
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
 from crypto_core import StepResult
 from theme import COLORS, STEP_COLORS_ALICE
 from utils import _build_step_content, _make_step_box, _svg_pixmap
+from bob_panel import BobDecryptDiagramWidget
 
 
 class AlicePanel(QWidget):
@@ -105,6 +107,28 @@ class AlicePanel(QWidget):
         layout.addWidget(self._anim_container, stretch=1)
         # ─────────────────────────────────────────────────────────────────
 
+        # ── Bob deşifreleme diyagramı container (başta gizli) ─────────────
+        self._bob_diag_container = QWidget()
+        bob_diag_layout = QVBoxLayout(self._bob_diag_container)
+        bob_diag_layout.setContentsMargins(0, 0, 0, 4)
+        bob_diag_layout.setSpacing(4)
+        self._bob_diag_widget = BobDecryptDiagramWidget()
+        bob_diag_layout.addWidget(self._bob_diag_widget)
+        self._btn_close_bob_diag = QPushButton("✖  Kapat")
+        self._btn_close_bob_diag.setEnabled(False)
+        self._btn_close_bob_diag.setFixedHeight(32)
+        self._btn_close_bob_diag.setStyleSheet(
+            "QPushButton { background: rgba(198,40,40,0.12); border: 2px solid #C62828; "
+            "border-radius: 6px; color: #C62828; font-weight: bold; font-size: 12px; }"
+            "QPushButton:hover { background: rgba(198,40,40,0.28); }"
+            "QPushButton:disabled { background: #536070; border: 1px solid #5A6272; color: #8896A8; }"
+        )
+        self._btn_close_bob_diag.clicked.connect(self._on_close_bob_diagram)
+        bob_diag_layout.addWidget(self._btn_close_bob_diag)
+        self._bob_diag_container.setVisible(False)
+        layout.addWidget(self._bob_diag_container, stretch=1)
+        # ─────────────────────────────────────────────────────────────────
+
         self._normal_widgets: list[QWidget] = [
             self._title_widget, self._msg_group, self._scroll, self.status_label
         ]
@@ -132,8 +156,46 @@ class AlicePanel(QWidget):
         for w in self._normal_widgets:
             w.setVisible(True)
 
+    # ------------------------------------------------------------------
+    # Bob Deşifreleme Diyagramı API
+    # ------------------------------------------------------------------
+
+    def show_bob_diagram(self) -> None:
+        """Bob deşifreleme fazı başladığında diyagramı Alice panelinde göster."""
+        old = self._anim_scroll.takeWidget()
+        if old is not None:
+            if hasattr(old, "_stop_timers"):
+                old._stop_timers()
+            old.deleteLater()
+        self._anim_container.setVisible(False)
+        for w in self._normal_widgets:
+            w.setVisible(False)
+        self._bob_diag_container.setVisible(True)
+
+    def set_bob_diagram_step(self, step_idx: int) -> None:
+        """Önceki adımı yeşil yap, step_idx'i kırmızı blink ile vurgula."""
+        if step_idx > 0:
+            self._bob_diag_widget.mark_step_done(step_idx - 1)
+        self._bob_diag_widget.set_active_step(step_idx)
+
+    def enable_bob_close_button(self) -> None:
+        """Bob'un son adımı tamamlandıktan sonra Kapat butonunu aktif et."""
+        self._btn_close_bob_diag.setEnabled(True)
+
+    def _on_close_bob_diagram(self) -> None:
+        """Kapat butonuna basıldığında diyagramı gizle, Alice içeriğini geri getir."""
+        self._bob_diag_widget.stop_blink()
+        self._bob_diag_container.setVisible(False)
+        for w in self._normal_widgets:
+            w.setVisible(True)
+
+    # ------------------------------------------------------------------
+
     def reset(self) -> None:
         self.hide_animation()
+        self._bob_diag_widget.reset()
+        self._bob_diag_container.setVisible(False)
+        self._btn_close_bob_diag.setEnabled(False)
         self._steps = []
         self._current_step = 0
         self._step_widgets.clear()

@@ -527,6 +527,14 @@ class _MixColumnsAnimWidget(QWidget):
         ANIM_COLORS["accent_peach"],
     ]
 
+    # GF(2⁸) MixColumns output formulas — one per output byte row
+    _FORMULAS = [
+        "02·s₀⊕03·s₁⊕s₂⊕s₃",
+        "s₀⊕02·s₁⊕03·s₂⊕s₃",
+        "s₀⊕s₁⊕02·s₂⊕03·s₃",
+        "03·s₀⊕s₁⊕s₂⊕02·s₃",
+    ]
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._before: list[list[str]] = [["--"] * 4 for _ in range(4)]
@@ -556,42 +564,94 @@ class _MixColumnsAnimWidget(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         W = self.width()
-        n_cols = 4
-        col_section_w = (W - 12) // n_cols
-        cell_w = col_section_w - 8
-        cell_h = 28
-        gap_y = 3
 
-        font_val = QFont("Courier New", 8, QFont.Weight.Bold)
-        font_lbl = QFont("IBM Plex Sans", 8, QFont.Weight.Bold)
-        font_sym = QFont("IBM Plex Sans", 12)
+        font_val  = QFont("Courier New", 8, QFont.Weight.Bold)
+        font_lbl  = QFont("IBM Plex Sans", 8, QFont.Weight.Bold)
+        # font_mat and font_fml are both Courier New 7 — kept separate for
+        # readability so either can be independently tuned later.
+        font_mat  = QFont("Courier New", 7)
+        font_fml  = QFont("Courier New", 7)
 
-        # Başlık
+        # ── Başlık ──────────────────────────────────────────────────────
         p.setFont(font_lbl)
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         p.drawText(QRect(0, 2, W, 14), Qt.AlignmentFlag.AlignCenter,
                    "GF(2⁸)  Matris Çarpımı  —  Sütun Karıştırma")
 
+        # ── MixColumns matrisi (sol panel) ──────────────────────────────
+        # Matrix box width and position
+        mat_box_w = 88
+        mat_box_h = 72
+        mat_box_x = 4
+        mat_box_y = 22  # 16px title + 6px gap
+
+        mat_bg   = QColor(ANIM_COLORS["bg_card"])
+        mat_brd  = QColor(ANIM_COLORS["accent_mauve"])
+        p.setBrush(QBrush(mat_bg))
+        p.setPen(QPen(mat_brd, 1))
+        p.drawRoundedRect(mat_box_x, mat_box_y, mat_box_w, mat_box_h, 4, 4)
+
+        # Matrix label
+        p.setFont(font_lbl)
+        p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
+        p.drawText(QRect(mat_box_x, mat_box_y + 2, mat_box_w, 12),
+                   Qt.AlignmentFlag.AlignCenter, "MixCol Matrisi")
+
+        mc_rows = [
+            "02  03  01  01",
+            "01  02  03  01",
+            "01  01  02  03",
+            "03  01  01  02",
+        ]
+        p.setFont(font_mat)
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        for i, row_txt in enumerate(mc_rows):
+            row_y = mat_box_y + 16 + i * 13
+            p.drawText(QRect(mat_box_x + 4, row_y, mat_box_w - 8, 13),
+                       Qt.AlignmentFlag.AlignCenter, row_txt)
+
+        # "×" symbol to the right of the matrix box
+        p.setFont(QFont("IBM Plex Sans", 13))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        times_x = mat_box_x + mat_box_w + 1
+        times_y = mat_box_y + mat_box_h // 2 - 10
+        p.drawText(QRect(times_x, times_y, 12, 20), Qt.AlignmentFlag.AlignCenter, "×")
+
+        # ── Column sections ─────────────────────────────────────────────
+        # Available width after the matrix box + "×" symbol
+        cols_x_start = mat_box_x + mat_box_w + 14   # start of column area
+        cols_avail_w = W - cols_x_start - 4
+        col_section_w = max(1, cols_avail_w // 4)
+        cell_w = max(1, col_section_w - 6)
+        cell_h = 24
+        gap_y  = 3
+
         for col in range(4):
-            x_col = 6 + col * col_section_w
-            color = self._COL_COLORS[col]
-            is_done = col < self._active_col
+            x_col = cols_x_start + col * col_section_w
+            color  = self._COL_COLORS[col]
+            is_done   = col < self._active_col
             is_active = col == self._active_col - 1
-            alpha = "88" if is_done else ("55" if is_active else "22")
+            alpha  = "88" if is_done else ("55" if is_active else "22")
             border_w = 2 if is_active else 1
 
-            # Sütun etiketi
+            # Column label
             p.setFont(font_lbl)
             lbl_color = QColor(color) if (is_active or is_done) else QColor(ANIM_COLORS["text_muted"])
             p.setPen(lbl_color)
-            p.drawText(QRect(x_col, 18, col_section_w, 14),
+            p.drawText(QRect(x_col, mat_box_y, col_section_w, 14),
                        Qt.AlignmentFlag.AlignCenter, f"S{col+1}")
 
-            y_start = 36
-            # Önce (before) hücreleri — 4 satır
+            # "Giriş" sub-label
+            p.setFont(font_mat)
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x_col, mat_box_y + 13, col_section_w, 10),
+                       Qt.AlignmentFlag.AlignCenter, "giriş")
+
+            y_start = mat_box_y + 24
+            # Before (input) cells — 4 rows
             for row in range(4):
                 y = y_start + row * (cell_h + gap_y)
-                bg = QColor(color + alpha)
+                bg     = QColor(color + alpha)
                 border = QColor(color)
                 p.setBrush(QBrush(bg))
                 p.setPen(QPen(border, border_w))
@@ -601,43 +661,42 @@ class _MixColumnsAnimWidget(QWidget):
                 p.drawText(QRect(x_col + 2, y, cell_w, cell_h),
                            Qt.AlignmentFlag.AlignCenter, self._before[row][col])
 
-                # ⊕ sembolü satırlar arasında (ilk 3 satırın altında)
-                if row < 3:
-                    sym_y = y + cell_h
-                    p.setFont(font_sym)
-                    p.setPen(QColor(color if (is_active or is_done) else ANIM_COLORS["text_muted"]))
-                    p.drawText(QRect(x_col, sym_y, col_section_w, gap_y + 2),
-                               Qt.AlignmentFlag.AlignCenter, "⊕")
-
-            # Ok: aşağı
-            arr_top = y_start + 4 * (cell_h + gap_y) + 4
-            arr_bot = arr_top + 18
+            # Down arrow
+            arr_top = y_start + 4 * (cell_h + gap_y) + 3
+            arr_bot = arr_top + 14
             if is_active or is_done:
                 p.setPen(QPen(QColor(color), 2))
                 mid_x = x_col + col_section_w // 2
-                p.drawLine(mid_x, arr_top, mid_x, arr_bot - 6)
+                p.drawLine(mid_x, arr_top, mid_x, arr_bot - 5)
                 pts = QPolygon([
                     QPoint(mid_x, arr_bot),
-                    QPoint(mid_x - 5, arr_bot - 8),
-                    QPoint(mid_x + 5, arr_bot - 8),
+                    QPoint(mid_x - 4, arr_bot - 7),
+                    QPoint(mid_x + 4, arr_bot - 7),
                 ])
                 p.setBrush(QBrush(QColor(color)))
                 p.drawPolygon(pts)
 
-            # Sonra (after) hücreleri
-            y2_start = arr_bot + 2
+            # "Çıkış" sub-label
+            y2_label = arr_bot + 1
+            p.setFont(font_mat)
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x_col, y2_label, col_section_w, 10),
+                       Qt.AlignmentFlag.AlignCenter, "çıkış")
+
+            # After (output) cells
+            y2_start = y2_label + 10
             for row in range(4):
                 y = y2_start + row * (cell_h + gap_y)
                 if is_active or is_done:
-                    bg = QColor(color + "33")
+                    bg     = QColor(color + "33")
                     border = QColor(color)
-                    val = self._after[row][col]
-                    txt = QColor(ANIM_COLORS["text_primary"])
+                    val    = self._after[row][col]
+                    txt    = QColor(ANIM_COLORS["text_primary"])
                 else:
-                    bg = QColor(ANIM_COLORS["bg_input"])
+                    bg     = QColor(ANIM_COLORS["bg_input"])
                     border = QColor(ANIM_COLORS["border"])
-                    val = "--"
-                    txt = QColor(ANIM_COLORS["text_muted"])
+                    val    = "--"
+                    txt    = QColor(ANIM_COLORS["text_muted"])
                 p.setBrush(QBrush(bg))
                 p.setPen(QPen(border, 1))
                 p.drawRoundedRect(x_col + 2, y, cell_w, cell_h, 3, 3)
@@ -645,6 +704,17 @@ class _MixColumnsAnimWidget(QWidget):
                 p.setPen(txt)
                 p.drawText(QRect(x_col + 2, y, cell_w, cell_h),
                            Qt.AlignmentFlag.AlignCenter, val)
+
+            # Formula labels for the active column (drawn below output cells)
+            if is_active:
+                fml_y = y2_start + 4 * (cell_h + gap_y) + 4
+                p.setFont(font_fml)
+                p.setPen(QColor(color))
+                for fi, fml in enumerate(self._FORMULAS):
+                    fml_x = max(0, x_col - col_section_w // 2)
+                    fml_w = min(col_section_w * 2, W - fml_x)
+                    p.drawText(QRect(fml_x, fml_y + fi * 11, fml_w, 11),
+                               Qt.AlignmentFlag.AlignLeft, fml)
 
         p.end()
 
@@ -993,6 +1063,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             [mat[r][c] for r in range(4)] for c in range(4)
         ]
         hex_out = "".join("".join(col) for col in col_bytes)
+        assert len(hex_out) == 32, f"Unexpected hex_out length: {len(hex_out)}"
 
         col_lines = []
         for c in range(4):
@@ -1032,12 +1103,29 @@ class AESAnimationWindow(CryptoAnimationWindow):
             "GHASH fonksiyonu da ayrıca kimlik doğrulama etiketi üretir.",
             "",
             "─" * 54,
-            f"Animasyon çıktısı (ECB blok):  {self._final_block_hex}",
-            f"crypto_core GCM çıktısı:       {self._expected_ct_hex}",
+            f"Animasyon çıktısı (AES-ECB blok dönüşümü):  {self._final_block_hex}",
+            f"crypto_core GCM çıktısı (gerçek şifreli metin):  {self._expected_ct_hex}",
             "",
-            "✅  AES-256 Blok Dönüşümü Başarılı",
         ]
-        self._match_lbl.setText("\n".join(lines))
+
+        # Build HTML for the label so the ⚠ warning line can be colored
+        # differently (yellow) from the ✅ success line (green via stylesheet).
+        warning_line = (
+            f'<span style="color:{ANIM_COLORS["accent_yellow"]}; font-weight:bold;">'
+            "⚠  Bu iki değer farklıdır — bu beklenen bir durumdur:"
+            "</span>"
+        )
+        plain_lines = [
+            "",
+            "  Animasyon: plaintext'in 14 round AES-ECB çıktısı",
+            "  GCM modu:  CTR sayacı şifrelenir → plaintext ⊕ keystream → ciphertext",
+            "             Aynı anahtar, farklı IV ve counter → farklı çıktı",
+            "",
+            "✅  AES-256-GCM Şifreleme Doğru Çalıştı",
+        ]
+        html_body = "<br>".join(lines) + "<br>" + warning_line + "<br>" + "<br>".join(plain_lines)
+        self._match_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self._match_lbl.setText(html_body)
         self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
 
     # showEvent override — intro başlatılmış, timer başlatma

@@ -579,13 +579,17 @@ class MainWindow(QMainWindow):
                 self._bob_has_more = True
                 self._phase = "bob"
                 self._btn_next.setText("Sonraki Adım")
+                self._alice_panel.show_bob_diagram()
 
         elif self._phase == "bob":
+            step_idx = self._bob_panel._current_step
             self._bob_has_more = self._bob_panel.show_next_step()
+            self._alice_panel.set_bob_diagram_step(step_idx)
             if not self._bob_has_more:
                 self._phase = "done"
                 self._btn_next.setEnabled(False)
                 self._btn_next.setText("Tamamlandı")
+                self._alice_panel.enable_bob_close_button()
                 self._show_comparison(self._original_message, self._decoded_message)
                 toast = VerificationToast(self._is_valid, parent=self)
                 toast.show()

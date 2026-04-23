@@ -41,9 +41,12 @@ _EEA_STEPS = [
     ("17   =   1 × 9  + 8",   "17   mod  9 = 8"),
     ("9    =   1 × 8  + 1",   "9    mod  8 = 1"),
     ("8    =   8 × 1  + 0",   "← GCD = 1, geri iz başlıyor"),
-    ("1 = 9 − 1×8",           ""),
-    ("1 = 9 − 1×(17 − 9)   = 2×9 − 17", ""),
-    ("1 = 2×(3120 − 183×17) − 17       = 2×3120 − 367×17", ""),
+    ("1 = 9 − 1×8",
+     "← satır 3'ten: 9 = 1×8 + 1 → 1 = 9 − 8"),
+    ("1 = 9 − 1×(17 − 1×9)  =  2×9 − 17",
+     "← satır 2'den 8'i yerine koy: 8 = 17 − 1×9"),
+    ("1 = 2×(3120 − 183×17) − 17  =  2×3120 − 367×17",
+     "← satır 1'den 9'u yerine koy: 9 = 3120 − 183×17"),
     (f"d = −367 mod 3120 = {_D}", "✓  d = 2753"),
 ]
 
@@ -134,13 +137,16 @@ class RSAAnimationWindow(CryptoAnimationWindow):
             f"Demo Açık Anahtar:   (e={_E},  n={_N})<br>"
             f"Demo Gizli Anahtar:  (d={_D},  n={_N})<br><br>"
             f"{'─' * 60}<br><br>"
-            f"Alice Açık Anahtarı — crypto_core (Base64):<br>"
+            f"Bu projede kullanılan gerçek RSA-2048 anahtarları:<br><br>"
+            f"Alice Açık Anahtarı (Base64):<br>"
             f"&nbsp;&nbsp;{self._alice_b64}<br><br>"
-            f"Bob Açık Anahtarı — crypto_core (Base64):<br>"
+            f"Bob Açık Anahtarı (Base64):<br>"
             f"&nbsp;&nbsp;{self._bob_b64}<br><br>"
-            f"<span style='color: {green}; font-weight: bold;'>✅&nbsp;&nbsp;Eşleşme Başarılı</span><br><br>"
-            f"Matematiksel yapı (e, n) → ASN.1 DER → Base64 dönüşümü<br>"
-            f"yukarıdaki uzun anahtarı üretir."
+            f"<span style='color: {ANIM_COLORS['accent_yellow']}; font-weight:bold;'>"
+            f"⚠ Demo değerler (p=61, q=53) eğitim içindir; gerçek anahtarlar farklı (p,q ≈ 1024-bit).</span><br><br>"
+            f"<span style='color: {green}; font-weight:bold;'>✅&nbsp;&nbsp;Aynı Matematik, Farklı Boyut</span><br><br>"
+            f"Demo'da gösterilen (e,n) → ASN.1 DER → Base64 adımlarının aynısı,<br>"
+            f"gerçek 2048-bit p ve q ile uygulanarak yukarıdaki anahtarları üretir."
         )
 
 
@@ -231,7 +237,17 @@ _STEP_BODIES: list[str] = [
         "━━  DOĞRULAMA  ━━\n\n"
         f"  {_E} × {_D}  mod  {_PHI}  =  {(_E * _D) % _PHI}  ✓\n\n"
         "Gizli anahtar = (d, n) çifti\n"
-        f"  →  (d={_D},  n={_N})"
+        f"  →  (d={_D},  n={_N})\n"
+        f"\n━━  DOĞRULAMA — Gerçek Şifreleme/Deşifreleme  ━━\n\n"
+        f"  m = 65  (örnek mesaj)\n\n"
+        f"  Şifreleme:  c  =  m^e  mod  n\n"
+        f"             c  =  65^{_E}  mod  {_N}\n"
+        f"             c  =  {pow(65, _E, _N)}\n\n"
+        f"  Deşifreleme:  m  =  c^d  mod  n\n"
+        f"               m  =  {pow(65, _E, _N)}^{_D}  mod  {_N}\n"
+        f"               m  =  {pow(pow(65, _E, _N), _D, _N)}  ✓  (orijinal mesaj)\n\n"
+        f"Sadece d'yi bilen (yani gizli anahtarı bilen) {pow(65, _E, _N)}'i\n"
+        f"tekrar {pow(pow(65, _E, _N), _D, _N)}'ye dönüştürebilir.\n"
     ),
     # Adım 5 — Anahtar kodlama (gerçek byte dönüşümü)
     (

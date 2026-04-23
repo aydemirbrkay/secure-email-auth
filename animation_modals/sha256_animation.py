@@ -60,7 +60,7 @@ class _SHA256DiagramWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(340)
+        self.setMinimumHeight(360)
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
         )
@@ -232,19 +232,11 @@ class _SHA256DiagramWidget(QWidget):
         d_cx = ox + 3 * (box_w + gap) + box_w // 2
         p.drawLine(d_cx, top_y + box_h, d_cx, bot_y)
         p.drawLine(d_cx, bot_y, e_out_cx, bot_y)
-
-        # Kaydırma okları: B←A, C←B ... (noktalı)
-        pen5 = QPen(QColor(ANIM_COLORS["text_muted"]), 1)
-        pen5.setStyle(Qt.PenStyle.DotLine)
-        p.setPen(pen5)
-        shift_y = top_y + box_h + 8
-        for i in range(1, 8):
-            if i == 4:
-                continue
-            src_cx = ox + (i - 1) * (box_w + gap) + box_w // 2
-            dst_cx = ox + i * (box_w + gap) + box_w // 2
-            p.drawLine(src_cx, shift_y, dst_cx, shift_y)
-            self._arrowhead(p, dst_cx, shift_y, size=5)
+        self._arrowhead_right(p, e_out_cx, bot_y)
+        p.setFont(QFont("IBM Plex Sans", 7))
+        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        p.drawText(QRect(e_out_cx - box_w // 2 - 2, bot_y, box_w // 2, box_h // 2),
+                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "+D")
 
         # ── Alt satır: çıkış registerları ──
         custom_out_colors = list(_REG_COLORS)
@@ -258,6 +250,14 @@ class _SHA256DiagramWidget(QWidget):
             font_lbl, font_val, suffix="'",
             custom_colors=custom_out_colors,
         )
+
+        # Kaydırma açıklaması (legend)
+        p.setFont(QFont("IBM Plex Sans", 8))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        legend_y = bot_y + box_h + 6
+        p.drawText(QRect(ox, legend_y, total, 14),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "B'=A  C'=B  D'=C  F'=E  G'=F  H'=G  (diğerleri kaydırılır)")
 
         # Aşama etiketi (sağ alt)
         phase_labels = [
@@ -325,6 +325,17 @@ class _SHA256DiagramWidget(QWidget):
             QPoint(x, y),
             QPoint(x - size, y - size * 2),
             QPoint(x + size, y - size * 2),
+        ])
+        p.setBrush(QBrush(p.pen().color()))
+        p.drawPolygon(pts)
+
+    @staticmethod
+    def _arrowhead_right(p: QPainter, x: int, y: int, size: int = 6) -> None:
+        """Sağa bakan ok ucu."""
+        pts = QPolygon([
+            QPoint(x, y),
+            QPoint(x - size * 2, y - size),
+            QPoint(x - size * 2, y + size),
         ])
         p.setBrush(QBrush(p.pen().color()))
         p.drawPolygon(pts)
@@ -676,7 +687,8 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
 
     Adımlar:
       0        : Padding görselleştirmesi
-      1..N     : Her 512-bit blok için kompresyon diyagramı (3 snapshot: r1,r32,r64)
+      1        : Mesaj genişletme (W_i) sayfası
+      2..9*N+1 : Her 512-bit blok için kompresyon diyagramı (9 snapshot: round 1,9,17,25,33,41,49,57,64)
       son adım : Hash eşleşmesi (_show_match_result)
 
     Parametreler:
@@ -696,11 +708,11 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._data = sha256_steps(message.encode("utf-8"))
 
         # Adım 0: padding
-        # Adım 1..3*N: her blok için 3 snapshot (r1, r32, r64)
+        # Adım 1: W_i mesaj genişletme
+        # Adım 2..9*N+1: her blok için 9 snapshot (round 1,9,17,25,33,41,49,57,64)
         # Son adım: eşleşme (_show_match_result)
         snaps = self._data["round_snapshots"]
-        # 3 snapshot per block
-        total = 1 + len(snaps)   # padding + all snapshots
+        total = 2 + len(snaps)   # padding + W_i genişletme + all snapshots
         super().__init__(
             "🔐  SHA-256 Hash Animasyonu",
             total,
@@ -726,6 +738,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         # Sayfa 1 — Padding
         self._page_padding = self._make_padding_page()
         self._stack.addWidget(self._page_padding)
+
+        # Sayfa 1b — Mesaj Genişletme (W_i)
+        self._page_wexpand = self._make_wexpand_page()
+        self._stack.addWidget(self._page_wexpand)
 
         # Sayfa 2 — Kompresyon diyagramı (tüm snapshot'lar için tek sayfa, veri güncellenir)
         self._page_diagram = self._make_diagram_page()
@@ -781,6 +797,64 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         cl.setContentsMargins(10, 8, 10, 8)
         cl.addWidget(info)
 
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(card)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        lay.addWidget(scroll)
+        return w
+
+    def _make_wexpand_page(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 8, 12, 8)
+
+        title = QLabel("Adım 2 — Mesaj Genişletme (Message Schedule)")
+        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_mauve']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+
+        d = self._data
+        exp = d.get("w_expansion") or []
+
+        lines = [
+            "W[0..15]:  Blok'tan doğrudan (mesajın 16 × 32-bit kelimesi)",
+            "",
+            "W[16..63]: σ1(W[i-2]) + W[i-7] + σ0(W[i-15]) + W[i-16]  (mod 2³²)",
+            "",
+            "  σ0(x) = ROTR(x,7)  ⊕  ROTR(x,18)  ⊕  SHR(x,3)",
+            "  σ1(x) = ROTR(x,17) ⊕  ROTR(x,19)  ⊕  SHR(x,10)",
+            "",
+            "─" * 56,
+            "Örnek — İlk blok W[16..31]:",
+            "",
+        ]
+        for entry in exp:
+            i = entry["i"]
+            lines.append(
+                f"  W[{i:2d}] = W[{i-16:2d}]({entry['w_i16']}) + σ0({entry['s0']}) "
+                f"+ W[{i-7:2d}]({entry['w_i7']}) + σ1({entry['s1']}) = {entry['result']}"
+            )
+        lines += [
+            "",
+            "64 round boyunca Compression fonksiyonu W[0..63] kullanır.",
+        ]
+
+        info = QLabel("\n".join(lines))
+        info.setFont(QFont("Courier New", 9))
+        info.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
+        info.setWordWrap(True)
+        info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        card = QFrame()
+        card.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(10, 8, 10, 8)
+        cl.addWidget(info)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(card)
@@ -849,9 +923,12 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         if step_idx == 0:
             self._stack.setCurrentWidget(self._page_padding)
             return
+        if step_idx == 1:
+            self._stack.setCurrentWidget(self._page_wexpand)
+            return
 
-        # step_idx 1..len(snaps) → snapshot[step_idx - 1]
-        snap_idx = step_idx - 1
+        # step_idx 2..len(snaps)+1 → snapshot[step_idx - 2]
+        snap_idx = step_idx - 2
         if snap_idx >= len(self._snaps):
             return
 

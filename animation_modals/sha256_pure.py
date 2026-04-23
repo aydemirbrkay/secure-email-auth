@@ -63,12 +63,28 @@ def sha256_steps(message: bytes) -> dict:
     h = list(H0)
     round_snapshots: list[dict] = []
 
+    w_expansion_sample: list[dict] | None = None
+
     for block in blocks:
         w = list(struct.unpack(">16I", block))
         for i in range(16, 64):
             s0 = _rotr(w[i - 15], 7) ^ _rotr(w[i - 15], 18) ^ (w[i - 15] >> 3)
             s1 = _rotr(w[i - 2], 17) ^ _rotr(w[i - 2], 19) ^ (w[i - 2] >> 10)
             w.append((w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFF)
+
+        if w_expansion_sample is None:  # ilk blok, henüz snapshot yok
+            w_expansion_sample = []
+            for i in range(16, 32):
+                s0 = _rotr(w[i - 15], 7) ^ _rotr(w[i - 15], 18) ^ (w[i - 15] >> 3)
+                s1 = _rotr(w[i - 2], 17) ^ _rotr(w[i - 2], 19) ^ (w[i - 2] >> 10)
+                w_expansion_sample.append({
+                    "i": i,
+                    "w_i16": f"{w[i-16]:08x}",
+                    "s0": f"{s0:08x}",
+                    "w_i7": f"{w[i-7]:08x}",
+                    "s1": f"{s1:08x}",
+                    "result": f"{w[i]:08x}",
+                })
 
         a, b, c, d, e, f, g, hh = h
 
@@ -113,6 +129,7 @@ def sha256_steps(message: bytes) -> dict:
         "blocks_count": len(blocks),
         "initial_h": [f"{v:08x}" for v in H0],
         "round_snapshots": round_snapshots,
+        "w_expansion": w_expansion_sample,
         "final_hash": final_hash,
         # Son blok toplama adımı için
         "pre_final_h":      [f"{v:08x}" for v in h_before],

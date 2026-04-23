@@ -23,7 +23,9 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (
     RSAPrivateKey,
     RSAPublicKey,
 )
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidSignature
 
 
 # ---------------------------------------------------------------------------
@@ -53,12 +55,16 @@ class RSAKeyPair:
 
 @dataclass
 class EncryptedPacket:
-    """Alice → Bob iletimi için şifreli paket."""
+    """Alice → Bob iletimi için şifreli paket.
 
-    encrypted_message: bytes       # AES-256-GCM ile şifrelenmiş (mesaj ∥ imza)
-    encrypted_session_key: bytes   # RSA ile şifrelenmiş oturum anahtarı K_S
+    AES-GCM çıktısı ``ciphertext || tag`` biçiminde tek alanda
+    taşınır (PyCA ``AESGCM`` API'si bu şekilde döndürür); ayrı bir
+    ``tag`` alanı tutulmaz.
+    """
+
+    encrypted_message: bytes       # AES-256-GCM ile şifrelenmiş (mesaj ∥ imza) + 16 byte auth tag
+    encrypted_session_key: bytes   # RSA-OAEP ile şifrelenmiş oturum anahtarı K_S
     nonce: bytes                   # AES-GCM rastgele sayısı (12 byte)
-    tag: bytes = b""               # GCM kimlik doğrulama etiketi
 
 
 @dataclass
@@ -122,16 +128,21 @@ class CryptoCore:
     # ------------------------------------------------------------------
     # RSA Dijital İmza
     # ------------------------------------------------------------------
+    # Not: Mesajın özeti H(m) zaten hesaplanmış olarak geldiği için
+    # ``Prehashed(SHA256())`` kullanılır; aksi hâlde kütüphane aldığı
+    # H(m)'i yeniden hashler ve anlatımla ("H(m) imzalanır") çakışır.
 
     @staticmethod
     def rsa_sign(private_key: RSAPrivateKey, message_hash: bytes) -> bytes:
+        if len(message_hash) != 32:
+            raise ValueError("message_hash 32 byte (SHA-256) olmalı.")
         return private_key.sign(
             message_hash,
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH,
             ),
-            hashes.SHA256(),
+            Prehashed(hashes.SHA256()),
         )
 
     @staticmethod
@@ -148,10 +159,10 @@ class CryptoCore:
                     mgf=padding.MGF1(hashes.SHA256()),
                     salt_length=padding.PSS.MAX_LENGTH,
                 ),
-                hashes.SHA256(),
+                Prehashed(hashes.SHA256()),
             )
             return True
-        except Exception:
+        except InvalidSignature:
             return False
 
     # ------------------------------------------------------------------

@@ -170,6 +170,8 @@ private_key.sign(
 
 PSS (Probabilistic Signature Scheme) dolgusu, rastgele tuz kullanarak aynı mesajın her imzasını farklı kılar. 2048-bit modulus 112-bit güvenlik gücüne karşılık gelir (NIST SP 800-131A).
 
+> **İmza girdisi hakkında not:** `rsa_sign(...)` fonksiyonuna mesaj değil, *önceden hesaplanmış* `H(m)` (32 byte) geçilir. Bu yüzden PyCA `cryptography` kütüphanesinde `Prehashed(SHA256())` ile imzalama yapılır; aksi hâlde kütüphane verilen 32 byte'lık özeti tekrar hashleyip **H(H(m))** imzalardı. Projedeki akış ve animasyon metinleri "H(m) imzalanır" şeklindedir ve kod buna birebir uyacak şekilde düzenlenmiştir.
+
 **Kaynak:** [RFC 8017 — PKCS #1 v2.2](https://www.rfc-editor.org/rfc/rfc8017.html)
 
 ---
@@ -216,8 +218,26 @@ OAEP dolgusu seçili şifreli metin saldırılarına (CCA) karşı güvenlidir. 
 | **Bütünlük** | GCM Auth Tag + SHA-256 | Mesaj manipülasyonu |
 | **Kimlik Doğrulama** | RSA-2048 PSS | Kimlik sahteciliği |
 | **İnkar Edememe** | RSA özel anahtar imzası | Gönderici inkarı |
-| **Tekrar Saldırısı Koruması** | Rastgele nonce (96-bit) | Replay attack |
-| **İletme Gizliliği** | Her mesajda yeni oturum anahtarı | Anahtar ifşasında geçmiş mesaj güvenliği |
+| **Nonce Benzersizliği** | 96-bit rastgele nonce (AES-GCM) | Aynı anahtar altında nonce çakışması |
+
+> **Tekrar Saldırısı (Replay) Hakkında Not:** Projede taşınan paket
+> yalnızca rastgele bir nonce içerir; paketin zaten görülmüş olup
+> olmadığını belirlemek için **timestamp / sıra numarası / tek kullanımlık
+> nonce kayıt defteri** gibi durum (state) tutan bir mekanizma yoktur.
+> Bu nedenle sistem, pasif dinleyicinin daha önce yakaladığı geçerli
+> bir paketi yeniden göndermesini (*replay*) **tek başına engelleyemez**.
+> Rastgele nonce yalnızca AES-GCM'in aynı anahtarla aynı nonce'ı bir
+> daha üretmemesini sağlar; bu **semantik güvenlik** için gerekli ama
+> replay saldırılarına karşı yeterli değildir.
+>
+> **İletme Gizliliği (Forward Secrecy) Hakkında Not:** Bu hibrit şemada
+> oturum anahtarı `K_S`, Bob'un uzun ömürlü RSA **açık anahtarı** ile
+> sarmalanır (`K⁺_B(K_S)`). Bob'un RSA **gizli anahtarı** ileride ifşa
+> olursa, saldırgan geçmişte kaydedilmiş tüm paketlerdeki `K⁺_B(K_S)`
+> değerini çözüp oturum anahtarını ve dolayısıyla mesajı elde
+> edebilir. Yani bu mimari **forward secrecy sağlamaz**. Gerçek
+> anlamda forward secrecy için RSA-KEM yerine (geçici) Diffie-Hellman
+> tabanlı bir anahtar değişimi (ör. ECDHE) kullanılmalıdır.
 
 ### Kriptografik Parametreler
 

@@ -494,7 +494,9 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
         combined = self.crypto.aes_gcm_decrypt(
             session_key, self.packet.nonce, self.packet.encrypted_message
         )
-        msg_bytes, signature = combined.split(self.crypto.SEPARATOR, 1)
+        # Sabit-uzunluk ayrıştırma: son SIGNATURE_LEN byte imzadır.
+        msg_bytes = combined[:-self.crypto.SIGNATURE_LEN]
+        signature = combined[-self.crypto.SIGNATURE_LEN:]
 
         # Saldırgan: mesajı değiştir, imzayı aynı tutmaya çalışsın.
         forged_msg = msg_bytes + b" (ekleme)"
@@ -530,6 +532,72 @@ class TestEncryptedPacketShape(unittest.TestCase):
             field_names,
             {"encrypted_message", "encrypted_session_key", "nonce"},
         )
+
+
+class TestMessageSignatureFraming(unittest.TestCase):
+    """m ∥ imza çerçeveleme (framing) testleri — ayraç çarpışmalarına
+    karşı bağışık olduğunu doğrular."""
+
+    def setUp(self) -> None:
+        self.crypto = CryptoCore()
+        self.crypto.setup_keys()
+
+    def test_message_containing_old_separator_roundtrips(self) -> None:
+        """
+        REGRESYON: Kullanıcı mesajı eski SEPARATOR stringi içerse bile
+        ayrıştırma bozulmamalı.
+
+        Önceki tasarımda ``combined = msg || b'||SIGNATURE_BOUNDARY||' || sig``
+        kullanılıyordu; kullanıcı mesajı bu ayracı içerirse ``split(..., 1)``
+        mesajın içinden ayırır, imza bozulmuş görünür ve doğrulama
+        yanlış-FAIL olurdu. Sabit-uzunluk (son 256 byte) kuralı bu
+        riski ortadan kaldırır.
+        """
+        attack_msg = "hedef: ||SIGNATURE_BOUNDARY|| — saldirgan denemesi"
+        packet, _ = self.crypto.alice_send(attack_msg)
+        msg, valid, _ = self.crypto.bob_receive(packet)
+        self.assertEqual(msg, attack_msg)
+        self.assertTrue(valid)
+
+    def test_short_combined_raises_readable_error(self) -> None:
+        """
+        İmzadan daha kısa bir paket geldiğinde okunabilir bir ValueError
+        fırlatılmalı — sessizce yanlış yere bölmemeli.
+
+        Bu durumu, çözülen birleşim 256 byte'tan kısa olacak şekilde
+        direkt olarak simüle ediyoruz (alt-seviye çerçeveleme kontrolü).
+        """
+        # 100 byte'lık sahte "combined" ile deşifre öncesi durumu taklit:
+        # Gerçek akışta bu, AES decrypt sonrası elde edilen combined'e
+        # karşılık gelir; burada doğrudan ayrıştırma mantığını doğruluyoruz.
+        short = b"A" * 100
+        self.assertLess(len(short), self.crypto.SIGNATURE_LEN)
+        # Paket seviyesinde çözülen combined'i simüle etmek için basit
+        # bir kontrol: (msg, sig) ayrıştırması SIGNATURE_LEN'den kısa
+        # girdide ValueError vermeli. Bu koşul bob_receive içinde
+        # belirgin biçimde patlamalı.
+        key = os.urandom(32)
+        nonce, ct = self.crypto.aes_gcm_encrypt(key, short)
+        enc_session = self.crypto.rsa_encrypt_key(
+            self.crypto.bob_keys.public_key, key
+        )
+        bad = EncryptedPacket(
+            encrypted_message=ct,
+            encrypted_session_key=enc_session,
+            nonce=nonce,
+        )
+        with self.assertRaises(ValueError):
+            self.crypto.bob_receive(bad)
+
+    def test_signature_is_always_256_bytes(self) -> None:
+        """RSA-2048 PSS imzası sabit 256 byte üretir — framing varsayımını
+        doğrular."""
+        for raw in (b"a", b"x" * 1024, "çöğüışÇÖĞÜŞİ".encode("utf-8")):
+            h = self.crypto.sha256_hash(raw)
+            sig = self.crypto.rsa_sign(
+                self.crypto.alice_keys.private_key, h
+            )
+            self.assertEqual(len(sig), self.crypto.SIGNATURE_LEN)
 
 
 if __name__ == "__main__":

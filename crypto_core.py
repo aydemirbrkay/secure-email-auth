@@ -87,7 +87,12 @@ class CryptoCore:
     AES_KEY_SIZE: int = 32
     AES_NONCE_SIZE: int = 12
     RSA_KEY_SIZE: int = 2048
-    SEPARATOR: bytes = b"||SIGNATURE_BOUNDARY||"
+    # RSA-2048 PSS imzası her zaman sabit 256 byte üretir; bu nedenle
+    # mesaj ∥ imza birleşiminde ayraç (delimiter) kullanmak yerine
+    # "son 256 byte = imza, kalanı = mesaj" kuralı uygulanır. Böylece
+    # kullanıcı mesajının ayraç string'ini içermesi durumunda oluşan
+    # ayrıştırma bozulması riski tamamen ortadan kalkar.
+    SIGNATURE_LEN: int = 256
 
     def __init__(self) -> None:
         self.alice_keys: Optional[RSAKeyPair] = None
@@ -260,15 +265,25 @@ class CryptoCore:
         ))
 
         # Adım 3: Mesaj ve imzanın birleştirilmesi — m ∥ K⁻_A(H(m))
+        # RSA-2048 PSS imzası sabit 256 byte olduğu için ayraç (delimiter)
+        # gerekmez; Bob ayrıştırmada son 256 byte'ı imza olarak alır.
         t0 = time.perf_counter()
-        combined = msg_bytes + self.SEPARATOR + signature
+        if len(signature) != self.SIGNATURE_LEN:
+            raise ValueError(
+                f"Beklenmedik imza uzunluğu: {len(signature)} byte "
+                f"(beklenen: {self.SIGNATURE_LEN} byte)."
+            )
+        combined = msg_bytes + signature
         elapsed_3 = (time.perf_counter() - t0) * 1000
         steps.append(StepResult(
             step_number=3,
             step_name="Mesaj ve İmza Birleştirme",
             description=(
                 "Orijinal mesaj (m) ile dijital imza K⁻_A(H(m)) "
-                "birleştirildi: m ∥ İmza"
+                "birleştirildi: m ∥ İmza. İmza her zaman sabit "
+                f"{self.SIGNATURE_LEN} byte (RSA-2048 PSS) olduğu için "
+                "ayıraç (delimiter) kullanılmaz; Bob deşifre ettikten "
+                "sonra son 256 byte'ı imza olarak alır."
             ),
             data={
                 "combined_size": f"{len(combined)} byte",
@@ -397,15 +412,25 @@ class CryptoCore:
         ))
 
         # Adım 3: Mesaj ve imzayı ayır
-        parts = combined.split(self.SEPARATOR, 1)
-        if len(parts) != 2:
-            raise ValueError("Mesaj ve imza ayrıştırılamadı.")
-        msg_bytes, signature = parts[0], parts[1]
+        # Sabit-uzunluk kuralı: son SIGNATURE_LEN byte imza, kalanı mesajdır.
+        # Bu yaklaşım ayraç (delimiter) çarpışmalarına karşı bağışıktır:
+        # kullanıcı mesajı herhangi bir bayt dizisi içerebilir.
+        if len(combined) < self.SIGNATURE_LEN:
+            raise ValueError(
+                f"Deşifre edilen paket çok kısa ({len(combined)} byte); "
+                f"en az {self.SIGNATURE_LEN} byte imza bekleniyor."
+            )
+        msg_bytes = combined[:-self.SIGNATURE_LEN]
+        signature = combined[-self.SIGNATURE_LEN:]
         message = msg_bytes.decode("utf-8")
         steps.append(StepResult(
             step_number=3,
             step_name="Mesaj ve İmza Ayrıştırma",
-            description="Mesaj (m) ve dijital imza birbirinden ayrıştırıldı.",
+            description=(
+                "Mesaj (m) ve dijital imza birbirinden ayrıştırıldı. "
+                f"İmza sabit {self.SIGNATURE_LEN} byte olduğu için ayıraç "
+                "aranmadı; son 256 byte imza, kalanı mesajdır."
+            ),
             data={
                 "message": message,
                 "signature_hex": signature.hex(),

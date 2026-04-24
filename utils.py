@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import os
 
+from cryptography.exceptions import InvalidSignature, InvalidTag
+
 from PyQt6.QtCore import Qt, QByteArray
 from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
@@ -49,9 +51,83 @@ FRIENDLY_NAMES: dict[str, str] = {
     "ciphertext_size":        "Şifreli Veri Boyutu",
     "encrypted_key_size":     "RSA Şifreli Anahtar Boyutu",
     "total_packet_size":      "Toplam Paket Boyutu",
+    "associated_data":        "AAD (Authenticated Metadata)",
+    "associated_data_size":   "AAD Boyutu",
     "message":                "Mesaj İçeriği",
     "elapsed_ms":             "İşlem Süresi",
 }
+
+
+def format_crypto_exception(exc: BaseException) -> tuple[str, str]:
+    """Kriptografik istisnayı kullanıcıya gösterilecek (başlık, gövde) metnine çevirir.
+
+    UI katmanı yakaladığı her Exception'ı doğrudan `str(exc)` olarak
+    göstermek yerine bu çevirmeni kullanmalıdır. Böylece:
+      - Kullanıcıya anlaşılır Türkçe bir neden verilir.
+      - Tekniği merak eden için orijinal istisna adı parantez içinde
+        eklenir (sessiz bilgi kaybı olmaz).
+      - Teknik detaylar tek bir yerden güncellenir.
+
+    Dönüş: (başlık, gövde) — QMessageBox.critical gibi yerlerde
+    doğrudan kullanılabilir.
+    """
+    exc_name = type(exc).__name__
+
+    if isinstance(exc, InvalidTag):
+        return (
+            "Deşifreleme Başarısız — Kimlik Doğrulama Hatası",
+            "AES-256-GCM kimlik doğrulama etiketi (tag) doğrulanamadı. "
+            "Bu genellikle şu sebeplerden biriyle olur:\n\n"
+            "  • Şifreli mesaj, nonce veya AAD (authenticated metadata) "
+            "iletim sırasında değiştirilmiş olabilir.\n"
+            "  • Bob'un çözdüğü oturum anahtarı ile Alice'in kullandığı "
+            "anahtar uyuşmuyor olabilir.\n\n"
+            "Paketin bütünlüğü bozulduğu için içerik güvenle "
+            "çözülemez — bu tasarlanmış güvenlik davranışıdır.\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, InvalidSignature):
+        return (
+            "İmza Doğrulanamadı",
+            "Dijital imza, Alice'in açık anahtarıyla doğrulanamadı. "
+            "Olası nedenler:\n\n"
+            "  • Mesaj imzalandıktan sonra değiştirilmiş.\n"
+            "  • İmza, başka bir gizli anahtarla üretilmiş.\n"
+            "  • İmzanın bağlı olduğu özet (H(m)) farklı bir mesaja ait.\n\n"
+            "Kimlik veya bütünlük doğrulanamadığı için mesaj "
+            "kabul edilmemelidir.\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, ValueError):
+        # OAEP çözme hatası, uzunluk kontrolü, vb. — genellikle veri
+        # formatı bozukluğu.
+        return (
+            "Paket Formatı Hatası",
+            "Şifreli paketteki bir alan beklenen formatta değil. "
+            "Olası nedenler:\n\n"
+            "  • RSA-OAEP ile sarılmış oturum anahtarı bozulmuş ya da "
+            "yanlış gizli anahtarla çözülmeye çalışılmış olabilir.\n"
+            "  • Birleşik veri (mesaj ‖ imza) beklenen 256 byte'lık "
+            "imza alanını taşıyamayacak kadar kısa olabilir.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, RuntimeError):
+        return (
+            "Akış Hatası",
+            f"İşlem akışı bir önkoşulu karşılamadı:\n\n{exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    # Beklenmeyen tipte istisna — yine de kullanıcıya bir şey göster.
+    return (
+        "Beklenmeyen Hata",
+        f"İşlem sırasında ele alınmamış bir hata oluştu:\n\n{exc}\n\n"
+        f"(Teknik: {exc_name})"
+    )
 
 
 def _png_icon_pixmap(filename: str, color: str, size: int, thickness: float = 1.0) -> QPixmap:

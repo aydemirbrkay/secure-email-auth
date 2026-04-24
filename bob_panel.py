@@ -478,10 +478,12 @@ class BobPanel(QWidget):
         self.status_label.setText("Alice'den paket bekleniyor...")
 
     def set_packet_info(self, packet: EncryptedPacket) -> None:
+        aad_display = packet.associated_data.decode("ascii", errors="replace")
         info = (
             f"Şifreli mesaj boyutu: {len(packet.encrypted_message)} byte\n"
             f"Şifreli oturum anahtarı: {len(packet.encrypted_session_key)} byte\n"
-            f"Rastgele Sayı (Nonce): {packet.nonce.hex()[:32]}…"
+            f"Rastgele Sayı (Nonce): {packet.nonce.hex()[:32]}…\n"
+            f"AAD (Authenticated Metadata): {aad_display}"
         )
         self._received_label.setText(info)
         self._received_label.setStyleSheet(

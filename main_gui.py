@@ -38,7 +38,7 @@ from theme import COLORS, GLOBAL_STYLESHEET
 from alice_panel import AlicePanel
 from bob_panel import BobPanel
 from toast import VerificationToast
-from utils import _png_icon_pixmap, _svg_pixmap
+from utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
 
 
 # ---------------------------------------------------------------------------
@@ -505,8 +505,9 @@ class MainWindow(QMainWindow):
 
         try:
             self._packet, alice_steps = self._crypto.alice_send(message)
-        except RuntimeError as exc:
-            QMessageBox.critical(self, "Hata", str(exc))
+        except Exception as exc:
+            title, body = format_crypto_exception(exc)
+            QMessageBox.critical(self, title, body)
             return
 
         self._original_message = message
@@ -571,7 +572,8 @@ class MainWindow(QMainWindow):
                 try:
                     message, is_valid, bob_steps = self._crypto.bob_receive(self._packet)
                 except Exception as exc:
-                    QMessageBox.critical(self, "Deşifreleme Hatası", str(exc))
+                    title, body = format_crypto_exception(exc)
+                    QMessageBox.critical(self, title, body)
                     return
                 self._decoded_message = message
                 self._is_valid = is_valid

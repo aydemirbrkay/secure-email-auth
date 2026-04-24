@@ -9,7 +9,7 @@ import base64
 from collections.abc import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 from .base import CryptoAnimationWindow, ANIM_COLORS
 
 # Eğitim amaçlı küçük demo değerler
@@ -91,6 +91,18 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _init_content(self) -> None:
+        # Kalıcı uyarı kartı — tüm adımlar boyunca görünür.
+        # Animasyonda gösterilen m^e mod n / m^d mod n "ham RSA"
+        # (textbook RSA) şemasıdır; pedagojik olarak doğrudur ancak
+        # gerçek projede kullanılan semantikle birebir aynı değildir.
+        # Projede:
+        #   - İmza için: RSA-2048 + PSS (rastgele tuzlu dolgu, MGF1-SHA256)
+        #   - Anahtar sarmalama için: RSA-2048 + OAEP (MGF1-SHA256)
+        # uygulanır. Bu kart, öğrencinin animasyon ile crypto_core.py
+        # arasındaki farkı yanlış anlamamasını sağlar.
+        self._banner = self._make_textbook_vs_production_banner()
+        self.content_layout.addWidget(self._banner)
+
         self._step_lbl = QLabel()
         self._step_lbl.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
@@ -118,6 +130,59 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         scroll.setWidget(card)
         scroll.setStyleSheet("background: transparent; border: none;")
         self.content_layout.addWidget(scroll, stretch=1)
+
+    # ------------------------------------------------------------------
+    # Kalıcı uyarı kartı
+    # ------------------------------------------------------------------
+
+    def _make_textbook_vs_production_banner(self) -> QFrame:
+        """Textbook RSA vs projedeki üretim modları uyarı kartını üretir.
+
+        Kart sade, kompakt ve tüm adımlar boyunca görünür kalır.
+        Öğrencinin animasyondaki ``m^e mod n`` formülünü projede
+        kullanılan şema sanmasını engeller.
+        """
+        banner = QFrame()
+        yellow = ANIM_COLORS["accent_yellow"]
+        banner.setStyleSheet(
+            f"QFrame {{ background: rgba(184, 134, 11, 0.10); "
+            f"border: 1px solid {yellow}; border-radius: 8px; }}"
+        )
+        lay = QHBoxLayout(banner)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(10)
+
+        icon = QLabel("⚠")
+        icon.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        icon.setStyleSheet(f"color: {yellow};")
+        icon.setAlignment(Qt.AlignmentFlag.AlignTop)
+        lay.addWidget(icon)
+
+        text = QLabel(
+            "<b>Pedagojik Not — Textbook RSA ≠ Projedeki RSA</b><br>"
+            "Bu animasyon eğitim amaçlı <b>ham (textbook) RSA</b> "
+            "şemasını gösterir: <i>c = m<sup>e</sup> mod n</i> / "
+            "<i>m = c<sup>d</sup> mod n</i>. Projede "
+            "<code>crypto_core.py</code> içinde kullanılan şema "
+            "farklıdır:<br>"
+            "&nbsp;&nbsp;• <b>İmza:</b> RSA-2048 + <b>PSS</b> "
+            "(rastgele tuzlu dolgu, MGF1-SHA256)<br>"
+            "&nbsp;&nbsp;• <b>Oturum anahtarı sarma:</b> RSA-2048 + "
+            "<b>OAEP</b> (MGF1-SHA256)<br>"
+            "Ham RSA deterministik ve seçili-şifreli-metin (CCA) "
+            "saldırılarına açıktır; üretimde <b>asla doğrudan</b> "
+            "kullanılmaz. Burada gösterilen matematik (modüler üs "
+            "alma) hâlâ PSS/OAEP'in altında çalışır, ama üzerine "
+            "dolgu katmanı eklenir."
+        )
+        text.setFont(QFont("Segoe UI", 9))
+        text.setStyleSheet(f"color: {ANIM_COLORS['text_primary']};")
+        text.setWordWrap(True)
+        text.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        lay.addWidget(text, stretch=1)
+        return banner
 
     # ------------------------------------------------------------------
     # Adım render'ları

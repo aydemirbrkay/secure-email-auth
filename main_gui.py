@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 )
 
 from crypto_core import CryptoCore, EncryptedPacket
+from crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
 from theme import COLORS, GLOBAL_STYLESHEET
 from alice_panel import AlicePanel
@@ -66,6 +67,13 @@ class MainWindow(QMainWindow):
         self._original_message: str = ""
         self._decoded_message: str = ""
         self._is_valid: bool = False
+
+        # Kripto worker referansları — garbage collect edilmelerini
+        # engellemek için instance üzerinde tutulurlar. İş bitince
+        # sinyal handler'larında temizlenirler.
+        self._keygen_worker: Optional[KeygenWorker] = None
+        self._send_worker: Optional[AliceSendWorker] = None
+        self._receive_worker: Optional[BobReceiveWorker] = None
 
         self._init_ui()
 
@@ -470,7 +478,25 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_keygen(self) -> None:
-        alice_keys, bob_keys = self._crypto.setup_keys()
+        # RSA-2048 anahtar üretimi ~1-2 sn sürebilir; UI donmaması için
+        # arka planda bir QThread worker'ı kullanıyoruz.
+        self._btn_keygen.setEnabled(False)
+        self._btn_keygen.setText("Anahtar Üretiliyor…")
+        self._bob_panel.show_keygen_step()
+
+        self._keygen_worker = KeygenWorker(self._crypto, self)
+        self._keygen_worker.finished_ok.connect(self._on_keygen_done)
+        self._keygen_worker.failed.connect(self._on_crypto_error)
+        self._keygen_worker.start()
+
+    def _on_keygen_done(self, alice_keys, bob_keys) -> None:
+        """KeygenWorker.finished_ok sinyaline bağlanan sonuç işleyici.
+
+        Ana thread'de çalışır; UI'ı anahtarlar üretildikten sonraki
+        duruma getirir.
+        """
+        self._btn_keygen.setText("Anahtar Üret")
+        self._keygen_worker = None
 
         alice_lines = alice_keys.public_pem().decode().strip().split("\n")
         bob_lines = bob_keys.public_pem().decode().strip().split("\n")
@@ -488,14 +514,45 @@ class MainWindow(QMainWindow):
         self._update_toggle_label()
 
         self._btn_start.setEnabled(True)
-        self._btn_keygen.setEnabled(False)
         self._phase = "ready"
         rsa_win = RSAAnimationWindow(
             alice_b64, bob_b64,
             on_close=self._alice_panel.hide_animation,
         )
         self._alice_panel.show_animation(rsa_win)
-        self._bob_panel.show_keygen_step()
+
+    def _on_receive_done(self, message: str, is_valid: bool, bob_steps: list) -> None:
+        """BobReceiveWorker tamamlandığında UI'ı bob fazına geçirir."""
+        self._receive_worker = None
+        self._decoded_message = message
+        self._is_valid = is_valid
+        self._bob_panel.set_steps(bob_steps)
+        self._bob_has_more = True
+        self._phase = "bob"
+        self._btn_next.setText("Sonraki Adım")
+        self._btn_next.setEnabled(True)
+        self._alice_panel.show_bob_diagram()
+
+    def _on_crypto_error(self, exc: Exception) -> None:
+        """Herhangi bir kripto worker'ının failed sinyaline ortak işleyici.
+
+        Hatayı kullanıcıya anlaşılır bir mesajla gösterir ve UI'ı
+        önceki durumuna döndürür (butonları yeniden etkinleştirir).
+        """
+        title, body = format_crypto_exception(exc)
+        QMessageBox.critical(self, title, body)
+
+        # Worker referansını temizle — hangi worker patladı bilmiyoruz,
+        # ama hepsini güvenle None yapabiliriz.
+        self._keygen_worker = None
+        self._send_worker = None
+        self._receive_worker = None
+
+        # Buton durumları: kullanıcı tekrar deneyebilmeli.
+        self._btn_keygen.setEnabled(True)
+        self._btn_keygen.setText("Anahtar Üret")
+        self._btn_next.setEnabled(True)
+        self._btn_next.setText("Sonraki Adım")
 
     def _on_start(self) -> None:
         message = self._alice_panel.msg_input.toPlainText().strip()
@@ -503,20 +560,31 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Uyarı", "Lütfen bir e-posta mesajı yazın!")
             return
 
-        try:
-            self._packet, alice_steps = self._crypto.alice_send(message)
-        except Exception as exc:
-            title, body = format_crypto_exception(exc)
-            QMessageBox.critical(self, title, body)
-            return
-
+        # Gönderim akışını arka plana al — özellikle büyük mesajlarda
+        # SHA-256 + RSA PSS + AES-GCM + RSA-OAEP zinciri UI'ı
+        # kilitleyebilir. Süre tipik kısa mesajlarda milisaniyelerdir
+        # ancak kullanıcıya "hangi iş yapılıyor" geri bildirimi için
+        # asenkron yürütüyoruz.
         self._original_message = message
+        self._btn_start.setEnabled(False)
+        self._btn_start.setText("Şifreleniyor…")
+        self._alice_panel.msg_input.setReadOnly(True)
+
+        self._send_worker = AliceSendWorker(self._crypto, message, self)
+        self._send_worker.finished_ok.connect(self._on_send_done)
+        self._send_worker.failed.connect(self._on_crypto_error)
+        self._send_worker.start()
+
+    def _on_send_done(self, packet: EncryptedPacket, alice_steps: list) -> None:
+        """AliceSendWorker tamamlandığında UI'ı bir sonraki faza hazırlar."""
+        self._packet = packet
+        self._send_worker = None
+        self._btn_start.setText("Şifreleme Başlat")
+
         self._alice_panel.set_steps(alice_steps)
         self._phase = "alice"
         self._alice_has_more = True
-        self._btn_start.setEnabled(False)
         self._btn_next.setEnabled(True)
-        self._alice_panel.msg_input.setReadOnly(True)
 
     def _on_next_step(self) -> None:
         if self._phase == "alice":
@@ -569,19 +637,17 @@ class MainWindow(QMainWindow):
         elif self._phase == "transit":
             if self._packet is not None:
                 self._bob_panel.set_packet_info(self._packet)
-                try:
-                    message, is_valid, bob_steps = self._crypto.bob_receive(self._packet)
-                except Exception as exc:
-                    title, body = format_crypto_exception(exc)
-                    QMessageBox.critical(self, title, body)
-                    return
-                self._decoded_message = message
-                self._is_valid = is_valid
-                self._bob_panel.set_steps(bob_steps)
-                self._bob_has_more = True
-                self._phase = "bob"
-                self._btn_next.setText("Sonraki Adım")
-                self._alice_panel.show_bob_diagram()
+                # Deşifreleme akışını arka plana al (RSA-OAEP çözme +
+                # AES-GCM doğrulamalı deşifre + RSA-PSS imza doğrulama).
+                self._btn_next.setEnabled(False)
+                self._btn_next.setText("Bob Deşifre Ediyor…")
+
+                self._receive_worker = BobReceiveWorker(
+                    self._crypto, self._packet, self
+                )
+                self._receive_worker.finished_ok.connect(self._on_receive_done)
+                self._receive_worker.failed.connect(self._on_crypto_error)
+                self._receive_worker.start()
 
         elif self._phase == "bob":
             step_idx = self._bob_panel._current_step
@@ -646,6 +712,21 @@ class MainWindow(QMainWindow):
         self._comparison_group.setVisible(True)
 
     def _on_reset(self) -> None:
+        # Koşan bir worker varsa sinyallerini kopar — geç gelen
+        # finished_ok çağrıları sıfırlanmış UI üstüne yazmasın.
+        # Worker'ın kendisine interrupt edilemez (kriptografi kütüphanesi
+        # C seviyesinde çalıştığı için); ancak sonucunu görmezden
+        # gelebiliriz.
+        for attr in ("_keygen_worker", "_send_worker", "_receive_worker"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.finished_ok.disconnect()
+                    w.failed.disconnect()
+                except TypeError:
+                    pass  # zaten bağlantı yoksa sessiz geç
+                setattr(self, attr, None)
+
         self._alice_panel.reset()
         self._bob_panel.reset()
         self._alice_panel.msg_input.setReadOnly(False)
@@ -658,7 +739,9 @@ class MainWindow(QMainWindow):
         self._decoded_message = ""
         self._is_valid = False
         self._btn_keygen.setEnabled(True)
+        self._btn_keygen.setText("Anahtar Üret")
         self._btn_start.setEnabled(False)
+        self._btn_start.setText("Şifreleme Başlat")
         self._btn_next.setEnabled(False)
         self._btn_next.setText("Sonraki Adım")
         self._key_info_group.setVisible(False)

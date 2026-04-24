@@ -178,6 +178,29 @@ class TestAESGCM(unittest.TestCase):
         nonce, _ = self.crypto.aes_gcm_encrypt(key, b"test")
         self.assertEqual(len(nonce), 12)
 
+    def test_aad_roundtrip(self) -> None:
+        """AAD ile şifreleme + aynı AAD ile deşifre = orijinal metin."""
+        key = os.urandom(32)
+        aad = b"secure-email-auth/v1|from=abcdef0123456789|ts=0"
+        nonce, ct = self.crypto.aes_gcm_encrypt(key, b"hello", aad)
+        pt = self.crypto.aes_gcm_decrypt(key, nonce, ct, aad)
+        self.assertEqual(pt, b"hello")
+
+    def test_aad_mismatch_fails(self) -> None:
+        """Farklı AAD ile deşifre InvalidTag fırlatmalı."""
+        key = os.urandom(32)
+        nonce, ct = self.crypto.aes_gcm_encrypt(key, b"hello", b"aad-A")
+        with self.assertRaises(InvalidTag):
+            self.crypto.aes_gcm_decrypt(key, nonce, ct, b"aad-B")
+
+    def test_aad_none_vs_empty_compatible(self) -> None:
+        """AAD=None ile AAD=b'' eşdeğer davranmalı (PyCA sözleşmesi)."""
+        key = os.urandom(32)
+        nonce, ct = self.crypto.aes_gcm_encrypt(key, b"hello", None)
+        # None ile yazıp boş bytes ile okuma kabul edilmeli
+        pt = self.crypto.aes_gcm_decrypt(key, nonce, ct, b"")
+        self.assertEqual(pt, b"hello")
+
 
 class TestRSAKeyEncryption(unittest.TestCase):
     """RSA ile oturum anahtarı şifreleme testleri."""
@@ -256,7 +279,10 @@ class TestFullWorkflow(unittest.TestCase):
         """Anahtar olmadan alım hatası."""
         fresh = CryptoCore()
         dummy_packet = EncryptedPacket(
-            encrypted_message=b"", encrypted_session_key=b"", nonce=b""
+            encrypted_message=b"",
+            encrypted_session_key=b"",
+            nonce=b"",
+            associated_data=b"",
         )
         with self.assertRaises(RuntimeError):
             fresh.bob_receive(dummy_packet)
@@ -422,6 +448,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             encrypted_message=bytes(tampered_ct),
             encrypted_session_key=self.packet.encrypted_session_key,
             nonce=self.packet.nonce,
+            associated_data=self.packet.associated_data,
         )
         with self.assertRaises(InvalidTag):
             self.crypto.bob_receive(bad)
@@ -438,6 +465,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             encrypted_message=bytes(tampered_ct),
             encrypted_session_key=self.packet.encrypted_session_key,
             nonce=self.packet.nonce,
+            associated_data=self.packet.associated_data,
         )
         with self.assertRaises(InvalidTag):
             self.crypto.bob_receive(bad)
@@ -452,6 +480,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             encrypted_message=self.packet.encrypted_message,
             encrypted_session_key=self.packet.encrypted_session_key,
             nonce=bytes(tampered_nonce),
+            associated_data=self.packet.associated_data,
         )
         with self.assertRaises(InvalidTag):
             self.crypto.bob_receive(bad)
@@ -469,9 +498,41 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             encrypted_message=self.packet.encrypted_message,
             encrypted_session_key=bytes(tampered_key),
             nonce=self.packet.nonce,
+            associated_data=self.packet.associated_data,
         )
         # OAEP çözme başarısız olursa bir istisna (genelde ValueError) oluşur
         with self.assertRaises(Exception):
+            self.crypto.bob_receive(bad)
+
+    # --- Tamper: AAD (AES-GCM bütünlük bağı) ----------------------------------
+
+    def test_tamper_associated_data_raises_invalid_tag(self) -> None:
+        """
+        AAD'de yapılacak her türlü değişiklik GCM kimlik doğrulama
+        etiketini bozmalı; ciphertext dokunulmamış olsa bile InvalidTag
+        fırlatılmalı. Bu test AAD'nin şifrelenmese de tag ile bağlı
+        olduğunu kanıtlar.
+        """
+        tampered_aad = bytearray(self.packet.associated_data)
+        tampered_aad[-1] ^= 0x01  # örn. timestamp'in son byte'ını değiştir
+        bad = EncryptedPacket(
+            encrypted_message=self.packet.encrypted_message,
+            encrypted_session_key=self.packet.encrypted_session_key,
+            nonce=self.packet.nonce,
+            associated_data=bytes(tampered_aad),
+        )
+        with self.assertRaises(InvalidTag):
+            self.crypto.bob_receive(bad)
+
+    def test_strip_associated_data_raises_invalid_tag(self) -> None:
+        """AAD'yi tamamen silmek (boş bytes) de deşifreyi bozmalı."""
+        bad = EncryptedPacket(
+            encrypted_message=self.packet.encrypted_message,
+            encrypted_session_key=self.packet.encrypted_session_key,
+            nonce=self.packet.nonce,
+            associated_data=b"",
+        )
+        with self.assertRaises(InvalidTag):
             self.crypto.bob_receive(bad)
 
     # --- Tamper: imza (AES altında bile) --------------------------------------
@@ -492,7 +553,10 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             self.packet.encrypted_session_key,
         )
         combined = self.crypto.aes_gcm_decrypt(
-            session_key, self.packet.nonce, self.packet.encrypted_message
+            session_key,
+            self.packet.nonce,
+            self.packet.encrypted_message,
+            self.packet.associated_data,
         )
         # Sabit-uzunluk ayrıştırma: son SIGNATURE_LEN byte imzadır.
         msg_bytes = combined[:-self.crypto.SIGNATURE_LEN]
@@ -522,16 +586,69 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
 
 
 class TestEncryptedPacketShape(unittest.TestCase):
-    """EncryptedPacket veri modelinin sadeleştirilmiş hâlini doğrular."""
+    """EncryptedPacket veri modelinin yapısını doğrular."""
 
-    def test_packet_has_no_tag_field(self) -> None:
-        """GCM tag ayrı alan olarak taşınmıyor — sadece 3 alan olmalı."""
+    def test_packet_has_expected_fields(self) -> None:
+        """
+        Paket tam olarak 4 alanı taşır:
+          - encrypted_message   (ciphertext ‖ tag)
+          - encrypted_session_key (RSA-OAEP ile sarılmış K_S)
+          - nonce                (12-byte rastgele)
+          - associated_data      (AAD — şifrelenmez, GCM tag ile korunur)
+
+        GCM tag ayrı bir alan olarak taşınmaz (ciphertext içine gömülüdür).
+        """
         from dataclasses import fields
         field_names = {f.name for f in fields(EncryptedPacket)}
         self.assertEqual(
             field_names,
-            {"encrypted_message", "encrypted_session_key", "nonce"},
+            {
+                "encrypted_message",
+                "encrypted_session_key",
+                "nonce",
+                "associated_data",
+            },
         )
+
+
+class TestAADBuilder(unittest.TestCase):
+    """``CryptoCore.build_aad`` davranışını doğrular."""
+
+    def setUp(self) -> None:
+        self.crypto = CryptoCore()
+        self.crypto.setup_keys()
+
+    def test_aad_starts_with_protocol_tag(self) -> None:
+        """AAD her zaman sabit protokol etiketiyle başlamalı."""
+        aad = self.crypto.build_aad(self.crypto.alice_keys.public_key)
+        self.assertTrue(aad.startswith(self.crypto.PROTOCOL_TAG))
+
+    def test_aad_contains_sender_fingerprint(self) -> None:
+        """
+        AAD, gönderenin açık anahtarının SHA-256 özetinin ilk 8 byte'ının
+        hex gösterimini içermeli — anahtar farklı olunca AAD da değişir.
+        """
+        aad_alice = self.crypto.build_aad(
+            self.crypto.alice_keys.public_key, timestamp=1000
+        )
+        aad_bob = self.crypto.build_aad(
+            self.crypto.bob_keys.public_key, timestamp=1000
+        )
+        self.assertNotEqual(aad_alice, aad_bob)
+        self.assertIn(b"|from=", aad_alice)
+        self.assertIn(b"|ts=1000", aad_alice)
+
+    def test_aad_is_deterministic_for_same_inputs(self) -> None:
+        """Aynı anahtar + aynı timestamp = aynı AAD."""
+        a1 = self.crypto.build_aad(self.crypto.alice_keys.public_key, timestamp=42)
+        a2 = self.crypto.build_aad(self.crypto.alice_keys.public_key, timestamp=42)
+        self.assertEqual(a1, a2)
+
+    def test_aad_timestamp_changes_value(self) -> None:
+        """Farklı timestamp farklı AAD üretmeli."""
+        a1 = self.crypto.build_aad(self.crypto.alice_keys.public_key, timestamp=1)
+        a2 = self.crypto.build_aad(self.crypto.alice_keys.public_key, timestamp=2)
+        self.assertNotEqual(a1, a2)
 
 
 class TestMessageSignatureFraming(unittest.TestCase):
@@ -577,7 +694,8 @@ class TestMessageSignatureFraming(unittest.TestCase):
         # girdide ValueError vermeli. Bu koşul bob_receive içinde
         # belirgin biçimde patlamalı.
         key = os.urandom(32)
-        nonce, ct = self.crypto.aes_gcm_encrypt(key, short)
+        aad = self.crypto.build_aad(self.crypto.alice_keys.public_key)
+        nonce, ct = self.crypto.aes_gcm_encrypt(key, short, aad)
         enc_session = self.crypto.rsa_encrypt_key(
             self.crypto.bob_keys.public_key, key
         )
@@ -585,6 +703,7 @@ class TestMessageSignatureFraming(unittest.TestCase):
             encrypted_message=ct,
             encrypted_session_key=enc_session,
             nonce=nonce,
+            associated_data=aad,
         )
         with self.assertRaises(ValueError):
             self.crypto.bob_receive(bad)

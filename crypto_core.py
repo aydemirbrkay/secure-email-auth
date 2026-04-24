@@ -60,11 +60,19 @@ class EncryptedPacket:
     AES-GCM çıktısı ``ciphertext || tag`` biçiminde tek alanda
     taşınır (PyCA ``AESGCM`` API'si bu şekilde döndürür); ayrı bir
     ``tag`` alanı tutulmaz.
+
+    ``associated_data`` alanı AES-GCM'in AAD (Additional Authenticated
+    Data) girdisidir: şifrelenmez ama GCM tag'i tarafından kimlik
+    doğrulaması altına alınır. Böylece protokol sürümü / gönderen
+    kimliği / zaman damgası gibi bağlam paketin bütünlüğüne
+    bağlanmış olur; bu alandaki herhangi bir değişiklik deşifrelemeyi
+    başarısız kılar (InvalidTag).
     """
 
     encrypted_message: bytes       # AES-256-GCM ile şifrelenmiş (mesaj ∥ imza) + 16 byte auth tag
     encrypted_session_key: bytes   # RSA-OAEP ile şifrelenmiş oturum anahtarı K_S
     nonce: bytes                   # AES-GCM rastgele sayısı (12 byte)
+    associated_data: bytes         # AES-GCM AAD — şifrelenmez, ama tag ile bütünlüğü korunur
 
 
 @dataclass
@@ -93,6 +101,9 @@ class CryptoCore:
     # kullanıcı mesajının ayraç string'ini içermesi durumunda oluşan
     # ayrıştırma bozulması riski tamamen ortadan kalkar.
     SIGNATURE_LEN: int = 256
+    # Protokol kimliği — AAD'nin sabit ön eki olarak kullanılır; sürüm
+    # değişirse bu etiket değişir ve eski alıcılar paketi reddeder.
+    PROTOCOL_TAG: bytes = b"secure-email-auth/v1"
 
     def __init__(self) -> None:
         self.alice_keys: Optional[RSAKeyPair] = None
@@ -178,16 +189,76 @@ class CryptoCore:
         self._session_key = os.urandom(self.AES_KEY_SIZE)
         return self._session_key
 
-    def aes_gcm_encrypt(self, key: bytes, plaintext: bytes) -> Tuple[bytes, bytes]:
+    def aes_gcm_encrypt(
+        self,
+        key: bytes,
+        plaintext: bytes,
+        associated_data: Optional[bytes] = None,
+    ) -> Tuple[bytes, bytes]:
+        """AES-256-GCM ile şifreleme.
+
+        ``associated_data`` (AAD) verilirse, şifrelenmez ancak GCM tag'i
+        tarafından kimlik doğrulaması altına alınır. Aynı AAD'nin
+        decrypt çağrısında verilmesi zorunludur; aksi hâlde
+        ``InvalidTag`` hatası oluşur.
+        """
         nonce = os.urandom(self.AES_NONCE_SIZE)
         aesgcm = AESGCM(key)
-        ciphertext = aesgcm.encrypt(nonce, plaintext, None)
+        ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data)
         return nonce, ciphertext
 
     @staticmethod
-    def aes_gcm_decrypt(key: bytes, nonce: bytes, ciphertext: bytes) -> bytes:
+    def aes_gcm_decrypt(
+        key: bytes,
+        nonce: bytes,
+        ciphertext: bytes,
+        associated_data: Optional[bytes] = None,
+    ) -> bytes:
+        """AES-256-GCM ile deşifre.
+
+        Eğer şifreleme sırasında AAD kullanıldıysa deşifrede de aynısı
+        verilmelidir; AAD'de herhangi bir değişiklik ``InvalidTag``
+        fırlatır.
+        """
         aesgcm = AESGCM(key)
-        return aesgcm.decrypt(nonce, ciphertext, None)
+        return aesgcm.decrypt(nonce, ciphertext, associated_data)
+
+    # ------------------------------------------------------------------
+    # AAD İnşası — protokol sürümü + gönderen parmak izi + zaman damgası
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def build_aad(
+        cls,
+        sender_public_key: RSAPublicKey,
+        timestamp: Optional[int] = None,
+    ) -> bytes:
+        """Pakete bağlanacak AAD'yi inşa eder.
+
+        Biçim (ASCII, okunabilir):
+            ``secure-email-auth/v1|from=<fp16hex>|ts=<unix>``
+
+        - ``fp16hex``: gönderen açık anahtarının DER kodlu PEM'inin
+          SHA-256 özetinin ilk 8 byte'ının hex gösterimi (16 karakter).
+        - ``unix``: Unix zaman damgası (saniye).
+
+        AAD şifrelenmez ama GCM tag ile korunur; böylece protokol
+        sürümü, gönderen kimliği ve zaman bağlamı ciphertext'e bağlanır.
+        """
+        if timestamp is None:
+            timestamp = int(time.time())
+        pem = sender_public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        fingerprint = hashlib.sha256(pem).digest()[:8].hex()
+        return (
+            cls.PROTOCOL_TAG
+            + b"|from="
+            + fingerprint.encode("ascii")
+            + b"|ts="
+            + str(timestamp).encode("ascii")
+        )
 
     # ------------------------------------------------------------------
     # RSA ile Oturum Anahtarı Şifreleme
@@ -293,23 +364,33 @@ class CryptoCore:
             },
         ))
 
-        # Adım 4: AES-256-GCM simetrik şifreleme
+        # Adım 4: AES-256-GCM simetrik şifreleme (AAD ile bağlamsal bağlama)
+        # AAD: protokol sürümü + Alice'in açık anahtar parmak izi + zaman
+        # damgası. Şifrelenmez ama GCM tag bu veriyi de imzalar; paket
+        # üstünden AAD değiştirilirse Bob InvalidTag alır.
         t0 = time.perf_counter()
         session_key = self.generate_session_key()
-        nonce, ciphertext = self.aes_gcm_encrypt(session_key, combined)
+        aad = self.build_aad(self.alice_keys.public_key)
+        nonce, ciphertext = self.aes_gcm_encrypt(session_key, combined, aad)
         elapsed_4 = (time.perf_counter() - t0) * 1000
         steps.append(StepResult(
             step_number=4,
             step_name="AES-256-GCM Şifreleme",
             description=(
                 "Birleştirilmiş veri, yeni üretilen simetrik oturum "
-                "anahtarı (K_S) ile AES-256-GCM kullanılarak şifrelendi."
+                "anahtarı (K_S) ile AES-256-GCM kullanılarak şifrelendi. "
+                "AAD (Additional Authenticated Data) olarak protokol "
+                "sürümü, Alice'in açık anahtar parmak izi ve zaman "
+                "damgası pakete bağlandı; bu alan şifrelenmez ama "
+                "GCM kimlik doğrulama etiketi ile bütünlüğü korunur."
             ),
             data={
                 "session_key_hex": session_key.hex(),
                 "nonce_hex": nonce.hex(),
                 "ciphertext_size": f"{len(ciphertext)} byte",
                 "ciphertext_hex_preview": ciphertext[:32].hex() + "...",
+                "associated_data": aad.decode("ascii"),
+                "associated_data_size": f"{len(aad)} byte",
                 "elapsed_ms": f"{elapsed_4:.4f} ms",
             },
         ))
@@ -340,18 +421,26 @@ class CryptoCore:
             encrypted_message=ciphertext,
             encrypted_session_key=encrypted_session_key,
             nonce=nonce,
+            associated_data=aad,
         )
-        total_size = len(ciphertext) + len(encrypted_session_key) + len(nonce)
+        total_size = (
+            len(ciphertext)
+            + len(encrypted_session_key)
+            + len(nonce)
+            + len(aad)
+        )
         steps.append(StepResult(
             step_number=6,
             step_name="Paket Gönderimi",
             description=(
-                "Şifreli mesaj K_S(m ∥ K⁻_A(H(m))) ve şifreli oturum "
-                "anahtarı K⁺_B(K_S) birlikte Bob'a iletildi."
+                "Şifreli mesaj K_S(m ∥ K⁻_A(H(m))), şifreli oturum "
+                "anahtarı K⁺_B(K_S), rastgele nonce ve AAD (bağlamsal "
+                "metadata) birlikte Bob'a iletildi."
             ),
             data={
                 "total_packet_size": f"{total_size} byte",
                 "nonce_hex": nonce.hex(),
+                "associated_data": aad.decode("ascii"),
             },
         ))
 
@@ -392,21 +481,33 @@ class CryptoCore:
             },
         ))
 
-        # Adım 2: AES-256-GCM ile deşifrele
+        # Adım 2: AES-256-GCM ile deşifrele (AAD doğrulaması ile birlikte)
+        # AAD paketle birlikte gelir ve aynı değer decrypt'e verilir;
+        # AAD üzerinde herhangi bir değişiklik tag doğrulamasını bozar
+        # ve InvalidTag fırlatılır.
         t0 = time.perf_counter()
         combined = self.aes_gcm_decrypt(
-            session_key, packet.nonce, packet.encrypted_message
+            session_key,
+            packet.nonce,
+            packet.encrypted_message,
+            packet.associated_data,
         )
         elapsed_2 = (time.perf_counter() - t0) * 1000
         steps.append(StepResult(
             step_number=2,
             step_name="AES-256-GCM Deşifreleme",
             description=(
-                "Elde edilen K_S ile şifreli veri çözülerek orijinal mesaj "
-                "(m) ve dijital imza K⁻_A(H(m)) ayrıştırıldı."
+                "Elde edilen K_S ile şifreli veri çözüldü. Bu adımda "
+                "AAD de (paket üstünde açık gelen bağlamsal veri) "
+                "GCM kimlik doğrulama etiketiyle birlikte kontrol "
+                "edildi; AAD üzerinde en ufak bir değişiklik olsaydı "
+                "deşifreleme InvalidTag hatası verirdi."
             ),
             data={
                 "combined_size": f"{len(combined)} byte",
+                "associated_data": packet.associated_data.decode(
+                    "ascii", errors="replace"
+                ),
                 "elapsed_ms": f"{elapsed_2:.4f} ms",
             },
         ))

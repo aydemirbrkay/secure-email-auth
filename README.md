@@ -5,7 +5,6 @@
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.6%2B-green?style=for-the-badge&logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
 [![Cryptography](https://img.shields.io/badge/cryptography-44.0%2B-red?style=for-the-badge&logo=letsencrypt&logoColor=white)](https://cryptography.io/)
-[![License](https://img.shields.io/badge/Lisans-MIT-yellow?style=for-the-badge)](LICENSE)
 
 **Erciyes Üniversitesi — Bilgisayar Mühendisliği Bölümü**
 **Bitirme Projesi • 2025**
@@ -369,12 +368,6 @@ python -m pytest test_crypto_core.py test_aes_pure.py test_sha256_pure.py test_d
 | [7] | [Python hashlib](https://docs.python.org/3/library/hashlib.html) | `crypto_core.py` — `hashlib.sha256()` |
 | [8] | [Python os.urandom](https://docs.python.org/3/library/os.html#os.urandom) | `crypto_core.py` — oturum anahtarı ve nonce üretimi |
 | [9] | [PyQt6](https://www.riverbankcomputing.com/static/Docs/PyQt6/) | `main_gui.py`, `alice_panel.py`, `bob_panel.py`, `animation_modals/` |
-
----
-
-## Lisans
-
-Bu proje **Erciyes Üniversitesi Bilgisayar Mühendisliği Bitirme Projesi** kapsamında hazırlanmıştır ve [MIT Lisansı](LICENSE) ile dağıtılmaktadır. Akademik, eğitimsel ve kişisel kullanım için serbesttir.
 
 ---
 

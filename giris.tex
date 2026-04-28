@@ -1,49 +1,40 @@
 \label{CH:Giris}
 
-Çalışmanın tanıtılması ve detaylı olarak anlatılması \cite{AlpaydinML}.
+İnternet üzerinden gerçekleştirilen e-posta iletişimi, kişisel ve kurumsal yaşamın ayrılmaz bir parçası haline gelmiştir. Ancak standart e-posta protokolleri (SMTP, IMAP, POP3) güvenlik mekanizmaları açısından oldukça yetersiz kalmaktadır: iletiler açık metin olarak aktarılabilmekte, gönderici kimliği kolayca taklit edilebilmekte ve mesaj içerikleri değiştirilebilmektedir \cite{StallingsCNS}. Bu durum; gizlilik, bütünlük, kimlik doğrulama ve inkar edememe gibi temel güvenlik gereksinimlerinin karşılanmasını zorunlu kılmaktadır.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam ac justo et nunc dignissim viverra nec sed erat. Aliquam ac augue at urna ultrices ullamcorper. Phasellus nec sapien elementum, condimentum nibh sed, pulvinar purus. Sed dolor mi, lacinia ut laoreet ut, finibus et tellus. Sed dignissim arcu quam, sit amet bibendum massa pellentesque vel. Aliquam erat volutpat. Etiam scelerisque, felis id consectetur pharetra, tortor dolor aliquet tortor, eget bibendum ante tortor ac ligula. Etiam dolor neque, aliquam sed tellus nec, aliquam posuere urna. Suspendisse nisl orci, elementum vel neque nec, vulputate consequat velit.
+Kriptografi, bu gereksinimleri karşılayan matematiksel temel mekanizmaları sunmaktadır. Simetrik şifreleme algoritmaları (AES), yüksek performanslı gizlilik sağlarken; asimetrik algoritmalar (RSA) güvenli anahtar değişimi ve dijital imzaya olanak tanımaktadır. Özet (hash) fonksiyonları ise mesaj bütünlüğünün denetlenmesinde kullanılmaktadır. Bu üç mekanizmanın birleşimi olan hibrit şifreleme, günümüz güvenli iletişim sistemlerinin temelini oluşturmaktadır \cite{KatzLindell}.
 
-Donec vitae lacus et sapien maximus posuere eget sollicitudin nisl. Ut venenatis ante sit amet tempor ultricies. Curabitur sagittis sit amet elit eget facilisis. In odio ipsum, accumsan ac eleifend vel, molestie in lectus. Sed vel commodo erat. Pellentesque lobortis neque ac eros suscipit fermentum. Sed feugiat convallis velit, eget commodo risus venenatis sed. Suspendisse dapibus tortor eget congue ultrices. Cras ut viverra odio. Ut vitae libero nec eros sagittis varius in eget risus. Donec et nibh sodales, pretium nisi ac, suscipit arcu. Cras at justo eget justo dignissim efficitur non quis nunc. Phasellus pharetra, augue sed gravida molestie, tellus enim lacinia libero, ac dapibus tortor odio id dui. Duis vel quam quam. Curabitur ac malesuada velit. Aliquam et mollis massa, sit amet varius mi.
-
-Mauris tempus neque et ex convallis, convallis bibendum nulla aliquet. Cras odio ipsum, consectetur at imperdiet a, ultrices id felis. Duis ullamcorper luctus nulla, nec cursus ex placerat vitae. Morbi id enim quam. Sed sed lacus id purus sollicitudin tincidunt. Fusce tincidunt elementum nisi, ut gravida tellus euismod sed. In est sapien, ornare a dictum ut, aliquam sit amet nisl. In enim turpis, laoreet et dui egestas, fermentum elementum purus. Nulla eget metus congue dui viverra mattis. Duis sed justo cursus, laoreet libero in, dictum nibh. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Mauris ac volutpat leo. Nullam imperdiet quam dui, et vehicula ipsum tincidunt pulvinar. Mauris quis diam orci. Praesent eu libero dolor.
-
-In ac neque neque. Praesent vel semper orci. Sed facilisis in velit sed commodo. Sed ultricies urna nibh. Vivamus feugiat rhoncus neque. Maecenas in aliquam sapien. Vivamus justo ex, rutrum sed euismod nec, pulvinar sed enim. Donec quam lectus, vulputate in posuere vel, maximus sollicitudin mauris. Curabitur urna lacus, ornare venenatis consequat a, efficitur eget odio. Nulla facilisi. Donec bibendum lorem at ex convallis, semper lacinia mauris pellentesque. Nam tempor massa at gravida luctus. Ut ac cursus ante. Nulla facilisi. Aliquam erat volutpat.
-
-Interdum et malesuada fames ac ante ipsum primis in faucibus. Aenean semper, purus ut ultrices laoreet, nisl nisl molestie tellus, dignissim iaculis lacus libero ut nibh. Aenean non fringilla lacus. Pellentesque tempor lorem id dapibus porta. Pellentesque mollis risus sed est pulvinar ultricies. Suspendisse potenti. Pellentesque semper lectus metus, vitae ultrices lorem pulvinar ac. Ut molestie rutrum nulla ut pulvinar. Nam et sodales erat. Proin facilisis varius lobortis. Phasellus laoreet pharetra tellus dignissim aliquam. Maecenas pretium ullamcorper enim, vel viverra enim euismod at. Nullam ut ligula enim. In quis metus arcu. Sed efficitur ligula congue, pellentesque tellus nec, scelerisque tortor. Vestibulum arcu odio, molestie eu accumsan tempor, bibendum at mauris.
-
+Bu bitirme projesi kapsamında; SHA-256 özet fonksiyonu, RSA-2048 PSS dijital imzası ve AES-256-GCM kimlik doğrulamalı şifreleme algoritmaları bir araya getirilerek e-posta mesajlarında gizlilik, bütünlük, kimlik doğrulama ve inkar edememe özelliklerini sağlayan eğitici bir hibrit şifreleme uygulaması geliştirilmiştir. Geliştirilen PyQt6 tabanlı masaüstü uygulama, Alice (gönderici) ile Bob (alıcı) senaryosu üzerinden kriptografik iş akışını adım adım görselleştirmekte ve her algoritmanın iç işleyişini animasyonlu pencereler aracılığıyla pedagojik biçimde sunmaktadır.
 
 \textbf{Literatür Özeti}
 
-Konuyla ilgili daha önce yapılmış çalışmaların derlenmesi ve tanıtılması.
+E-posta güvenliği alanında yapılan çalışmalar, farklı kriptografik yaklaşımları ele almaktadır. PGP (Pretty Good Privacy), 1991 yılında Phil Zimmermann tarafından geliştirilen ve RSA ile IDEA algoritmalarını birleştiren ilk yaygın e-posta şifreleme standardıdır \cite{ZimmermanPGP}. OpenPGP (RFC 4880) bu standardın güncellenmiş ve açık kaynaklı hâlidir. S/MIME (RFC 5751) ise X.509 sertifika altyapısına dayanan ve kurumsal ortamlarda yaygın olarak kullanılan bir diğer güvenli e-posta standardıdır \cite{RamsdellTurner}.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi facilisis purus eget tellus sagittis vehicula. Nullam pretium urna quis purus gravida dictum. Quisque erat nunc, pretium at enim et, luctus lobortis leo. Pellentesque at eros erat. Suspendisse sagittis est mauris, non ornare dolor maximus at. Phasellus id congue felis, at venenatis lorem. Vestibulum purus nisi, efficitur eget vulputate sed, gravida a felis. Pellentesque pulvinar, nisi hendrerit interdum blandit, lorem justo cursus justo, at suscipit velit eros interdum quam. In consequat metus ut est scelerisque, vitae dapibus odio varius. Maecenas pellentesque porttitor sem, ut sollicitudin ligula luctus nec. Nam sit amet porttitor mi, in mattis enim. Aliquam erat volutpat.
+RSA algoritması, Rivest, Shamir ve Adleman tarafından 1978 yılında tanıtılmış; asimetrik şifreleme ve dijital imzanın temelini oluşturmuştur \cite{RSA1978}. PKCS \#1 v2.2 standardı (RFC 8017), RSA-PSS imza şemasını ve RSA-OAEP şifreleme şemasını tanımlamaktadır \cite{RFC8017}. AES-256-GCM, NIST tarafından FIPS 197 ve SP 800-38D standartlarıyla belgelenmiş, kimlik doğrulamalı şifreleme sağlayan AEAD modudur \cite{FIPS197, SP80038D}. SHA-256 ise FIPS 180-4 standardıyla tanımlanan 256 bit çıktı üreten güvenli özet algoritmasıdır \cite{FIPS1804}.
 
-Pellentesque pretium sit amet turpis nec sodales. Nulla ut ex vestibulum, accumsan tortor quis, tempus ligula. Quisque at justo vulputate, interdum odio at, dignissim orci. Fusce ex metus, fringilla sed porta ac, placerat vitae purus. Aenean posuere accumsan velit, sed hendrerit metus volutpat eu. Quisque fermentum lectus sed interdum convallis. Aenean id ante porttitor, sagittis ex ac, vestibulum urna. Pellentesque sit amet sem eleifend tellus gravida congue. Maecenas nec rhoncus lectus, sed condimentum quam. Cras varius arcu in consectetur scelerisque. Vestibulum varius mauris eu nibh semper, in gravida sem ultrices. Nullam sed dolor non justo pharetra luctus. Cras ac nisi nibh. Orci varius natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus.
+Kriptografik sistemlerin görselleştirilmesi üzerine yapılan araştırmalar, animasyonlu gösterimlerin kriptografik kavramların anlaşılmasını önemli ölçüde kolaylaştırdığını ortaya koymaktadır \cite{CryptoVis}. Bu çalışmada geliştirilen animasyon modülleri, literatürdeki bu yaklaşımdan ilham almaktadır.
 
-Suspendisse finibus nec neque sed vulputate. Nulla facilisi. Etiam vel neque est. Pellentesque sollicitudin libero arcu, et euismod turpis finibus suscipit. Praesent et libero turpis. Nullam auctor metus quis neque rhoncus, non gravida nibh sagittis. Duis tristique maximus dui, sit amet condimentum eros dapibus vitae. Sed rhoncus quam non velit venenatis fermentum. Donec a nulla ultrices, dictum est et, lobortis nisl. Cras sed est nisl. Nullam auctor suscipit erat. Vestibulum nec aliquet leo, vel sodales sapien. Sed pharetra dui ac enim fermentum vehicula. Quisque elit tortor, finibus ut elit nec, posuere dapibus odio. Quisque feugiat orci libero.
-
- 
 \textbf{Çalışmanın Amacı}
 
- Bu çalışmasının amaçları şu şekilde sıralanabilir:
-  
-  \begin{itemize}
-  	\item Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque odio mi, efficitur non pulvinar eu, fringilla at augue. Nullam tempor vel erat accumsan laoreet. Nunc sed lacinia mi, elementum auctor tortor. Aliquam non rhoncus lorem. Cras non mauris justo. Donec dapibus in nunc vel mattis. Vestibulum nibh massa, ullamcorper eu dolor ut, tempor bibendum ex. 	
-  	
-  	\item Duis pellentesque dolor vel ligula finibus fringilla. Nunc sed enim cursus, laoreet lacus eget, porta lectus. Phasellus non finibus turpis. Quisque eget condimentum ex. Suspendisse feugiat maximus sapien, semper bibendum turpis rutrum et. Donec lacinia luctus tincidunt. Integer in dui mattis, aliquam ligula ut, facilisis metus. Nulla facilisi. Sed non vestibulum magna. Proin non dolor tincidunt erat tristique dignissim. Integer egestas, dolor ac euismod pharetra, nibh libero laoreet nibh, fringilla euismod dolor arcu blandit lorem. In et eros posuere, ultricies nunc sed, bibendum dui. Nullam posuere in nulla at tristique. Donec elementum odio elit, non vehicula nulla varius in. Fusce quis ligula volutpat tellus gravida varius. Praesent nec elementum ex, et maximus mi.   	   	  	
-  \end{itemize}
-  
- 
+Bu çalışmasının amaçları şu şekilde sıralanabilir:
+
+\begin{itemize}
+  	\item Güvenli e-posta iletişiminin dört temel güvenlik özelliğini (gizlilik, bütünlük, kimlik doğrulama ve inkar edememe) karşılayan, endüstriyel kriptografik standartlara uygun bir hibrit şifreleme sistemi tasarlamak ve gerçekleştirmek.
+
+  	\item AES-256-GCM, RSA-2048 PSS/OAEP ve SHA-256 algoritmalarının iç işleyişini; 14 turlu AES durum matrisi animasyonu, Genişletilmiş Öklid Algoritması adım animasyonu ve SHA-256 sıkıştırma devresi görselleştirmesi aracılığıyla pedagojik biçimde sunmak.
+
+  	\item Geliştirilen sistemi 26 birim testi ile doğrulayarak yazılım kalitesini ve kriptografik doğruluğu güvence altına almak.
+\end{itemize}
+
 \textbf{Tezin Organizasyonu}
 
-Bu çalışmanın düzenlemesi şu şekildedir. 
+Bu çalışmanın düzenlemesi şu şekildedir.
 
-1. Bölümde, 
+1. Bölümde, e-posta güvenliğinin önemi, çalışmanın amacı ve literatürdeki ilgili çalışmalar ele alınmaktadır.
 
-2. Bölümde, 
+2. Bölümde, sistemde kullanılan kriptografik primitifler (SHA-256, RSA-2048, AES-256-GCM) teorik altyapısıyla birlikte açıklanmaktadır.
 
-....
+3. Bölümde, sistemin mimari tasarımı, modüler yapısı, GUI gerçekleştirimi ve animasyon modülleri ayrıntılı biçimde aktarılmaktadır.
 
-5. Bölümde,  
+4. Bölümde, birim test sonuçları ve güvenlik analizi sunulmakta; çalışmanın bulguları, sınırlılıkları ve öneriler tartışılmaktadır.
 

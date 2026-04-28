@@ -1,13 +1,141 @@
-\chapter{2.BÖLÜM BAŞLIĞI}
+\chapter{SİSTEM TASARIMI VE GERÇEKLEŞTİRİM}
 \label{IkinciBolum}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent eu nisi massa. Donec at augue mauris. Donec ligula ligula, dignissim nec sapien sed, blandit accumsan neque. In justo lacus, mattis a arcu et, ornare ultricies lorem. Donec luctus consequat tincidunt. Maecenas at tristique libero. Aliquam vel leo quis nisl egestas viverra sit amet at turpis. Vestibulum id augue sollicitudin, elementum est et, suscipit lacus. Vestibulum sed volutpat quam. Sed sed dui vitae erat commodo maximus quis nec nisl. Proin imperdiet scelerisque nulla vitae tincidunt. Sed vehicula orci vitae pretium luctus. Morbi a efficitur risus. Cras at suscipit purus.
- 
-        
-	   
-   
-     
-\section{Alt-Başlık}
+Bu bölümde, geliştirilen güvenli e-posta kimlik doğrulama sisteminin yazılım mimarisi, modüler yapısı, GUI gerçekleştirimi, animasyon modülleri ve test altyapısı ayrıntılı biçimde ele alınmaktadır.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut ac aliquam eros. Quisque ullamcorper diam tortor, quis facilisis orci iaculis condimentum. Quisque finibus consequat lacus id euismod. Nunc mattis, lectus ac interdum mollis, diam nisl consectetur est, id dapibus ex nibh in sapien. Nam in lacinia risus. Duis sollicitudin lacinia ante blandit viverra. Maecenas accumsan sapien vitae ex maximus, congue iaculis leo hendrerit. Donec aliquet mauris eu dolor faucibus laoreet. Nulla facilisis ut lectus vitae lobortis. Phasellus et eros at sapien lacinia posuere id eget tortor. Nulla facilisi. In pretium nibh at libero fermentum, at consectetur ante suscipit. Integer laoreet venenatis consectetur. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+\section{Sistem Mimarisi}
+
+Uygulama, tek yönlü bağımlılık ilkesine göre tasarlanmış katmanlı bir mimariye sahiptir. Şekil \ref{fig:Mimari}'de görüldüğü üzere üç temel katman belirlenmiştir:
+
+\begin{enumerate}
+    \item \textbf{Kriptografi Katmanı (\texttt{crypto\_core.py}):} RSA anahtar üretimi, SHA-256 özetleme, RSA-PSS imzalama/doğrulama ve AES-256-GCM şifreleme/deşifreleme işlevlerini gerçekleştiren arka uç. GUI'den bağımsız; yalnızca Python standart kütüphanesi ve PyCA \texttt{cryptography} paketi kullanılmaktadır.
+    \item \textbf{Sunum Katmanı (\texttt{alice\_panel.py}, \texttt{bob\_panel.py}):} Alice ve Bob panellerini yöneten, adım adım iş akışını tetikleyen ve animasyon pencerelerini çağıran bileşenler.
+    \item \textbf{Animasyon Katmanı (\texttt{animation\_modals/}):} AES-256, RSA-2048 ve SHA-256 algoritmalarının iç işleyişini görselleştiren bağımsız pencere bileşenleri.
+\end{enumerate}
+
+\begin{table}[t]
+	\caption{Proje Modülleri ve Sorumlulukları.}
+	\centering
+	\begin{tabular}{|l|l|}
+		\hline \textbf{Modül} & \textbf{Sorumluluk} \\
+		\hline \texttt{main\_gui.py} & Ana pencere, iş akışı yöneticisi \\
+		\hline \texttt{crypto\_core.py} & Kriptografik iş mantığı (arka uç) \\
+		\hline \texttt{alice\_panel.py} & Alice paneli ve animasyon konteyneri \\
+		\hline \texttt{bob\_panel.py} & Bob paneli ve deşifre diyagramı \\
+		\hline \texttt{theme.py} & Renk paleti ve tema sabitleri \\
+		\hline \texttt{toast.py} & Doğrulama bildirimi bileşeni \\
+		\hline \texttt{utils.py} & Yardımcı fonksiyonlar \\
+		\hline \texttt{animation\_modals/aes\_animation.py} & AES-256-GCM adım animasyonu \\
+		\hline \texttt{animation\_modals/rsa\_animation.py} & RSA-2048 eğitim animasyonu \\
+		\hline \texttt{animation\_modals/sha256\_animation.py} & SHA-256 sıkıştırma animasyonu \\
+		\hline \texttt{animation\_modals/aes\_pure.py} & Saf Python AES-256 (tur verisi) \\
+		\hline \texttt{animation\_modals/sha256\_pure.py} & Saf Python SHA-256 (adım verisi) \\
+		\hline
+	\end{tabular}
+	\label{tab:Moduller}
+\end{table}
+
+\section{Kriptografik İş Akışı}
+
+Proje, \texttt{CryptoCore} sınıfı etrafında organize edilmiştir. RSA anahtar çifti \texttt{RSAKeyPair} veri sınıfında tutulmakta; şifreli paket ise \texttt{EncryptedPacket} veri sınıfıyla temsil edilmektedir. Temel veri sınıfları Tablo \ref{tab:VeriSiniflari}'da özetlenmiştir.
+
+\begin{table}[t]
+	\caption{Temel Veri Sınıfları.}
+	\centering
+	\begin{tabular}{|l|l|l|}
+		\hline \textbf{Sınıf} & \textbf{Alan} & \textbf{Açıklama} \\
+		\hline \texttt{RSAKeyPair} & \texttt{private\_key} & RSA-2048 gizli anahtar \\
+		\hline                    & \texttt{public\_key}  & RSA-2048 açık anahtar \\
+		\hline \texttt{EncryptedPacket} & \texttt{encrypted\_message} & AES-GCM şifreli metin + etiketi \\
+		\hline                          & \texttt{encrypted\_session\_key} & OAEP şifreli $K_S$ \\
+		\hline                          & \texttt{nonce} & 96-bit rastgele sayı \\
+		\hline                          & \texttt{associated\_data} & AES-GCM AAD alanı \\
+		\hline \texttt{StepResult} & \texttt{step\_number} & Adım numarası \\
+		\hline                     & \texttt{step\_name}   & Adım adı \\
+		\hline                     & \texttt{data}         & Ara çıktı sözlüğü \\
+		\hline
+	\end{tabular}
+	\label{tab:VeriSiniflari}
+\end{table}
+
+Alice tarafının şifreleme sürecinde gerçekleştirilen altı adım Algoritma \ref{algo:Alice}'de özetlenmiştir.
+
+\begin{algorithm}
+	~\\
+	\SetKwInOut{Input}{Girişler}
+	\SetKwInOut{Output}{Çıkış}
+	\Input{
+		\textit{m}: Düz metin mesaj. \\
+		$K^-_A$: Alice'in gizli RSA anahtarı. \\
+		$K^+_B$: Bob'un açık RSA anahtarı. \\
+	}
+	\Output{\textit{Paket}: $\{C, K^+_B(K_S), \text{Nonce}\}$}
+	\begin{algorithmic}[H]
+		\STATE $H \leftarrow \text{SHA-256}(m)$
+		\STATE $\sigma \leftarrow \text{RSA-PSS}_{K^-_A}(H)$
+		\STATE $P \leftarrow m \| \sigma$
+		\STATE $K_S \leftarrow \text{os.urandom}(32)$, $\text{Nonce} \leftarrow \text{os.urandom}(12)$
+		\STATE $C \leftarrow \text{AES-256-GCM}_{K_S, \text{Nonce}}(P)$
+		\STATE $E_{K_S} \leftarrow \text{RSA-OAEP}_{K^+_B}(K_S)$
+		\STATE \textbf{return} $\{C, E_{K_S}, \text{Nonce}\}$
+	\end{algorithmic}
+	\caption{Alice Tarafı Şifreleme Algoritması}
+	~\\
+	\label{algo:Alice}
+\end{algorithm}
+
+\section{Animasyon Modülleri}
+
+Proje, kriptografik algoritmaların iç işleyişini adım adım görselleştiren üç bağımsız animasyon penceresi içermektedir. Bu pencereler \texttt{CryptoAnimationWindow} temel sınıfından türetilmiş olup PyQt6'nın \texttt{QPainter} API'si kullanılarak özel grafik bileşenleri olarak gerçekleştirilmiştir.
+
+\subsection{AES-256-GCM Animasyonu}
+
+\texttt{aes\_animation.py} modülü, AES-256'nın 14 turunu görselleştirmektedir. Saf Python AES-256 gerçekleştirimi (\texttt{aes\_pure.py}) her tur sonrası 4×4 durum matrisini (\texttt{MatrixWidget}) depolar. Animasyon penceresi şu bileşenleri içermektedir:
+
+\begin{itemize}
+    \item Tıklanabilir tur çubuğu (Round 0 – Round 14).
+    \item \textbf{SubBytes:} S-Box ile byte değiştirme, hücre hücre animasyon.
+    \item \textbf{ShiftRows:} Satır kaydırma (0, 1, 2, 3 byte sola) için renkli ok gösterimi.
+    \item \textbf{MixColumns:} GF($2^8$) sabit matris çarpımı formülü ($02 \cdot s_0 \oplus 03 \cdot s_1 \oplus s_2 \oplus s_3$).
+    \item \textbf{AddRoundKey:} XOR ile tur anahtarı karıştırma.
+    \item ECB ve GCM çıktılarının neden farklı olduğunu açıklayan eşleşme ekranı.
+\end{itemize}
+
+\subsection{RSA-2048 Animasyonu}
+
+\texttt{rsa\_animation.py} modülü, RSA-2048'in matematiksel temellerini yedi adımda sunmaktadır: asal sayı seçimi, $n = p \cdot q$, $\phi(n)$, $e$ seçimi, $d$ hesabı (Genişletilmiş Öklid Algoritması adım adım), DER/Base64 dönüşümü ve gerçek 2048-bit anahtar gösterimi. Demo değerler ($p = 61$, $q = 53$) üzerinden şifreleme ve deşifreleme doğrulaması ($m = 65 \rightarrow c = 2790 \rightarrow m = 65$) gerçekleştirilmektedir.
+
+\subsection{SHA-256 Animasyonu}
+
+\texttt{sha256\_animation.py} modülü üç bölümden oluşmaktadır: dolgu görselleştirmesi, mesaj genişletme tablosu ($W_0 \ldots W_{31}$) ve QPainter tabanlı sıkıştırma devresi diyagramı. Sıkıştırma diyagramı; sekiz register (A–H), $T_1 = \Sigma_1(E) + \text{Ch}(E,F,G) + H + K_i + W_i$ ve $T_2 = \Sigma_0(A) + \text{Maj}(A,B,C)$ kutularını ve kaydırma bağlantılarını içermektedir. Her blok için 9 anlık görüntü (tur 1, 9, 17, 25, 33, 41, 49, 57, 64) sunulmaktadır.
+
+\section{Test Altyapısı ve Sonuçları}
+
+Uygulama, dört ayrı test dosyasında toplam 26 birim testi ile doğrulanmıştır. Testler Python \texttt{pytest} çerçevesi ile çalıştırılmaktadır.
+
+\begin{table}[t]
+	\caption{Test Dosyaları ve Kapsamları.}
+	\centering
+	\begin{tabular}{|l|c|l|}
+		\hline \textbf{Test Dosyası} & \textbf{Test Sayısı} & \textbf{Kapsam} \\
+		\hline \texttt{test\_crypto\_core.py} & 26 & SHA-256, RSA, AES-GCM, uçtan uca iş akışı \\
+		\hline \texttt{test\_aes\_pure.py} & -- & Saf Python AES-256 gerçekleştirimi \\
+		\hline \texttt{test\_sha256\_pure.py} & -- & Saf Python SHA-256 gerçekleştirimi \\
+		\hline \texttt{test\_diagram\_rects.py} & -- & Diyagram dikdörtgen sınır kontrolleri \\
+		\hline
+	\end{tabular}
+	\label{tab:Testler}
+\end{table}
+
+Temel test senaryoları arasında şunlar yer almaktadır:
+
+\begin{itemize}
+    \item SHA-256 çıktısının uzunluğunun ve bilinen test vektörlerinin doğrulanması.
+    \item RSA anahtarlarının üretilmesi ve PEM/DER serileştirmesinin kontrolü.
+    \item İmza doğrulamasının $H(m)$ üzerinde yapıldığının ve $H(H(m))$ ile yapılmadığının test edilmesi (\texttt{test\_signature\_is\_over\_hash\_not\_double\_hash}).
+    \item AES-256-GCM şifreleme-deşifreleme döngüsünün bütünlüğünün doğrulanması.
+    \item Bozuk şifreli metin veya bozuk imza ile gerçekleştirilen negatif test senaryoları.
+    \item Alice'ten Bob'a uçtan uca iletim ve başarılı doğrulama testi.
+\end{itemize}
+
 \clearpage

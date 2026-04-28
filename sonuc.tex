@@ -2,8 +2,32 @@
 \label{Ch:Sonuclar}
 \section{Tartışma, Sonuç ve Öneriler}
 
-   önerilebilir ve daha yüksek performanslı yöntemler geliştirilebilir: 
+Bu çalışmada, güvenli e-posta iletişimini sağlamak amacıyla SHA-256, RSA-2048 PSS/OAEP ve AES-256-GCM algoritmalarını birleştiren eğitici bir hibrit şifreleme sistemi tasarlanmış ve PyQt6 ile gerçekleştirilmiştir. Sistem; gizlilik, bütünlük, kimlik doğrulama ve inkar edememe özelliklerini NIST FIPS 180-4, NIST SP 800-38D ve RFC 8017 standartlarına uygun biçimde karşılamaktadır.
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut ac aliquam eros. Quisque ullamcorper diam tortor, quis facilisis orci iaculis condimentum. Quisque finibus consequat lacus id euismod. Nunc mattis, lectus ac interdum mollis, diam nisl consectetur est, id dapibus ex nibh in sapien. Nam in lacinia risus. Duis sollicitudin lacinia ante blandit viverra. Maecenas accumsan sapien vitae ex maximus, congue iaculis leo hendrerit. Donec aliquet mauris eu dolor faucibus laoreet. Nulla facilisis ut lectus vitae lobortis. Phasellus et eros at sapien lacinia posuere id eget tortor. Nulla facilisi. In pretium nibh at libero fermentum, at consectetur ante suscipit. Integer laoreet venenatis consectetur. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+Gerçekleştirilen uygulamanın temel katkıları şu şekilde sıralanabilir:
+
+\begin{itemize}
+    \item \textbf{Hibrit şifreleme iş akışı:} Asimetrik RSA ve simetrik AES'in birleştirilmesiyle hem güvenli anahtar yönetimi hem de yüksek performanslı mesaj şifreleme elde edilmiştir.
+    \item \textbf{Pedagojik animasyon katmanı:} AES-256'nın 14 turu, RSA-2048'in matematiksel temeli ve SHA-256'nın sıkıştırma devresi adım adım görselleştirilmiş; kriptografik kavramların daha kolay anlaşılmasına katkı sağlanmıştır.
+    \item \textbf{Test kapsamı:} 26 birim testi ile kriptografik doğruluk ve yazılım kalitesi güvence altına alınmıştır.
+\end{itemize}
+
+Sistemin mevcut sınırlılıkları şu şekilde belirlenmiştir:
+
+\begin{itemize}
+    \item \textbf{Tekrar saldırısı koruması:} Paket yalnızca rastgele bir nonce içermekte; zaman damgası veya sıra numarası gibi mekanizmalar bulunmadığından sistem tekrar saldırılarına (replay attack) tek başına karşı koyamamaktadır.
+    \item \textbf{İletme gizliliği (Forward Secrecy):} Oturum anahtarı Bob'un uzun ömürlü RSA açık anahtarıyla şifrelendiğinden, gizli anahtarın ileriki bir tarihte ifşası geçmiş iletişimleri tehlikeye atabilir. Gerçek anlamda iletme gizliliği için ECDHE tabanlı geçici anahtar değişimi kullanılması gerekmektedir.
+    \item \textbf{Anahtar yönetimi:} Mevcut prototipin gerçek ağ ortamına taşınması için güvenilir bir açık anahtar altyapısına (PKI) veya güven modeline ihtiyaç duyulmaktadır.
+\end{itemize}
+
+Gelecek çalışmalar kapsamında önerilen geliştirmeler şu şekilde sıralanabilir:
+
+\begin{itemize}
+    \item Zaman damgası ve nonce kayıt defteri eklenerek tekrar saldırılarına karşı koruma sağlanması.
+    \item RSA-KEM yerine ECDHE tabanlı geçici anahtar değişimi entegrasyonu ile iletme gizliliği kazandırılması.
+    \item X.509 sertifika tabanlı kimlik doğrulama ile açık anahtar güven modelinin güçlendirilmesi.
+    \item Gerçek SMTP/IMAP protokolleri üzerinden çalışan ağ modülünün eklenmesi.
+    \item RSA-2048'den kuantum sonrası güvenli algoritmalara (ör. CRYSTALS-Dilithium, CRYSTALS-Kyber) geçiş yol haritasının belirlenmesi.
+\end{itemize}
 
 \clearpage

@@ -1,87 +1,106 @@
-\chapter{1.BÖLÜM BAŞLIĞI}
+\chapter{KRİPTOGRAFİK ALTYAPI VE TEMEL KAVRAMLAR}
 \label{CH:BolumBir}
 
-Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor.
+Bu bölümde, projede kullanılan kriptografik primitiflerin teorik temelleri açıklanmaktadır. Ele alınan konular sırasıyla SHA-256 özet fonksiyonu, RSA-2048 asimetrik kriptografi ve AES-256-GCM kimlik doğrulamalı simetrik şifrelemedir. Her bölüm, ilgili NIST ve IETF standartlarına atıf yapılarak sunulmaktadır.
 
-	\section{Alt Başlık} 
+	\section{Özet (Hash) Fonksiyonları} 
 
-Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor. 
- 
- 	\subsection{Alt-Alt Başlık} 
+Kriptografik özet (hash) fonksiyonları, herhangi bir uzunluktaki girdi verisini sabit uzunlukta bir çıktıya dönüştüren tek yönlü fonksiyonlardır. Güvenli bir özet fonksiyonu şu üç özelliği sağlamalıdır \cite{KatzLindell}:
 
-Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor.
+\begin{itemize}
+    \item \textbf{Tek Yönlülük (Preimage Resistance):} $h = H(m)$ verildiğinde $m$'yi bulmak hesaplama açısından imkânsız olmalıdır.
+    \item \textbf{İkinci Öngörüntü Direnci (Second Preimage Resistance):} Bir $m$ verildiğinde $H(m') = H(m)$ koşulunu sağlayan $m' \neq m$ bulmak imkânsız olmalıdır.
+    \item \textbf{Çakışma Direnci (Collision Resistance):} $H(m_1) = H(m_2)$ koşulunu sağlayan herhangi bir $(m_1, m_2)$ çifti bulmak imkânsız olmalıdır.
+\end{itemize}
 
+	\subsection{SHA-256 Algoritması}
 
+SHA-256 (Secure Hash Algorithm 256-bit), NIST tarafından FIPS 180-4 standardıyla tanımlanmış ve herhangi bir girdiden 256 bitlik sabit uzunlukta özet üreten bir algoritmalardır \cite{FIPS1804}. Merkle-Damgård yapısını kullanan SHA-256, girdi mesajını 512 bitlik bloklara böler; her blok 64 tur sıkıştırma işlemine tabi tutulur.
 
+SHA-256'nın temel işlem adımları şu şekilde özetlenebilir:
+
+\begin{enumerate}
+    \item \textbf{Dolgu (Padding):} Mesaj sonuna 0x80 biti eklenir, ardından mesaj uzunluğu 512 bitlik bloğa hizalanacak biçimde sıfır bitleri ile doldurulur ve sonuna 64 bitlik uzunluk değeri yazılır.
+    \item \textbf{Mesaj Genişletme (Message Schedule):} İlk 16 kelime ($W_0 \ldots W_{15}$) bloktan doğrudan alınır; $W_{16} \ldots W_{63}$ kelimeleri $\sigma_0$ ve $\sigma_1$ fonksiyonları kullanılarak genişletilir:
+        \begin{equation}
+            W_i = \sigma_1(W_{i-2}) + W_{i-7} + \sigma_0(W_{i-15}) + W_{i-16}
+        \end{equation}
+    \item \textbf{Sıkıştırma (Compression):} Sekiz çalışma değişkeni (A–H) 64 tur boyunca güncellenir; her turda seçim (Ch), çoğunluk (Maj) ve $\Sigma$ fonksiyonları uygulanır.
+    \item \textbf{Toplama:} Her blok sonunda çalışma değişkenleri başlangıç özet değerleriyle toplanır; son blok sonucunda 256 bitlik özet elde edilir.
+\end{enumerate}
+
+Projede SHA-256, mesaj bütünlüğünün denetlenmesi ve RSA imzalama öncesinde mesaj özetinin hesaplanması amacıyla kullanılmaktadır. Python \texttt{hashlib} kütüphanesi üzerinden FIPS 180-4 uyumlu uygulama gerçekleştirilmektedir.
+
+	\section{Asimetrik Şifreleme: RSA-2048}
+
+Asimetrik (açık anahtarlı) kriptografi, matematiksel ilişkili iki anahtar çifti kullanır: biri şifreleme veya imzalama için, diğeri deşifreleme veya doğrulama için. RSA algoritması, büyük sayıların çarpanlarına ayrılmasının hesaplama güçlüğüne dayanmaktadır \cite{RSA1978}.
+
+	\subsection{RSA Anahtar Üretimi}
+
+RSA anahtar üretimi şu adımları izler:
+
+\begin{enumerate}
+    \item Büyük asal sayılar $p$ ve $q$ rassal seçilir ($p \neq q$).
+    \item Modulus $n = p \cdot q$ hesaplanır.
+    \item Euler totient değeri $\phi(n) = (p-1)(q-1)$ hesaplanır.
+    \item $1 < e < \phi(n)$ ve $\gcd(e, \phi(n)) = 1$ koşullarını sağlayan açık üs $e$ seçilir (projede $e = 65537$).
+    \item $d \cdot e \equiv 1 \pmod{\phi(n)}$ koşulunu sağlayan gizli üs $d$, Genişletilmiş Öklid Algoritması ile hesaplanır.
+    \item Açık anahtar $(n, e)$ ve gizli anahtar $(n, d)$ olarak belirlenir.
+\end{enumerate}
+
+	\subsection{RSA-2048 PSS Dijital İmzası}
+
+PSS (Probabilistic Signature Scheme) dolgusu, RFC 8017 §9.1'de tanımlanmıştır \cite{RFC8017}. Rastgele tuz (salt) kullanarak aynı mesajın her imzasını farklı kılan PSS, deterministik PKCS \#1 v1.5 dolgusu yerine tercih edilmektedir. Projede imzalama süreci şu şekilde işlemektedir:
+
+\begin{enumerate}
+    \item Mesaj $m$ üzerinde SHA-256 uygulanarak $H(m)$ hesaplanır.
+    \item $H(m)$ (32 byte), Alice'in gizli anahtarı $K^-_A$ ile PSS dolgusu kullanılarak imzalanır.
+    \item Elde edilen imza $\sigma = K^-_A(H(m))$ mesaja eklenir.
+\end{enumerate}
+
+Doğrulama aşamasında Bob, Alice'in açık anahtarı $K^+_A$ ile imzayı doğrular ve mesajdan yeniden hesapladığı $H(m)$ ile eşleşip eşleşmediğini kontrol eder. 2048 bitlik anahtar boyutu NIST SP 800-131A'ya göre 112 bitlik güvenlik gücüne karşılık gelmektedir \cite{SP800131A}.
+
+	\subsection{RSA-2048 OAEP Şifrelemesi}
+
+OAEP (Optimal Asymmetric Encryption Padding), RFC 8017 §7.1'de tanımlanmış olup seçili şifreli metin saldırılarına (CCA2) karşı kanıtlanabilir güvenlik sağlar \cite{RFC8017}. Projede AES-256-GCM oturum anahtarı ($K_S$, 32 byte) Bob'un açık anahtarı $K^+_B$ ile OAEP dolgusu kullanılarak şifrelenir. Bu yolla büyük veri şifrelemenin RSA ile yapılmasından kaçınılmış, hibrit şifreleme paradigması benimsenmiştir.
+
+	\section{Simetrik Şifreleme: AES-256-GCM}
+
+AES (Advanced Encryption Standard), NIST tarafından FIPS 197 standardıyla tanımlanmış blok şifreleme algoritmasıdır \cite{FIPS197}. 256 bitlik anahtar kullanan AES-256 varyantı 14 tur uygular; her tur dört dönüşümden oluşur: SubBytes, ShiftRows, MixColumns ve AddRoundKey.
+
+	\subsection{AES Tur Dönüşümleri}
+
+\begin{itemize}
+    \item \textbf{SubBytes:} 4×4 byte'lık durum matrisindeki her byte, S-Box arama tablosu kullanılarak GF($2^8$) üzerinde ters elemanla değiştirilir.
+    \item \textbf{ShiftRows:} Durum matrisinin ikinci, üçüncü ve dördüncü satırları sırasıyla 1, 2 ve 3 byte sola döngüsel olarak kaydırılır.
+    \item \textbf{MixColumns:} Her sütun GF($2^8$) üzerinde sabit bir $4 \times 4$ matris ile çarpılır:
+        \begin{equation}
+            \begin{bmatrix} 02 & 03 & 01 & 01 \\ 01 & 02 & 03 & 01 \\ 01 & 01 & 02 & 03 \\ 03 & 01 & 01 & 02 \end{bmatrix}
+        \end{equation}
+    \item \textbf{AddRoundKey:} Durum matrisi ile tur anahtarı XOR işlemine tabi tutulur.
+\end{itemize}
+
+	\subsection{GCM Modu}
+
+GCM (Galois/Counter Mode), NIST SP 800-38D standardında tanımlanmıştır \cite{SP80038D}. AEAD (Authenticated Encryption with Associated Data) sağlayan GCM; AES-CTR tabanlı şifrelemeyi Galois alanı üzerinde çalışan GHASH kimlik doğrulama etiketi ile birleştirir. 128 bitlik kimlik doğrulama etiketi ($\tau$), şifreli metnin bütünlüğünü ve geçerli anahtar ile üretildiğini garanti eder.
+
+Projede 96 bitlik rastgele nonce, 256 bitlik AES anahtarı ve 128 bitlik kimlik doğrulama etiketi standart parametre seti olarak kullanılmaktadır:
+
+\begin{equation}
+    C \| \tau = \text{AES-256-GCM}(K_S, \text{Nonce}, m \| \sigma)
+\end{equation}
+
+	\section{Hibrit Şifreleme Paradigması}
+
+Asimetrik algoritmalar (RSA) büyük verinin şifrelenmesinde hem yavaş hem de büyük şifreli metin üretmesi nedeniyle elverişsizdir. Simetrik algoritmalar (AES) ise hızlı olmasına karşın güvenli anahtar dağıtımı sorunuyla karşılaşır. Hibrit şifreleme; rastgele bir oturum anahtarı $K_S$ oluşturarak mesajı bu simetrik anahtarla şifreler, anahtarı ise alıcının açık anahtarıyla asimetrik olarak korur \cite{StallingsCNS}. Bu yolla her iki paradigmanın avantajları birleştirilmekte; gerçek dünya protokolleri (TLS, PGP, S/MIME) bu mimariye dayanmaktadır.
 
 \begin{figure}[t]
 	\centering
-	\includegraphics[width=150mm]{grafik/multidisiplin.eps}
-	\caption{Örnek şekil.}
-	\label{fig:MultiDisiplinDM}
+	\includegraphics[width=150mm]{alice and bob.png}
+	\caption{Alice (gönderici) tarafı şifreleme akış diyagramı: 6 adımlı hibrit şifreleme süreci.}
+	\label{fig:AliceAkis}
 \end{figure}
 
-    
- 
-
-  	\begin{equation}\label{Eq:Trainset}
-	{ S =  \{ (x_{i,1},...,x_{i,n},c_i^j)|i = 1,...,m\} }
-  	\end{equation}
-
-
-
-
-\begin{table}[t]
-	\caption{Örnek Tablo.}
-	\centering 
-	\begin{tabular}{|c|c|c|c|}		
-		\hline  Değerlendirme  & Karşılaştırma Testi &  Sınıf Kararı & Sınıf Benzerliği \\ 
-		\hline  Doğru pozitif (\emph{TP})  & Pozitif & (Doğru karar) & Aynı sınıf  \\ 
-		\hline  Yanlış pozitif (\emph{FP})  & Pozitif  &  (Yanlış karar) & Farklı sınıf \\ 
-		\hline  Doğru negatif (\emph{TN})  &  Negatif  & (Doğru karar)  & Farklı sınıf \\ 
-		\hline Yanlış negatif (\emph{FN})   & Negatif  &  (Yanlış karar) & Aynı sınıf \\ 
-		\hline 
-	\end{tabular} 
-	\label{tab:ModelEslesmeOlcutu}%
-\end{table}%
-
-\subsubsection{Alt-Alt-Alt Başlık}
- 
-Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor.. 
-
-
- 
-\begin{algorithm} 	
-	~\\  
-		\SetKwInput{KwData}{Veri}
-	\SetKwInOut{Input}{Girişler}
-	\SetKwInOut{Output}{Çıkış} 	
-	\Input{  					
-		\textit{D}: Eğitim veri kümesi. \\		
-		\textit{a}: Öznitelik değerleri. \\		
-	}
-	\Output{ \textit{KararAğacı}: Keşfedilen karar ağacı modeli.}
-	\KwData{ 
-		\textit{$m$}: Öznitelik sayısı.\\
-	} 
-	\begin{algorithmic}[H]
-		\STATE  $KararA\breve{g}ac\imath$ = \{\}	
-		\STATE Temel durumları kontrol et
-		\FOR{($i=1\cdots m$)}
-		\STATE 	$a_i$ için normalleştirilmiş bilgi kazancını hesapla.
-		\ENDFOR
-		\STATE 	En yüksek bilgi kazancını veren $a_{best}$ ile düğüm ekle.
-		\STATE 	Yapılan dallanma üzerinde alt kümelere aynı biçimde yeni düğümler ekle.
-		\STATE 	Karar ağacı üretildikten sonra budama işlemi gerçekleştir. 
-	\end{algorithmic}
-	\KwRet KararAğacı
-	\caption{Örnek Algoritma} 
-	~\\  
-	\label{algo:C45}
-\end{algorithm}
-
-
-                       
-
+Şekil \ref{fig:AliceAkis}'de görüldüğü üzere Alice tarafında altı adım gerçekleştirilmektedir: (1) mesajın SHA-256 ile özetlenmesi, (2) özetin RSA-2048 PSS ile imzalanması, (3) mesaj ve imzanın birleştirilmesi, (4) birleşimin AES-256-GCM ile şifrelenmesi, (5) oturum anahtarının RSA-2048 OAEP ile şifrelenmesi ve (6) paketin iletilmesi. Bob tarafında ise beş adımla deşifreleme ve doğrulama yapılmaktadır.
 
 \clearpage

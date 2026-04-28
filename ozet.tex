@@ -1,14 +1,16 @@
 
 %\vspace{-1mm}
 
-Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.
- 
+Bu çalışmada, güvenli e-posta iletişimini sağlamak amacıyla gizlilik, bütünlük, kimlik doğrulama ve inkar edememe özelliklerini bir arada sunan hibrit bir kriptografik sistem tasarlanmış ve gerçekleştirilmiştir. Sistem; Alice (gönderici) ile Bob (alıcı) iletişim senaryosu temelinde ele alınmış, her iki tarafın kriptografik işlemleri adım adım görselleştiren bir masaüstü uygulama arayüzüyle desteklenmiştir.
 
+Önerilen sistemde mesaj bütünlüğü ve kimlik doğrulaması için SHA-256 özet fonksiyonu ile RSA-2048 PSS (Probabilistic Signature Scheme) dijital imza algoritması kullanılmaktadır. Mesaj gizliliği ise simetrik şifreleme algoritması AES-256-GCM (Galois/Counter Mode) ile sağlanmakta; simetrik oturum anahtarı RSA-2048 OAEP dolgusu kullanılarak asimetrik olarak şifrelenmektedir. Bu hibrit yaklaşım sayesinde asimetrik kriptografinin güvenlik avantajları ile simetrik kriptografinin performans avantajları bir arada elde edilmektedir.
+
+Gerçekleştirilen PyQt6 tabanlı masaüstü uygulama; AES-256, RSA-2048 ve SHA-256 algoritmalarının iç işleyişini 14 turlu AES durum matrisi, Genişletilmiş Öklid Algoritması adımları ve SHA-256 sıkıştırma devresi animasyonlarıyla pedagojik biçimde sunmaktadır. Uygulama 26 birim testi ile doğrulanmış olup NIST FIPS 180-4, NIST SP 800-38D ve RFC 8017 standartlarına uygun kriptografik primitifler kullanılmaktadır.
 
 \vspace{3mm}
 
  \begin{tabular}{ll}
 {\textbf{Anahtar Kelimeler:}} & 
-{Optimizasyon,Görüntü İşleme,Veri Madenciliği.	} 	 
+{Hibrit Şifreleme, AES-256-GCM, RSA-2048, SHA-256, Dijital İmza, E-posta Güvenliği.} 	 
  \end{tabular} 
 

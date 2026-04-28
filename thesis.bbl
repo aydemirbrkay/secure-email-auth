@@ -1,0 +1,57 @@
+\begin{thebibliography}{10}
+
+\bibitem{StallingsCNS}
+Stallings, W., 2017. Cryptography and Network Security: Principles and
+  Practice, Pearson, 7 edition.
+
+\bibitem{KatzLindell}
+Katz, J. and Lindell, Y., 2021. Introduction to Modern Cryptography, Chapman
+  and Hall/CRC, 3 edition.
+
+\bibitem{ZimmermanPGP}
+Zimmermann, P.R., 1995. {The Official PGP User's Guide}, Technical report, MIT
+  Press.
+
+\bibitem{RamsdellTurner}
+Ramsdell, B. and Turner, S., 2010. {S/MIME Version 3.2 Message Specification},
+  RFC 5751, Internet Engineering Task Force,
+  .
+
+\bibitem{RSA1978}
+Rivest, R.L., Shamir, A., and Adleman, L., 1978. A Method for Obtaining Digital
+  Signatures and Public-Key Cryptosystems, \textbf{Communications of the ACM},
+  \textbf{21}(2):120--126.
+
+\bibitem{RFC8017}
+Moriarty, K., Kaliski, B., Jonsson, J., and Rusch, A., 2016. {PKCS \#1: RSA
+  Cryptography Specifications Version 2.2}, RFC 8017, Internet Engineering Task
+  Force.
+
+\bibitem{FIPS197}
+{NIST}, 2001. {FIPS PUB 197: Advanced Encryption Standard (AES)}, Federal
+  Information Processing Standard 197, National Institute of Standards and
+  Technology.
+
+\bibitem{SP80038D}
+{NIST}, 2007. {SP 800-38D: Recommendation for Block Cipher Modes of Operation:
+  Galois/Counter Mode (GCM) and GMAC}, Special Publication 800-38D, National
+  Institute of Standards and Technology,
+  .
+
+\bibitem{FIPS1804}
+{NIST}, 2015. {FIPS PUB 180-4: Secure Hash Standard (SHS)}, Federal Information
+  Processing Standard 180-4, National Institute of Standards and Technology,
+  .
+
+\bibitem{CryptoVis}
+Thota, S. and Banka, H., 2014. Visualization of Cryptographic Algorithms for
+  Educational Purposes, {\it Proceedings of the International Conference on
+  Computing, Communication and Control Technologies\/}.
+
+\bibitem{SP800131A}
+{NIST}, 2019. {SP 800-131A Rev. 2: Transitioning the Use of Cryptographic
+  Algorithms and Key Lengths}, Special Publication 800-131A, National Institute
+  of Standards and Technology,
+  .
+
+\end{thebibliography}

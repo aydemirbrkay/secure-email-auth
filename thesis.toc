@@ -1,0 +1,37 @@
+\contentsline {mistix}{\onaynameToC }{i}{}%
+\contentsline {mistix}{\tesekkurnameToC }{ii}{}%
+\contentsline {mistix}{\ozetnameToC }{iii}{}%
+\contentsline {mistix}{\abstractnameToC }{iv}{}%
+\contentsline {mistix}{\contentsnameToC }{v}{}%
+\contentsline {mistix}{\listtablenameToC }{vii}{}%
+\contentsline {mistix}{\listfigurenameToC }{viii}{}%
+\contentsline {mistix}{\abbreviationnameToC }{ix}{}%
+\addvspace {10mm}\vspace {2em}
+\contentsline {fhmkyl}{ \bf \fontfamily {cmr}\normalsize \selectfont GİRİŞ\normalfont }{1}{}%
+\addvspace {\spacebeforechapterToC }
+\parbox {\textwidth } {\centering \bf 1. \bf \fontfamily {cmr}\normalsize \selectfont BÖLÜM\normalfont \\ \addvspace {\spaceafterchapterToC } \bf KRİPTOGRAFİK ALTYAPI VE TEMEL KAVRAMLAR} 
+\contentsline {section}{\bf \numberline {1.1.}\bf Özet (Hash) Fonksiyonları}{4}{}%
+\contentsline {subsection}{\bf \numberline {1.1.1.}\bf SHA-256 Algoritması}{4}{}%
+\contentsline {section}{\bf \numberline {1.2.}\bf Asimetrik Şifreleme: RSA-2048}{5}{}%
+\contentsline {subsection}{\bf \numberline {1.2.1.}\bf RSA Anahtar Üretimi}{5}{}%
+\contentsline {subsection}{\bf \numberline {1.2.2.}\bf RSA-2048 PSS Dijital İmzası}{6}{}%
+\contentsline {subsection}{\bf \numberline {1.2.3.}\bf RSA-2048 OAEP Şifrelemesi}{7}{}%
+\contentsline {section}{\bf \numberline {1.3.}\bf Simetrik Şifreleme: AES-256-GCM}{7}{}%
+\contentsline {subsection}{\bf \numberline {1.3.1.}\bf AES Tur Dönüşümleri}{7}{}%
+\contentsline {subsection}{\bf \numberline {1.3.2.}\bf GCM Modu}{7}{}%
+\contentsline {section}{\bf \numberline {1.4.}\bf Hibrit Şifreleme Paradigması}{8}{}%
+\addvspace {\spacebeforechapterToC }
+\parbox {\textwidth } {\centering \bf 2. \bf \fontfamily {cmr}\normalsize \selectfont BÖLÜM\normalfont \\ \addvspace {\spaceafterchapterToC } \bf SİSTEM TASARIMI VE GERÇEKLEŞTİRİM} 
+\contentsline {section}{\bf \numberline {2.1.}\bf Sistem Mimarisi}{10}{}%
+\contentsline {section}{\bf \numberline {2.2.}\bf Kriptografik İş Akışı}{11}{}%
+\contentsline {section}{\bf \numberline {2.3.}\bf Animasyon Modülleri}{11}{}%
+\contentsline {subsection}{\bf \numberline {2.3.1.}\bf AES-256-GCM Animasyonu}{12}{}%
+\contentsline {subsection}{\bf \numberline {2.3.2.}\bf RSA-2048 Animasyonu}{12}{}%
+\contentsline {subsection}{\bf \numberline {2.3.3.}\bf SHA-256 Animasyonu}{13}{}%
+\contentsline {section}{\bf \numberline {2.4.}\bf Test Altyapısı ve Sonuçları}{13}{}%
+\addvspace {\spacebeforechapterToC }
+\parbox {\textwidth } {\centering \bf 3. \bf \fontfamily {cmr}\normalsize \selectfont BÖLÜM\normalfont \\ \addvspace {\spaceafterchapterToC } \bf TARTIŞMA, SONUÇ ve ÖNERİLER} 
+\contentsline {section}{\bf \numberline {3.1.}\bf Tartışma, Sonuç ve Öneriler}{14}{}%
+\contentsline {fhmkyl}{\bf \fontfamily {cmr}\normalsize \selectfont KAYNAKLAR\normalfont }{16}{}%
+\contentsline {fhmkyl}{\bf \fontfamily {cmr}\normalsize \selectfont EKLER\normalfont }{17}{}%
+\contentsline {fhmkyl}{\bf \fontfamily {cmr}\normalsize \selectfont ÖZGEÇMİŞ\normalfont }{18}{}%

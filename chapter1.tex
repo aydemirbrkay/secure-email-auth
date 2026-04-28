@@ -1,0 +1,87 @@
+\chapter{1.BÖLÜM BAŞLIĞI}
+\label{CH:BolumBir}
+
+Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor.
+
+	\section{Alt Başlık} 
+
+Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor. 
+ 
+ 	\subsection{Alt-Alt Başlık} 
+
+Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor.
+
+
+
+
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=150mm]{grafik/multidisiplin.eps}
+	\caption{Örnek şekil.}
+	\label{fig:MultiDisiplinDM}
+\end{figure}
+
+    
+ 
+
+  	\begin{equation}\label{Eq:Trainset}
+	{ S =  \{ (x_{i,1},...,x_{i,n},c_i^j)|i = 1,...,m\} }
+  	\end{equation}
+
+
+
+
+\begin{table}[t]
+	\caption{Örnek Tablo.}
+	\centering 
+	\begin{tabular}{|c|c|c|c|}		
+		\hline  Değerlendirme  & Karşılaştırma Testi &  Sınıf Kararı & Sınıf Benzerliği \\ 
+		\hline  Doğru pozitif (\emph{TP})  & Pozitif & (Doğru karar) & Aynı sınıf  \\ 
+		\hline  Yanlış pozitif (\emph{FP})  & Pozitif  &  (Yanlış karar) & Farklı sınıf \\ 
+		\hline  Doğru negatif (\emph{TN})  &  Negatif  & (Doğru karar)  & Farklı sınıf \\ 
+		\hline Yanlış negatif (\emph{FN})   & Negatif  &  (Yanlış karar) & Aynı sınıf \\ 
+		\hline 
+	\end{tabular} 
+	\label{tab:ModelEslesmeOlcutu}%
+\end{table}%
+
+\subsubsection{Alt-Alt-Alt Başlık}
+ 
+Integer ultricies leo sem, vel tempor lacus ullamcorper in. Suspendisse potenti. Pellentesque nec augue elit. Quisque blandit vestibulum nisi, quis volutpat risus lacinia sed. Morbi odio purus, dignissim sed nisl vitae, condimentum sagittis lectus. Nulla vitae lorem leo. Morbi eget blandit metus, sit amet interdum sem. Aenean vel ligula lacus. Donec faucibus pulvinar tristique. Morbi egestas tristique justo et tempor.. 
+
+
+ 
+\begin{algorithm} 	
+	~\\  
+		\SetKwInput{KwData}{Veri}
+	\SetKwInOut{Input}{Girişler}
+	\SetKwInOut{Output}{Çıkış} 	
+	\Input{  					
+		\textit{D}: Eğitim veri kümesi. \\		
+		\textit{a}: Öznitelik değerleri. \\		
+	}
+	\Output{ \textit{KararAğacı}: Keşfedilen karar ağacı modeli.}
+	\KwData{ 
+		\textit{$m$}: Öznitelik sayısı.\\
+	} 
+	\begin{algorithmic}[H]
+		\STATE  $KararA\breve{g}ac\imath$ = \{\}	
+		\STATE Temel durumları kontrol et
+		\FOR{($i=1\cdots m$)}
+		\STATE 	$a_i$ için normalleştirilmiş bilgi kazancını hesapla.
+		\ENDFOR
+		\STATE 	En yüksek bilgi kazancını veren $a_{best}$ ile düğüm ekle.
+		\STATE 	Yapılan dallanma üzerinde alt kümelere aynı biçimde yeni düğümler ekle.
+		\STATE 	Karar ağacı üretildikten sonra budama işlemi gerçekleştir. 
+	\end{algorithmic}
+	\KwRet KararAğacı
+	\caption{Örnek Algoritma} 
+	~\\  
+	\label{algo:C45}
+\end{algorithm}
+
+
+                       
+
+
+\clearpage

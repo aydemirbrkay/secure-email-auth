@@ -79,11 +79,6 @@ def _eea_steps(a: int, b: int) -> list[tuple[int, int, int, int, int]]:
 
 
 # ---------------------------------------------------------------------------
-# Demo değerler — her animasyon açılışında rastgele küçük asal çifti seçilir
-# Asal havuzu: 11..97 arasındaki tüm asallar
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Tez değerleri — tab:RSAExample ile birebir uyumlu (chapter1.tex)
 # Tüm widget'lar bu sabitleri __init__'lerinde okur.
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 """
 RSAAnimationWindow v2 — RSA-2048 anahtar üretimini görsel olarak animasyonla anlatır.
 
-Yedi adım:
+Sekiz adım:
   1) p ve q seçimi (asal eleği)
   2) n = p × q
   3) φ(n) = (p−1)(q−1)
@@ -10,6 +10,7 @@ Yedi adım:
   5) Gizli üs d (Genişletilmiş Öklid Algoritması)
   6) DER ve Base64 kodlaması
   7) Demo ↔ gerçek 2048-bit anahtar eşleşmesi
+  8) Şifreleme/Deşifreleme turu (m → c → m')
 
 Kalıcı sol panel "Anahtar İnşa Paneli" her adımda otomatik olarak dolar.
 """
@@ -1729,7 +1730,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         kb_frame.setMaximumWidth(210)
         split.addWidget(kb_frame, stretch=0)
 
-        # Sağ: 7 sayfalı stack
+        # Sağ: 8 sayfalı stack
         stack_frame = QFrame()
         stack_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "

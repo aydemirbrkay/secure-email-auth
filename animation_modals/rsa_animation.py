@@ -1441,6 +1441,212 @@ class _KeyMatchWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# 8) Adım 8 — Şifreleme/Deşifreleme Turu (Eq:RSAExample)
+# ---------------------------------------------------------------------------
+
+class _RSAEncryptDecryptWidget(QWidget):
+    """
+    Tezdeki Eq:RSAExample animasyonu:
+      m = 65   →   c = m^e mod n = 65^17 mod 3233 = 2790
+      c = 2790 →   m' = c^d mod n = 2790^2753 mod 3233 = 65   ✓
+
+    Faz makinesi (toplam ~3.6 sn):
+      PLAINTEXT_IN  (400 ms): m kutusu belirir
+      ENC_FORMULA   (800 ms): şifreleme formülü satır satır yazılır,
+                              açık anahtar kartı parlar
+      CIPHER_OUT    (400 ms): c kutusu belirir
+      CIPHER_IN     (200 ms): c alt yola düşer
+      DEC_FORMULA   (800 ms): deşifreleme formülü, gizli anahtar kartı parlar
+      PLAINTEXT_OUT (400 ms): m' kutusu belirir
+      MATCH         (600 ms): m' = m ✓ yeşil pulse
+    """
+
+    _M = 65
+    _C = pow(_M, _E, _N)             # 2790
+    _M_PRIME = pow(_C, _D, _N)       # 65
+
+    _TICK_MS = 50
+
+    # Faz tick eşikleri (kümülatif)
+    _T_PLAIN_IN_END  = 8    # 400 ms
+    _T_ENC_END       = 24   # +800 ms = 1200
+    _T_CIPHER_END    = 32   # +400 ms = 1600
+    _T_CIPHER_IN_END = 36   # +200 ms = 1800
+    _T_DEC_END       = 52   # +800 ms = 2600
+    _T_PLAIN_OUT_END = 60   # +400 ms = 3000
+    _T_MATCH_END     = 72   # +600 ms = 3600
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(360)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._tick = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_tick)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._tick = 0
+        self.update()
+        self._timer.start(self._TICK_MS)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _on_tick(self) -> None:
+        if self._tick < self._T_MATCH_END:
+            self._tick += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+        t = self._tick
+
+        box_w, box_h = 110, 50
+        margin = 30
+        ox = margin
+        center_x = W // 2
+
+        # ── Üst yol: Şifreleme ──
+        enc_y = 50
+        # m kutusu
+        if t >= 1:
+            self._draw_box(
+                p, ox, enc_y, box_w, box_h,
+                f"m = {self._M}", ANIM_COLORS["accent_blue"],
+                opacity=min(1.0, t / self._T_PLAIN_IN_END),
+            )
+        # Şifreleme formülü kutusu
+        if t > self._T_PLAIN_IN_END:
+            opacity = min(1.0, (t - self._T_PLAIN_IN_END) / (self._T_ENC_END - self._T_PLAIN_IN_END))
+            self._draw_formula_box(
+                p, center_x - 130, enc_y - 10, 260, 70,
+                "c = m^e mod n",
+                f"= {self._M}^{_E} mod {_N}",
+                f"= {self._C}",
+                ANIM_COLORS["accent_mauve"],
+                lines_revealed=int(3 * opacity) + 1,
+            )
+            # Açık anahtar kartı
+            if t > self._T_PLAIN_IN_END + 4:
+                self._draw_key_card(
+                    p, W - margin - 140, enc_y - 10,
+                    "Açık Anahtar", f"(n={_N}, e={_E})",
+                    ANIM_COLORS["accent_blue"],
+                )
+        # c kutusu
+        if t >= self._T_ENC_END:
+            opacity = min(1.0, (t - self._T_ENC_END) / (self._T_CIPHER_END - self._T_ENC_END))
+            self._draw_box(
+                p, W - margin - box_w, enc_y, box_w, box_h,
+                f"c = {self._C}", ANIM_COLORS["accent_peach"], opacity=opacity,
+            )
+
+        # ── Alt yol: Deşifreleme ──
+        dec_y = enc_y + 130
+        # c (alt yolda sol)
+        if t >= self._T_CIPHER_IN_END:
+            self._draw_box(
+                p, ox, dec_y, box_w, box_h,
+                f"c = {self._C}", ANIM_COLORS["accent_peach"],
+            )
+        # Deşifreleme formülü
+        if t > self._T_CIPHER_IN_END:
+            opacity = min(1.0, (t - self._T_CIPHER_IN_END) / (self._T_DEC_END - self._T_CIPHER_IN_END))
+            self._draw_formula_box(
+                p, center_x - 130, dec_y - 10, 260, 70,
+                "m' = c^d mod n",
+                f"= {self._C}^{_D} mod {_N}",
+                f"= {self._M_PRIME}",
+                ANIM_COLORS["accent_green"],
+                lines_revealed=int(3 * opacity) + 1,
+            )
+            if t > self._T_CIPHER_IN_END + 4:
+                self._draw_key_card(
+                    p, W - margin - 140, dec_y - 10,
+                    "Gizli Anahtar", f"(n={_N}, d={_D})",
+                    ANIM_COLORS["accent_mauve"],
+                )
+        # m' kutusu
+        if t >= self._T_DEC_END:
+            opacity = min(1.0, (t - self._T_DEC_END) / (self._T_PLAIN_OUT_END - self._T_DEC_END))
+            label = f"m' = {self._M_PRIME}"
+            if t >= self._T_PLAIN_OUT_END:
+                label = f"m' = {self._M_PRIME} = m ✓"
+            color = ANIM_COLORS["accent_green"] if t >= self._T_PLAIN_OUT_END else ANIM_COLORS["accent_blue"]
+            self._draw_box(
+                p, W - margin - box_w, dec_y, box_w, box_h,
+                label, color, opacity=opacity,
+                pulse=(t >= self._T_PLAIN_OUT_END and t < self._T_MATCH_END),
+            )
+
+        p.end()
+
+    def _draw_box(
+        self, p: QPainter, x: int, y: int, w: int, h: int,
+        text: str, color: str, opacity: float = 1.0, pulse: bool = False,
+    ) -> None:
+        col = QColor(color)
+        col.setAlphaF(opacity)
+        fill = QColor(color)
+        fill.setAlphaF(opacity * 0.18)
+        if pulse:
+            phase = (self._tick % 8) / 8.0
+            fill.setAlphaF(opacity * (0.18 + 0.20 * abs(0.5 - phase) * 2))
+
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(col, 2))
+        p.drawRoundedRect(x, y, w, h, 6, 6)
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        text_col = QColor(ANIM_COLORS["text_primary"])
+        text_col.setAlphaF(opacity)
+        p.setPen(text_col)
+        p.drawText(QRect(x, y, w, h), Qt.AlignmentFlag.AlignCenter, text)
+
+    def _draw_formula_box(
+        self, p: QPainter, x: int, y: int, w: int, h: int,
+        line1: str, line2: str, line3: str, color: str,
+        lines_revealed: int,
+    ) -> None:
+        col = QColor(color)
+        fill = QColor(color)
+        fill.setAlphaF(0.15)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(col, 2))
+        p.drawRoundedRect(x, y, w, h, 6, 6)
+
+        p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        text_col = QColor(ANIM_COLORS["text_primary"])
+        p.setPen(text_col)
+        lines = [line1, line2, line3]
+        for li in range(min(lines_revealed, 3)):
+            p.drawText(QRect(x + 8, y + 6 + li * 20, w - 16, 18),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       lines[li])
+
+    def _draw_key_card(
+        self, p: QPainter, x: int, y: int, title: str, val: str, color: str,
+    ) -> None:
+        col = QColor(color)
+        fill = QColor(color)
+        fill.setAlphaF(0.20)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(col, 1))
+        p.drawRoundedRect(x, y, 140, 60, 6, 6)
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setPen(col)
+        p.drawText(QRect(x, y + 6, 140, 18), Qt.AlignmentFlag.AlignCenter, title)
+        p.setFont(QFont("Courier New", 9))
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.drawText(QRect(x, y + 28, 140, 26), Qt.AlignmentFlag.AlignCenter, val)
+
+
+# ---------------------------------------------------------------------------
 # 9) Ana Pencere
 # ---------------------------------------------------------------------------
 
@@ -1454,13 +1660,14 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     """
 
     _TITLES = [
-        "Adım 1 / 7 — p ve q Seçimi",
-        "Adım 2 / 7 — n = p × q",
-        "Adım 3 / 7 — φ(n) = (p − 1)(q − 1)",
-        "Adım 4 / 7 — Açık Üs e Seçimi",
-        "Adım 5 / 7 — Gizli Üs d  (Genişletilmiş Öklid)",
-        "Adım 6 / 7 — DER ve Base64 Kodlaması",
-        "Adım 7 / 7 — Gerçek Anahtarlarla Eşleşme",
+        "Adım 1 / 8 — p ve q Seçimi",
+        "Adım 2 / 8 — n = p × q",
+        "Adım 3 / 8 — φ(n) = (p − 1)(q − 1)",
+        "Adım 4 / 8 — Açık Üs e Seçimi",
+        "Adım 5 / 8 — Gizli Üs d  (Genişletilmiş Öklid)",
+        "Adım 6 / 8 — DER ve Base64 Kodlaması",
+        "Adım 7 / 8 — Gerçek Anahtarlarla Eşleşme",
+        "Adım 8 / 8 — Şifreleme / Deşifreleme Turu",
     ]
 
     _CAPTIONS = [
@@ -1471,6 +1678,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         "d, e'nin φ(n) modülünde tersidir:  e · d ≡ 1  (mod φ).",
         "Anahtar dosyada DER yapısında, satır içinde Base64 olarak kodlanır.",
         "Aynı matematik · farklı boyut: demo 12-bit n, gerçek 2048-bit n.",
+        "m → c → m'  döngüsü; her iki yön de aynı m değerine ulaşır (Eq:RSAExample).",
     ]
 
     def __init__(
@@ -1539,6 +1747,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
             _EEAWidget(),
             _DERByteFlowWidget(self._alice_b64),
             _KeyMatchWidget(self._alice_b64, self._bob_b64),
+            _RSAEncryptDecryptWidget(),
         ]
         for w in self._page_widgets:
             self._stack.addWidget(w)
@@ -1575,11 +1784,11 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         self._fade_in_current_page()
 
     def _show_match_result(self) -> None:
-        # Son adım — index 6
-        self._step_lbl.setText(self._TITLES[6])
-        self._stack.setCurrentIndex(6)
-        self._kb.set_step(6)
-        self._caption.setText(self._CAPTIONS[6])
+        # Son adım — index 7 (Şifreleme/Deşifreleme Turu)
+        self._step_lbl.setText(self._TITLES[7])
+        self._stack.setCurrentIndex(7)
+        self._kb.set_step(7)
+        self._caption.setText(self._CAPTIONS[7])
         self._fade_in_current_page()
 
     def _fade_in_current_page(self) -> None:

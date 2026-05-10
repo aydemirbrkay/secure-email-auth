@@ -51,5 +51,32 @@ class TestRSAAnimationConstants(unittest.TestCase):
         self.assertEqual(t % _PHI, _D)  # _D = 2753
 
 
+class TestRSAAnimationStructure(unittest.TestCase):
+    """RSAAnimationWindow'un 8 adımlı yapısını doğrular (UI başlatmadan)."""
+
+    def test_titles_have_eight_entries(self):
+        from animation_modals.rsa_animation import RSAAnimationWindow
+        self.assertEqual(len(RSAAnimationWindow._TITLES), 8)
+
+    def test_captions_have_eight_entries(self):
+        from animation_modals.rsa_animation import RSAAnimationWindow
+        self.assertEqual(len(RSAAnimationWindow._CAPTIONS), 8)
+
+    def test_titles_use_eight_format(self):
+        """Her adım başlığı 'Adım N / 8' formatında olmalı."""
+        from animation_modals.rsa_animation import RSAAnimationWindow
+        for i, title in enumerate(RSAAnimationWindow._TITLES):
+            self.assertIn(f"Adım {i+1} / 8", title,
+                          f"index {i}: '{title}'")
+
+    def test_eighth_title_is_encryption_tour(self):
+        from animation_modals.rsa_animation import RSAAnimationWindow
+        self.assertIn("Şifreleme", RSAAnimationWindow._TITLES[7])
+
+    def test_encrypt_decrypt_widget_exists(self):
+        from animation_modals import rsa_animation as rsa
+        self.assertTrue(hasattr(rsa, "_RSAEncryptDecryptWidget"))
+
+
 if __name__ == "__main__":
     unittest.main()

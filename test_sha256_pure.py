@@ -72,5 +72,16 @@ class TestSHA256Pure(unittest.TestCase):
         # üretmesi beklenir (aksi hâlde operand/sonuç ayrımı kaybolmuştur).
         self.assertTrue(any(row["w_i15"] != row["s0"] for row in exp))
 
+class TestSHA256AnimationStructure(unittest.TestCase):
+    """sha256_animation modülünün yeni widget yapısını doğrular."""
+
+    def test_w_expansion_widget_exists(self):
+        from animation_modals import sha256_animation as sha
+        self.assertTrue(hasattr(sha, "_WExpansionWidget"))
+
+    def test_match_assembly_widget_exists(self):
+        from animation_modals import sha256_animation as sha
+        self.assertTrue(hasattr(sha, "_MatchAssemblyWidget"))
+
 if __name__ == "__main__":
     unittest.main()

@@ -503,6 +503,310 @@ class _RegisterDemoWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Mesaj Genişletme (Message Schedule) animasyonu
+# ---------------------------------------------------------------------------
+
+class _WExpansionWidget(QWidget):
+    """
+    SHA-256 mesaj genişletme animasyonu.
+
+    sha256_pure.sha256_steps()'ın döndürdüğü w_expansion listesi (16 entry,
+    i=16..31) üzerinde gezinir. Her i için 4 girdi kutusu (W[i-16], σ0(W[i-15]),
+    W[i-7], σ1(W[i-2])) sırayla doğar, ardından oklar `+` düğümüne akar ve
+    sonuç W[i] kutusu yeşil pulse ile belirir.
+
+    ◀ / ▶ butonları ile i = 16..31 arasında gezinilir.
+    """
+
+    _TICK_MS = 50
+    _T_INPUTS_END = 24    # 1200 ms
+    _T_ARROWS_END = 36    # +600 ms
+    _T_RESULT_END = 44    # +400 ms
+
+    def __init__(
+        self, expansion: list[dict] | None, parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._exp: list[dict] = expansion or []
+        self._cur = 0  # mevcut i'nin _exp listesindeki indeksi (0..15)
+        self._tick = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_tick)
+
+        self.setMinimumHeight(380)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Alt navigasyon butonları
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.addStretch(1)
+
+        nav = QHBoxLayout()
+        nav.setSpacing(8)
+        nav.addStretch(1)
+
+        self._btn_prev = QPushButton("◀ Önceki i")
+        self._btn_next = QPushButton("Sonraki i ▶")
+        for b in (self._btn_prev, self._btn_next):
+            b.setStyleSheet(
+                f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+                f"color: #FFFFFF; border: none; border-radius: 6px; "
+                f"padding: 6px 14px; font-weight: bold; }}"
+                f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+                f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
+                f"color: {ANIM_COLORS['text_muted']}; }}"
+            )
+        self._btn_prev.clicked.connect(self._prev_i)
+        self._btn_next.clicked.connect(self._next_i)
+        nav.addWidget(self._btn_prev)
+        nav.addWidget(self._btn_next)
+        nav.addStretch(1)
+        outer.addLayout(nav)
+
+        self._update_button_states()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._tick = 0
+        self.update()
+        if self._exp:
+            self._timer.start(self._TICK_MS)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _on_tick(self) -> None:
+        if self._tick < self._T_RESULT_END:
+            self._tick += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def _prev_i(self) -> None:
+        if self._cur > 0:
+            self._cur -= 1
+            self._restart_animation()
+
+    def _next_i(self) -> None:
+        if self._cur < len(self._exp) - 1:
+            self._cur += 1
+            self._restart_animation()
+
+    def _restart_animation(self) -> None:
+        self._tick = 0
+        self._update_button_states()
+        self.update()
+        self._timer.start(self._TICK_MS)
+
+    def _update_button_states(self) -> None:
+        self._btn_prev.setEnabled(self._cur > 0)
+        self._btn_next.setEnabled(self._cur < len(self._exp) - 1)
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+
+        if not self._exp:
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.setFont(QFont("Georgia", 11))
+            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                       "w_expansion verisi yok")
+            p.end()
+            return
+
+        entry = self._exp[self._cur]
+        i_val = entry["i"]
+
+        # Üst: σ formülleri sabit referans
+        p.setFont(QFont("Courier New", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 8, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)")
+        p.drawText(QRect(0, 26, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "σ1(x) = ROTR(x,17) ⊕ ROTR(x,19) ⊕ SHR(x,10)")
+
+        # Başlık: i = N / 31
+        p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, 50, W, 22), Qt.AlignmentFlag.AlignCenter,
+                   f"W[{i_val}] = σ1(W[{i_val-2}]) + W[{i_val-7}] + "
+                   f"σ0(W[{i_val-15}]) + W[{i_val-16}]   (mod 2³²)")
+
+        # 4 girdi kutusu (yan yana 2x2 grid)
+        box_w, box_h = 200, 56
+        gap_x, gap_y = 30, 24
+        total_w = 2 * box_w + gap_x
+        ox = (W - total_w) // 2
+        oy = 90
+
+        inputs = [
+            (ox, oy,
+             f"W[{i_val-16}]",
+             entry["w_i16"],
+             None,
+             ANIM_COLORS["accent_blue"]),
+            (ox + box_w + gap_x, oy,
+             f"σ0(W[{i_val-15}])",
+             entry["w_i15"],
+             entry["s0"],
+             ANIM_COLORS["accent_mauve"]),
+            (ox, oy + box_h + gap_y,
+             f"W[{i_val-7}]",
+             entry["w_i7"],
+             None,
+             ANIM_COLORS["accent_peach"]),
+            (ox + box_w + gap_x, oy + box_h + gap_y,
+             f"σ1(W[{i_val-2}])",
+             entry["w_i2"],
+             entry["s1"],
+             ANIM_COLORS["accent_yellow"]),
+        ]
+
+        # Hangileri görünür?
+        # 0..6 → kutu 0; 6..12 → kutu 0+1; 12..18 → +2; 18..24 → +3
+        visible_count = min(4, max(0, (self._tick + 5) // 6))
+
+        for idx, (bx, by, label, operand, result, color) in enumerate(inputs):
+            if idx >= visible_count:
+                continue
+            opacity = 1.0
+            if idx == visible_count - 1:
+                progress = (self._tick - idx * 6) / 6.0
+                opacity = max(0.0, min(1.0, progress))
+            self._draw_input_box(p, bx, by, box_w, box_h,
+                                 label, operand, result, color, opacity)
+
+        # `+` düğümü merkezde
+        node_x = W // 2 - 22
+        node_y = oy + box_h + gap_y // 2 - 22
+        if self._tick >= self._T_INPUTS_END:
+            self._draw_plus_node(p, node_x, node_y)
+
+        # 4 ok girdi → düğüm
+        if self._tick > self._T_INPUTS_END:
+            arrow_progress = min(1.0,
+                (self._tick - self._T_INPUTS_END) /
+                (self._T_ARROWS_END - self._T_INPUTS_END))
+            for bx, by, _, _, _, color in inputs:
+                self._draw_arrow_to_node(p, bx + box_w // 2, by + box_h,
+                                          node_x + 22, node_y + 22,
+                                          QColor(color), arrow_progress)
+
+        # Sonuç kutusu altta
+        result_y = oy + 2 * box_h + gap_y + 60
+        if self._tick >= self._T_ARROWS_END:
+            opacity = min(1.0,
+                (self._tick - self._T_ARROWS_END) /
+                (self._T_RESULT_END - self._T_ARROWS_END))
+            pulse = self._tick >= self._T_RESULT_END
+            self._draw_result_box(p, W // 2 - box_w // 2, result_y, box_w, box_h,
+                                  i_val, entry["result"], opacity, pulse)
+            # düğüm → sonuç oku
+            self._draw_arrow_simple(p, node_x + 22, node_y + 44,
+                                    W // 2, result_y, QColor(ANIM_COLORS["accent_green"]))
+
+        # Alt: navigasyon göstergesi
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, H - 80, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   f"i = {i_val} / 31  ({self._cur + 1}/{len(self._exp)})")
+
+        p.end()
+
+    def _draw_input_box(
+        self, p: QPainter, x: int, y: int, w: int, h: int,
+        label: str, operand: str, result: str | None, color: str,
+        opacity: float,
+    ) -> None:
+        col = QColor(color)
+        col.setAlphaF(opacity)
+        fill = QColor(color)
+        fill.setAlphaF(opacity * 0.18)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(col, 2))
+        p.drawRoundedRect(x, y, w, h, 6, 6)
+
+        p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        text_col = QColor(ANIM_COLORS["text_primary"])
+        text_col.setAlphaF(opacity)
+        p.setPen(text_col)
+        p.drawText(QRect(x + 4, y + 2, w - 8, 18),
+                   Qt.AlignmentFlag.AlignCenter, label)
+
+        p.setFont(QFont("Courier New", 10))
+        if result is None:
+            p.drawText(QRect(x + 4, y + 22, w - 8, 28),
+                       Qt.AlignmentFlag.AlignCenter, operand)
+        else:
+            p.drawText(QRect(x + 4, y + 22, w - 8, 16),
+                       Qt.AlignmentFlag.AlignCenter, operand)
+            p.setPen(QColor(ANIM_COLORS["accent_green"]))
+            p.drawText(QRect(x + 4, y + 38, w - 8, 16),
+                       Qt.AlignmentFlag.AlignCenter, f"→ {result}")
+
+    def _draw_plus_node(self, p: QPainter, x: int, y: int) -> None:
+        p.setBrush(QBrush(QColor(ANIM_COLORS["bg_input"])))
+        p.setPen(QPen(QColor(ANIM_COLORS["accent_green"]), 2))
+        p.drawEllipse(x, y, 44, 44)
+        p.setFont(QFont("Courier New", 18, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        p.drawText(QRect(x, y, 44, 44), Qt.AlignmentFlag.AlignCenter, "+")
+
+    def _draw_arrow_to_node(
+        self, p: QPainter, x1: int, y1: int, x2: int, y2: int,
+        color: QColor, progress: float,
+    ) -> None:
+        """x1,y1'den x2,y2'ye giden okun progress kadarını çiz."""
+        col = QColor(color)
+        col.setAlphaF(progress)
+        p.setPen(QPen(col, 2))
+        cx = int(x1 + (x2 - x1) * progress)
+        cy = int(y1 + (y2 - y1) * progress)
+        p.drawLine(x1, y1, cx, cy)
+
+    def _draw_arrow_simple(
+        self, p: QPainter, x1: int, y1: int, x2: int, y2: int,
+        color: QColor,
+    ) -> None:
+        p.setPen(QPen(color, 2))
+        p.drawLine(x1, y1, x2, y2)
+        # ok ucu
+        size = 6
+        pts = QPolygon([
+            QPoint(x2, y2),
+            QPoint(x2 - size, y2 - size * 2),
+            QPoint(x2 + size, y2 - size * 2),
+        ])
+        p.setBrush(QBrush(color))
+        p.drawPolygon(pts)
+
+    def _draw_result_box(
+        self, p: QPainter, x: int, y: int, w: int, h: int,
+        i: int, value: str, opacity: float, pulse: bool,
+    ) -> None:
+        col = QColor(ANIM_COLORS["accent_green"])
+        col.setAlphaF(opacity)
+        fill = QColor(ANIM_COLORS["accent_green"])
+        if pulse:
+            phase = (self._tick % 8) / 8.0
+            fill.setAlphaF(opacity * (0.18 + 0.20 * abs(0.5 - phase) * 2))
+        else:
+            fill.setAlphaF(opacity * 0.20)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(col, 2))
+        p.drawRoundedRect(x, y, w, h, 6, 6)
+
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        text_col = QColor(ANIM_COLORS["text_primary"])
+        text_col.setAlphaF(opacity)
+        p.setPen(text_col)
+        p.drawText(QRect(x, y, w, h), Qt.AlignmentFlag.AlignCenter,
+                   f"W[{i}] = {value}")
+
+
+# ---------------------------------------------------------------------------
 # SHA-256 Ön Tanıtma Widget'ı
 # ---------------------------------------------------------------------------
 
@@ -805,6 +1109,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         return w
 
     def _make_wexpand_page(self) -> QWidget:
+        """Mesaj genişletme sayfası — animasyonlu _WExpansionWidget."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -815,58 +1120,8 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
 
-        d = self._data
-        exp = d.get("w_expansion") or []
-
-        lines = [
-            "W[0..15]:  Blok'tan doğrudan (mesajın 16 × 32-bit kelimesi)",
-            "",
-            "W[16..63]: σ1(W[i-2]) + W[i-7] + σ0(W[i-15]) + W[i-16]  (mod 2³²)",
-            "",
-            "  σ0(x) = ROTR(x,7)  ⊕  ROTR(x,18)  ⊕  SHR(x,3)",
-            "  σ1(x) = ROTR(x,17) ⊕  ROTR(x,19)  ⊕  SHR(x,10)",
-            "",
-            "Gösterim: σ0(W[i-15]=operand) → sonuç   (σ1 için de aynı)",
-            "─" * 72,
-            "Örnek — İlk blok W[16..31]:",
-            "",
-        ]
-        for entry in exp:
-            i = entry["i"]
-            lines.append(
-                f"  W[{i:2d}] = W[{i-16:2d}]({entry['w_i16']})"
-                f" + σ0(W[{i-15:2d}]={entry['w_i15']})→{entry['s0']}"
-                f" + W[{i-7:2d}]({entry['w_i7']})"
-                f" + σ1(W[{i-2:2d}]={entry['w_i2']})→{entry['s1']}"
-                f" = {entry['result']}"
-            )
-        lines += [
-            "",
-            "Not: σ0(…) ve σ1(…) içindeki değer fonksiyonun GİRDİSİDİR;",
-            "ok (→) işaretinden sonraki 32-bit kelime ise fonksiyonun ÇIKTISIDIR.",
-            "",
-            "64 round boyunca Compression fonksiyonu W[0..63] kullanır.",
-        ]
-
-        info = QLabel("\n".join(lines))
-        info.setFont(QFont("Courier New", 9))
-        info.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
-        info.setWordWrap(True)
-        info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-
-        card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
-        )
-        cl = QVBoxLayout(card)
-        cl.setContentsMargins(10, 8, 10, 8)
-        cl.addWidget(info)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(card)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        lay.addWidget(scroll)
+        widget = _WExpansionWidget(self._data.get("w_expansion") or [])
+        lay.addWidget(widget, stretch=1)
         return w
 
     def _make_diagram_page(self) -> QWidget:

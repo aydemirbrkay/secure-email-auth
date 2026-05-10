@@ -32,6 +32,24 @@ class TestRSAAnimationConstants(unittest.TestCase):
         self.assertFalse(hasattr(rsa, "_PRIME_POOL"),
                          "_PRIME_POOL kaldırılmış olmalı")
 
+    def test_eea_steps_for_thesis_values(self):
+        """φ=3120, e=17 için EEA çıktısının ilk satırları sabittir.
+
+        Tezdeki Algoritma algo:EEA ile q, r, s, t kolonlarının
+        deterministik olduğunu doğrular.
+        """
+        from animation_modals.rsa_animation import _eea_steps, _PHI, _E, _D
+        rows = _eea_steps(_PHI, _E)
+        # İlk iki satır seed: (0, 0, 3120, 1, 0) ve (1, 0, 17, 0, 1)
+        self.assertEqual(rows[0], (0, 0, 3120, 1, 0))
+        self.assertEqual(rows[1], (1, 0, 17, 0, 1))
+        # i=2 için: q=⌊3120/17⌋=183, r=3120-183·17=9, s=1, t=-183
+        self.assertEqual(rows[2], (2, 183, 9, 1, -183))
+        # GCD=1 satırı → t değeri pozitif moda alınınca _D olmalı
+        gcd_row = next(row for row in rows if row[2] == 1)
+        t = gcd_row[4]
+        self.assertEqual(t % _PHI, _D)  # _D = 2753
+
 
 if __name__ == "__main__":
     unittest.main()

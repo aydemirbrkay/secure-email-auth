@@ -570,25 +570,25 @@ class _SHA256IntroWidget(QWidget):
 
         # Akış şeması kutular + oklar
         flow_items = [
-            ("plain",  "📨  Mesaj Girişi",                      ANIM_COLORS["text_secondary"],  None),
+            ("plain",  "Mesaj Girişi",                          ANIM_COLORS["text_secondary"],  None),
             ("arrow",  None, None, None),
-            ("detail", "🔢  Padding  (512-bit katı)",           ANIM_COLORS["accent_peach"],
+            ("detail", "Padding  (512-bit katı)",                ANIM_COLORS["accent_peach"],
              ["→  '1' biti eklenir",
               "→  '0' bitleriyle 512-bit katına tamamlanır",
               "→  Sonuna 64-bit mesaj uzunluğu yazılır"]),
             ("arrow",  None, None, None),
-            ("detail", "📦  Blok Bölme  (N × 512-bit)",        ANIM_COLORS["accent_blue"],
+            ("detail", "Blok Bölme  (N × 512-bit)",              ANIM_COLORS["accent_blue"],
              ["→  Her blok 64 bayt / 512 bit",
               "→  16 adet 32-bit kelime  (W0 – W15)"]),
             ("arrow",  None, None, None),
-            ("detail", "⚙️  Sıkıştırma  (64 Round / Blok)",    ANIM_COLORS["accent_mauve"],
+            ("detail", "Sıkıştırma  (64 Round / Blok)",          ANIM_COLORS["accent_mauve"],
              ["→  Çalışma değişkenleri: A, B, C, D, E, F, G, H",
               "→  T1 = Σ1(E) + Ch(E,F,G) + H + Kᵢ + Wᵢ",
               "→  T2 = Σ0(A) + Maj(A,B,C)"]),
             ("arrow",  None, None, None),
-            ("plain",  "➕  H Değerlerini Güncelle",            ANIM_COLORS["accent_yellow"],   None),
+            ("plain",  "H Değerlerini Güncelle",                 ANIM_COLORS["accent_yellow"],   None),
             ("arrow",  None, None, None),
-            ("plain",  "🔒  256-bit SHA-256 Hash",              ANIM_COLORS["accent_green"],    None),
+            ("plain",  "256-bit SHA-256 Hash",                   ANIM_COLORS["accent_green"],    None),
         ]
 
         for kind, text, color, subs in flow_items:
@@ -603,7 +603,7 @@ class _SHA256IntroWidget(QWidget):
             self._reveal_widgets.append(w)
 
         # Başla butonu — scroll area dışında, her zaman görünür konumda
-        self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
+        self._btn_start = QPushButton("Görselleştirmeyi Başlat")
         self._btn_start.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
@@ -714,7 +714,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         snaps = self._data["round_snapshots"]
         total = 2 + len(snaps)   # padding + W_i genişletme + all snapshots
         super().__init__(
-            "🔐  SHA-256 Hash Animasyonu",
+            "SHA-256 Hash Animasyonu",
             total,
             manual_mode=True,
             on_close=on_close,

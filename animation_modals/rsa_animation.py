@@ -1,73 +1,1361 @@
 # animation_modals/rsa_animation.py
 """
-RSAAnimationWindow — RSA-2048 anahtar üretimini 7 adımda görselleştirir.
-Kullanıcı ◀ Geri / İleri ▶ butonlarıyla ilerler (manual_mode=True).
-Demo için küçük değerler kullanılır; son adımda gerçek Base64 eşleşmesi yapılır.
+RSAAnimationWindow v2 — RSA-2048 anahtar üretimini görsel olarak animasyonla anlatır.
+
+Yedi adım:
+  1) p ve q seçimi (asal eleği)
+  2) n = p × q
+  3) φ(n) = (p−1)(q−1)
+  4) Açık üs e seçimi (gcd doğrulaması)
+  5) Gizli üs d (Genişletilmiş Öklid Algoritması)
+  6) DER ve Base64 kodlaması
+  7) Demo ↔ gerçek 2048-bit anahtar eşleşmesi
+
+Kalıcı sol panel "Anahtar İnşa Paneli" her adımda otomatik olarak dolar.
 """
 from __future__ import annotations
+
 import base64
 from collections.abc import Callable
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
+from math import gcd
+
+from PyQt6.QtCore import (
+    Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect, QPoint,
+)
+from PyQt6.QtGui import (
+    QFont, QPainter, QColor, QPen, QBrush, QPolygon,
+)
+from PyQt6.QtWidgets import (
+    QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
+    QGraphicsOpacityEffect, QSizePolicy, QGridLayout,
+)
+
 from .base import CryptoAnimationWindow, ANIM_COLORS
 
-# Eğitim amaçlı küçük demo değerler
-_P, _Q = 61, 53
-_N = _P * _Q            # 3233
-_PHI = (_P - 1) * (_Q - 1)  # 3120
-_E = 17
-_D = pow(_E, -1, _PHI)  # 2753
 
-# Demo değerlerin gerçek DER → Base64 dönüşümü
+# ---------------------------------------------------------------------------
+# Yardımcı fonksiyonlar
+# ---------------------------------------------------------------------------
+
+def _is_prime(n: int) -> bool:
+    if n < 2:
+        return False
+    if n < 4:
+        return True
+    if n % 2 == 0:
+        return False
+    for i in range(3, int(n**0.5) + 1, 2):
+        if n % i == 0:
+            return False
+    return True
+
+
 def _der_int(v: int) -> bytes:
     """Bir tam sayıyı DER INTEGER olarak kodlar."""
     b = v.to_bytes((v.bit_length() + 8) // 8, "big")
-    if b[0] >= 0x80:          # işaret biti sıfır olmalı → 0x00 öneki ekle
+    if b[0] >= 0x80:
         b = b"\x00" + b
     return bytes([0x02, len(b)]) + b
 
-_DER_N   = _der_int(_N)
-_DER_E   = _der_int(_E)
-_DER_SEQ = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
-_B64_DEMO = base64.b64encode(_DER_SEQ).decode()
 
-# DER byte'larının hex gösterimi (adım 5 için)
-_DER_HEX = " ".join(f"{x:02X}" for x in _DER_SEQ)
+def _eea_steps(a: int, b: int) -> list[tuple[int, int, int, int, int]]:
+    """
+    Genişletilmiş Öklid: a·s + b·t = gcd(a, b)
+    Returns: list of (i, q_i, r_i, s_i, t_i)
+    """
+    r0, r1 = a, b
+    s0, s1 = 1, 0
+    t0, t1 = 0, 1
+    rows = [(0, 0, r0, s0, t0), (1, 0, r1, s1, t1)]
+    i = 2
+    while r1 != 0:
+        q = r0 // r1
+        r0, r1 = r1, r0 - q * r1
+        s0, s1 = s1, s0 - q * s1
+        t0, t1 = t1, t0 - q * t1
+        rows.append((i, q, r1, s1, t1))
+        i += 1
+    return rows
 
-# Extended Euclidean gösterimi için adımlar (elle hesaplanmış)
-_EEA_STEPS = [
-    ("3120 = 183 × 17 + 9",   "3120 mod 17 = 9"),
-    ("17   =   1 × 9  + 8",   "17   mod  9 = 8"),
-    ("9    =   1 × 8  + 1",   "9    mod  8 = 1"),
-    ("8    =   8 × 1  + 0",   "← GCD = 1, geri iz başlıyor"),
-    ("1 = 9 − 1×8",
-     "← satır 3'ten: 9 = 1×8 + 1 → 1 = 9 − 8"),
-    ("1 = 9 − 1×(17 − 1×9)  =  2×9 − 17",
-     "← satır 2'den 8'i yerine koy: 8 = 17 − 1×9"),
-    ("1 = 2×(3120 − 183×17) − 17  =  2×3120 − 367×17",
-     "← satır 1'den 9'u yerine koy: 9 = 3120 − 183×17"),
-    (f"d = −367 mod 3120 = {_D}", "✓  d = 2753"),
-]
 
+# ---------------------------------------------------------------------------
+# Demo değerler — her animasyon açılışında rastgele küçük asal çifti seçilir
+# Asal havuzu: 11..97 arasındaki tüm asallar
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Tez değerleri — tab:RSAExample ile birebir uyumlu (chapter1.tex)
+# Tüm widget'lar bu sabitleri __init__'lerinde okur.
+# ---------------------------------------------------------------------------
+
+_P:   int = 61
+_Q:   int = 53
+_N:   int = _P * _Q          # 3233
+_PHI: int = (_P - 1) * (_Q - 1)  # 3120
+_E:   int = 17
+_D:   int = pow(_E, -1, _PHI)    # 2753
+
+assert (_E * _D) % _PHI == 1, "RSA invariant ihlal edildi: e · d ≢ 1 (mod φ)"
+
+_DER_N:   bytes = _der_int(_N)
+_DER_E:   bytes = _der_int(_E)
+_DER_SEQ: bytes = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
+_B64_DEMO: str  = base64.b64encode(_DER_SEQ).decode()
+
+
+# ---------------------------------------------------------------------------
+# 1) Anahtar İnşa Paneli — kalıcı sol panel
+# ---------------------------------------------------------------------------
+
+class _RSAKeyBuilderWidget(QWidget):
+    """
+    Sol panel; anahtar alanları her adımda otomatik dolar.
+    Yeni dolan alanda 600 ms süreli yeşil pulse animasyonu.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        # Cari demo değerlerinden alanları oluştur (her instance kendi anlık snapshot'ını alır)
+        # (anahtar, doldurulduğu_adim_idx, sembol, değer, renk_anahtarı)
+        self._FIELDS = [
+            ("p",   0, "p",     str(_P),    "accent_blue"),
+            ("q",   0, "q",     str(_Q),    "accent_mauve"),
+            ("n",   1, "n",     str(_N),    "accent_yellow"),
+            ("phi", 2, "φ(n)",  str(_PHI),  "accent_yellow"),
+            ("e",   3, "e",     str(_E),    "accent_peach"),
+            ("d",   4, "d",     str(_D),    "accent_green"),
+        ]
+        self._cells: dict[str, tuple[QLabel, QLabel, QFrame]] = {}
+        self._public_card: QLabel | None = None
+        self._private_card: QLabel | None = None
+        self._last_step = -1
+        self._animations: list[QPropertyAnimation] = []
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(6, 6, 6, 6)
+        outer.setSpacing(4)
+
+        title = QLabel("ANAHTAR İNŞA PANELİ")
+        title.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; letter-spacing: 1px;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(title)
+
+        # Bireysel alanlar
+        for key, _, sym, _val, color_key in self._FIELDS:
+            row = self._make_field_row(sym, color_key)
+            outer.addWidget(row["frame"])
+            self._cells[key] = (row["label"], row["value"], row["frame"])
+
+        outer.addSpacing(4)
+
+        # Açık ve gizli anahtar kartları (K⁺ / K⁻ akademik notasyon)
+        self._public_card = self._make_key_card(
+            icon_sign="+",
+            title="Açık Anahtar",
+            value="(?, ?)",
+            color=ANIM_COLORS["accent_blue"],
+        )
+        outer.addWidget(self._public_card)
+
+        self._private_card = self._make_key_card(
+            icon_sign="−",
+            title="Gizli Anahtar",
+            value="(?, ?)",
+            color=ANIM_COLORS["accent_green"],
+        )
+        outer.addWidget(self._private_card)
+
+        outer.addStretch()
+
+    @staticmethod
+    def _make_field_row(symbol: str, color_key: str) -> dict:
+        frame = QFrame()
+        frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 5px; }}"
+        )
+        lay = QHBoxLayout(frame)
+        lay.setContentsMargins(8, 3, 8, 3)
+        lay.setSpacing(6)
+
+        sym_lbl = QLabel(symbol)
+        sym_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        sym_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS[color_key]}; border: none;"
+        )
+        sym_lbl.setMinimumWidth(34)
+        lay.addWidget(sym_lbl)
+
+        eq = QLabel("=")
+        eq.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; border: none;")
+        lay.addWidget(eq)
+
+        val_lbl = QLabel("?")
+        val_lbl.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        val_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS['text_muted']}; border: none;"
+        )
+        val_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        lay.addWidget(val_lbl, stretch=1)
+
+        return {"frame": frame, "label": sym_lbl, "value": val_lbl}
+
+    @staticmethod
+    def _make_key_card(
+        icon_sign: str, title: str, value: str, color: str,
+    ) -> QLabel:
+        """
+        Akademik notasyondaki K⁺ / K⁻ stilini taklit eden kart.
+        icon_sign: '+' (açık anahtar) ya da '−' (gizli anahtar)
+        """
+        lbl = QLabel()
+        lbl.setTextFormat(Qt.TextFormat.RichText)
+        lbl.setText(
+            f"<div style='text-align:center; color:{ANIM_COLORS['text_muted']};'>"
+            f"<span style='font-size:18pt; font-weight:bold; color:{color}; "
+            f"font-family: Georgia, serif;'>K<sup>{icon_sign}</sup></span>"
+            f"&nbsp;&nbsp;<span style='font-size:9pt;'>{title}</span><br>"
+            f"<span style='font-family: Courier New, monospace; font-size:9pt;'>{value}</span>"
+            f"</div>"
+        )
+        lbl.setStyleSheet(
+            f"QLabel {{ background: {ANIM_COLORS['bg_input']}; "
+            f"border: 2px dashed {ANIM_COLORS['border']}; border-radius: 6px; "
+            f"padding: 6px; }}"
+        )
+        lbl.setWordWrap(True)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return lbl
+
+    def set_step(self, step_idx: int) -> None:
+        """Verilen adıma göre alanları doldur ve yeni dolanları pulse ile vurgula."""
+        for key, fill_step, _sym, val, color_key in self._FIELDS:
+            sym_lbl, val_lbl, frame = self._cells[key]
+            should_be_filled = step_idx >= fill_step
+            was_filled = self._last_step >= fill_step
+
+            if should_be_filled:
+                val_lbl.setText(val)
+                val_lbl.setStyleSheet(
+                    f"color: {ANIM_COLORS[color_key]}; border: none; "
+                    f"font-weight: bold;"
+                )
+                frame.setStyleSheet(
+                    f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+                    f"border: 2px solid {ANIM_COLORS[color_key]}; border-radius: 6px; }}"
+                )
+                if not was_filled:
+                    self._pulse(frame, color_key)
+            else:
+                val_lbl.setText("?")
+                val_lbl.setStyleSheet(
+                    f"color: {ANIM_COLORS['text_muted']}; border: none;"
+                )
+                frame.setStyleSheet(
+                    f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+                    f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 6px; }}"
+                )
+
+        # Açık anahtar — Adım 4 sonrası (e ve n biliniyor)
+        # Cari (instance-snapshot) değerlerden oku; FIELDS aynı anda set edildi
+        e_val = self._FIELDS[4][3]   # 'e' alanının str değeri
+        n_val = self._FIELDS[2][3]   # 'n' alanının str değeri
+        d_val = self._FIELDS[5][3]   # 'd' alanının str değeri
+        self._set_key_card(
+            self._public_card, icon_sign="+", title="Açık Anahtar",
+            color=ANIM_COLORS["accent_blue"],
+            filled=(step_idx >= 3),
+            value=f"(e, n) = ({e_val}, {n_val})" if step_idx >= 3 else "(?, ?)",
+        )
+        if step_idx >= 3 and self._last_step < 3:
+            self._pulse(self._public_card, "accent_blue")
+
+        # Gizli anahtar — Adım 5 sonrası (d ve n biliniyor)
+        self._set_key_card(
+            self._private_card, icon_sign="−", title="Gizli Anahtar",
+            color=ANIM_COLORS["accent_green"],
+            filled=(step_idx >= 4),
+            value=f"(d, n) = ({d_val}, {n_val})" if step_idx >= 4 else "(?, ?)",
+        )
+        if step_idx >= 4 and self._last_step < 4:
+            self._pulse(self._private_card, "accent_green")
+
+        self._last_step = step_idx
+
+    @staticmethod
+    def _set_key_card(
+        lbl: QLabel, icon_sign: str, title: str, color: str,
+        filled: bool, value: str,
+    ) -> None:
+        """Kart içeriğini ve çerçeve stilini günceller."""
+        text_color = ANIM_COLORS["text_primary"] if filled else ANIM_COLORS["text_muted"]
+        lbl.setText(
+            f"<div style='text-align:center; color:{text_color};'>"
+            f"<span style='font-size:18pt; font-weight:bold; color:{color}; "
+            f"font-family: Georgia, serif;'>K<sup>{icon_sign}</sup></span>"
+            f"&nbsp;&nbsp;<span style='font-size:9pt;'>{title}</span><br>"
+            f"<span style='font-family: Courier New, monospace; font-size:9pt; "
+            f"font-weight:bold;'>{value}</span>"
+            f"</div>"
+        )
+        if filled:
+            lbl.setStyleSheet(
+                f"QLabel {{ background: {ANIM_COLORS['bg_input']}; "
+                f"border: 2px solid {color}; border-radius: 6px; "
+                f"padding: 6px; }}"
+            )
+        else:
+            lbl.setStyleSheet(
+                f"QLabel {{ background: {ANIM_COLORS['bg_input']}; "
+                f"border: 2px dashed {ANIM_COLORS['border']}; border-radius: 6px; "
+                f"padding: 6px; }}"
+            )
+
+    def _pulse(self, target: QWidget, color_key: str) -> None:
+        """600 ms opacity pulse: 0.4 → 1.0 ile yumuşak parıltı."""
+        effect = QGraphicsOpacityEffect(target)
+        target.setGraphicsEffect(effect)
+        effect.setOpacity(0.4)
+
+        anim = QPropertyAnimation(effect, b"opacity", target)
+        anim.setDuration(600)
+        anim.setStartValue(0.4)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+        anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+        self._animations.append(anim)
+
+
+# ---------------------------------------------------------------------------
+# 2) Adım 1 — Asal Eleği
+# ---------------------------------------------------------------------------
+
+class _PrimeSieveWidget(QWidget):
+    """2..100 arası sayılar 10×10 grid; asallar yeşil; p=61, q=53 yanıp söner."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(220)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._blink = True
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._timer.start(700)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
+        self._blink = not self._blink
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W, H = self.width(), self.height()
+        margin = 8
+        cols = 10
+        rows = 10
+        header_h = 22
+        footer_h = 22
+        avail_w = W - 2 * margin
+        avail_h = H - 2 * margin - header_h - footer_h
+        cell = max(20, min(42, min(avail_w // cols, avail_h // rows)))
+        grid_w = cell * cols
+        grid_h = cell * rows
+        ox = (W - grid_w) // 2
+        oy = margin + header_h
+
+        # Üst başlık
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(
+            QRect(0, 2, W, header_h),
+            Qt.AlignmentFlag.AlignCenter,
+            "1–100 arası sayılar  •  asallar yeşil  •  p ve q seçili",
+        )
+
+        for n in range(1, 101):
+            i = n - 1
+            r, c = divmod(i, cols)
+            x = ox + c * cell
+            y = oy + r * cell
+
+            is_prime = _is_prime(n)
+            is_pq = (n == _P or n == _Q)
+
+            if is_pq:
+                # Yanıp sönen sarı çerçeve
+                border_col = (
+                    QColor(ANIM_COLORS["accent_yellow"])
+                    if self._blink
+                    else QColor(ANIM_COLORS["accent_peach"])
+                )
+                fill = QColor(ANIM_COLORS["accent_yellow"])
+                fill.setAlpha(80 if self._blink else 140)
+                p.setBrush(QBrush(fill))
+                p.setPen(QPen(border_col, 2))
+            elif is_prime:
+                p.setBrush(QBrush(QColor(ANIM_COLORS["accent_green"] + "33")))
+                p.setPen(QPen(QColor(ANIM_COLORS["accent_green"]), 1))
+            else:
+                p.setBrush(QBrush(QColor(ANIM_COLORS["bg_card"])))
+                p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
+
+            p.drawRoundedRect(x + 2, y + 2, cell - 4, cell - 4, 4, 4)
+
+            if is_pq:
+                p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            elif is_prime:
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            else:
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.setFont(QFont("Courier New", 9))
+            p.drawText(
+                QRect(x, y, cell, cell),
+                Qt.AlignmentFlag.AlignCenter,
+                str(n),
+            )
+
+        # Açıklama
+        p.setFont(QFont("Georgia", 10))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        legend_y = oy + grid_h + 10
+        p.drawText(
+            QRect(margin, legend_y, W - 2 * margin, 24),
+            Qt.AlignmentFlag.AlignCenter,
+            f"Seçilenler:  p = {_P}    q = {_Q}",
+        )
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# 3) Adım 2 — Çarpma  n = p × q
+# ---------------------------------------------------------------------------
+
+class _MultiplicationWidget(QWidget):
+    """p × q animasyonu — q'nun her basamağı için ayrı satır + toplam."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(220)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Çarpma satırlarını cari _P, _Q'ya göre dinamik üret
+        self._ROWS = self._compute_rows(_P, _Q)
+        self._reveal = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    @staticmethod
+    def _compute_rows(p: int, q: int) -> list[tuple[str, str, int]]:
+        """q'nun her basamağı için 'p × <basamak değeri>' satırı + toplam."""
+        rows: list[tuple[str, str, int]] = []
+        for i, ch in enumerate(reversed(str(q))):
+            digit = int(ch)
+            if digit == 0:
+                continue
+            place = digit * (10 ** i)
+            rows.append((f"{p} × {place}", f"= {p * place}", 0))
+        rows.append(("─" * 18, "", 1))
+        rows.append(("Toplam", f"= {p * q}", 2))
+        return rows
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._reveal = 0
+        self.update()
+        self._timer.start(700)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
+        if self._reveal < len(self._ROWS) + 1:
+            self._reveal += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W, H = self.width(), self.height()
+        cx = W // 2
+        top_y = 8
+
+        # Başlık formülü
+        p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(
+            QRect(0, top_y, W, 26),
+            Qt.AlignmentFlag.AlignCenter,
+            "n = p × q",
+        )
+
+        # p ve q kutuları
+        box_w, box_h = 70, 42
+        gap = 22
+        boxes_y = top_y + 36
+        p_x = cx - box_w - gap
+        q_x = cx + gap
+
+        self._draw_boxed(p, p_x, boxes_y, box_w, box_h, str(_P),
+                         ANIM_COLORS["accent_blue"], font_size=14)
+        # × sembolü
+        p.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.drawText(
+            QRect(p_x + box_w, boxes_y, gap * 2, box_h),
+            Qt.AlignmentFlag.AlignCenter,
+            "×",
+        )
+        self._draw_boxed(p, q_x, boxes_y, box_w, box_h, str(_Q),
+                         ANIM_COLORS["accent_mauve"], font_size=14)
+
+        # Çarpma satırları (kademeli açılır)
+        rows_y = boxes_y + box_h + 14
+        line_h = 22
+        p.setFont(QFont("Courier New", 11))
+        for i, (left, right, kind) in enumerate(self._ROWS):
+            if i >= self._reveal:
+                break
+            y = rows_y + i * line_h
+            if kind == 2:
+                p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+                p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
+            elif kind == 1:
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            else:
+                p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+                p.setFont(QFont("Courier New", 11))
+            p.drawText(
+                QRect(cx - 180, y, 180, line_h),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                left + "  ",
+            )
+            p.drawText(
+                QRect(cx, y, 180, line_h),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                right,
+            )
+
+        # Sonuç kutusu (tüm satırlar açıldıktan sonra)
+        if self._reveal >= len(self._ROWS) + 1:
+            result_y = rows_y + (len(self._ROWS) + 1) * line_h
+            self._draw_boxed(
+                p, cx - 70, result_y, 140, 38, f"n = {_N}",
+                ANIM_COLORS["accent_yellow"], font_size=12,
+            )
+
+        p.end()
+
+    @staticmethod
+    def _draw_boxed(
+        p: QPainter, x: int, y: int, w: int, h: int, text: str,
+        color: str, font_size: int = 16,
+    ) -> None:
+        fill = QColor(color)
+        fill.setAlpha(60)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(QColor(color), 2))
+        p.drawRoundedRect(x, y, w, h, 8, 8)
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.setFont(QFont("Georgia", font_size, QFont.Weight.Bold))
+        p.drawText(QRect(x, y, w, h), Qt.AlignmentFlag.AlignCenter, text)
+
+
+# ---------------------------------------------------------------------------
+# 4) Adım 3 — Euler Totient  φ(n) = (p−1)(q−1)
+# ---------------------------------------------------------------------------
+
+class _TotientWidget(QWidget):
+    """φ(n) hesabı: (p−1) ve (q−1) elde edilir, sonra çarpılır."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(220)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._phase = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._phase = 0
+        self.update()
+        self._timer.start(800)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
+        if self._phase < 4:
+            self._phase += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        W, H = self.width(), self.height()
+        cx = W // 2
+
+        # Formül başlığı
+        p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
+                   "φ(n) = (p − 1) × (q − 1)")
+
+        # Üst satır: p ve q kutularından (p−1) ve (q−1) türetimi
+        row1_y = 44
+        box_w, box_h = 60, 38
+        gap = 18
+        # Toplam satır genişliği: 2*box_w + gap (arrow) + box_w   (sol blok) + space + sağ blok
+        # Sol blok: box(p) + arrow + box(p-1) = 60 + 24 + 60 = 144
+        # Sağ blok: aynı = 144
+        # Aralık: 30
+        total_w = 144 * 2 + 30
+        left_x = cx - total_w // 2
+
+        # p kutusu → p−1 kutusu
+        self._draw_box(p, left_x, row1_y, box_w, box_h,
+                       f"p = {_P}", ANIM_COLORS["accent_blue"])
+        self._draw_arrow(p, left_x + box_w, row1_y + box_h // 2,
+                         left_x + box_w + 22, row1_y + box_h // 2)
+        if self._phase >= 1:
+            self._draw_box(p, left_x + box_w + 24, row1_y, box_w, box_h,
+                           f"p−1 = {_P-1}", ANIM_COLORS["accent_green"])
+
+        # q kutusu → q−1 kutusu
+        right_x = left_x + 144 + 30
+        self._draw_box(p, right_x, row1_y, box_w, box_h,
+                       f"q = {_Q}", ANIM_COLORS["accent_mauve"])
+        self._draw_arrow(p, right_x + box_w, row1_y + box_h // 2,
+                         right_x + box_w + 22, row1_y + box_h // 2)
+        if self._phase >= 2:
+            self._draw_box(p, right_x + box_w + 24, row1_y, box_w, box_h,
+                           f"q−1 = {_Q-1}", ANIM_COLORS["accent_green"])
+
+        # Orta satır: çarpma
+        if self._phase >= 3:
+            mid_y = row1_y + box_h + 18
+            p.setFont(QFont("Courier New", 12))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(
+                QRect(0, mid_y, W, 24),
+                Qt.AlignmentFlag.AlignCenter,
+                f"({_P-1})  ×  ({_Q-1})  =  {(_P-1)*(_Q-1)}",
+            )
+
+        # Alt satır: sonuç
+        if self._phase >= 4:
+            result_y = row1_y + box_h + 56
+            self._draw_box(
+                p, cx - 90, result_y, 180, 44,
+                f"φ(n) = {_PHI}", ANIM_COLORS["accent_yellow"],
+                font_size=13,
+            )
+        p.end()
+
+    @staticmethod
+    def _draw_box(
+        p: QPainter, x: int, y: int, w: int, h: int, text: str,
+        color: str, font_size: int = 11,
+    ) -> None:
+        fill = QColor(color)
+        fill.setAlpha(60)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(QColor(color), 2))
+        p.drawRoundedRect(x, y, w, h, 6, 6)
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.setFont(QFont("Georgia", font_size, QFont.Weight.Bold))
+        p.drawText(QRect(x, y, w, h), Qt.AlignmentFlag.AlignCenter, text)
+
+    @staticmethod
+    def _draw_arrow(p: QPainter, x1: int, y1: int, x2: int, y2: int) -> None:
+        pen = QPen(QColor(ANIM_COLORS["text_muted"]), 2)
+        p.setPen(pen)
+        p.drawLine(x1, y1, x2, y2)
+        # Ok ucu
+        p.setBrush(QBrush(QColor(ANIM_COLORS["text_muted"])))
+        head = QPolygon([
+            QPoint(x2, y2),
+            QPoint(x2 - 8, y2 - 4),
+            QPoint(x2 - 8, y2 + 4),
+        ])
+        p.drawPolygon(head)
+
+
+# ---------------------------------------------------------------------------
+# 5) Adım 4 — gcd doğrulaması
+# ---------------------------------------------------------------------------
+
+class _GCDWidget(QWidget):
+    """e=17 seçimi ve gcd(e, φ(n))=1 doğrulaması — Öklid adımları akar."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(220)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Öklid adımları: gcd(17, 3120)
+        a, b = _E, _PHI
+        steps = []
+        while b != 0:
+            steps.append((a, b, a % b))
+            a, b = b, a % b
+        self._steps = steps  # son adımdaki b=0 öncesi a, gcd
+        self._gcd_value = a
+        self._reveal = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._reveal = 0
+        self.update()
+        self._timer.start(550)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
+        if self._reveal < len(self._steps) + 1:
+            self._reveal += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+        cx = W // 2
+
+        # Başlık
+        p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
+                   f"Aday:  e = {_E}    Koşul:  gcd(e, φ(n)) = 1")
+
+        # Öklid adımları
+        rows_y = 42
+        line_h = 22
+        p.setFont(QFont("Courier New", 11))
+        for i, (a, b, r) in enumerate(self._steps):
+            if i >= self._reveal:
+                break
+            y = rows_y + i * line_h
+
+            is_last = (r == 0)
+            color = (ANIM_COLORS["accent_green"] if is_last
+                     else ANIM_COLORS["text_secondary"])
+            p.setPen(QColor(color))
+            text = f"{a}  =  {a // b} × {b}  +  {r}"
+            p.drawText(QRect(0, y, W, line_h),
+                       Qt.AlignmentFlag.AlignCenter, text)
+
+        # Sonuç
+        if self._reveal >= len(self._steps) + 1:
+            result_y = rows_y + (len(self._steps) + 1) * line_h + 8
+            success = (self._gcd_value == 1)
+            color = (ANIM_COLORS["accent_green"] if success
+                     else ANIM_COLORS["accent_peach"])
+            fill = QColor(color)
+            fill.setAlpha(60)
+            box_w, box_h = 280, 44
+            x = cx - box_w // 2
+            p.setBrush(QBrush(fill))
+            p.setPen(QPen(QColor(color), 2))
+            p.drawRoundedRect(x, result_y, box_w, box_h, 6, 6)
+
+            p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_primary"]))
+            mark = "✓ Geçerli" if success else "✗ Reddedildi"
+            p.drawText(
+                QRect(x, result_y, box_w, box_h),
+                Qt.AlignmentFlag.AlignCenter,
+                f"GCD = {self._gcd_value}    {mark}",
+            )
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# 6) Adım 5 — Genişletilmiş Öklid Algoritması (EEA)  →  d
+# ---------------------------------------------------------------------------
+
+class _EEAWidget(QWidget):
+    """EEA tablosu: i, q, r, s, t sütunları. Satırlar 250 ms aralıkla açılır."""
+
+    _COLS = ["i", "bölüm", "kalan", "s", "t"]
+    _COL_WIDTHS = [32, 60, 76, 76, 76]
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setMinimumHeight(260)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._rows = _eea_steps(_PHI, _E)
+        self._reveal = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._reveal = 0
+        self.update()
+        self._timer.start(420)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
+        if self._reveal < len(self._rows) + 2:
+            self._reveal += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W, H = self.width(), self.height()
+
+        # Başlık — kısa ve öz
+        p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, 4, W, 22), Qt.AlignmentFlag.AlignCenter,
+                   "Genişletilmiş Öklid Algoritması")
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 26, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   f"Amaç: e·d ≡ 1 (mod φ)   ·   φ = {_PHI},  e = {_E}")
+
+        # Hangi satırda gcd=1 bulundu? (terminatörden bir önceki)
+        gcd_row_idx = len(self._rows) - 2
+
+        # Tablo merkezleme — sağ tarafta açıklamalar için yer bırak
+        total_col_w = sum(self._COL_WIDTHS)
+        annot_w = 130  # sağ taraf açıklama sütunu
+        ox = (W - total_col_w - annot_w) // 2
+        header_y = 50
+        row_h = 20
+
+        # Başlık satırı
+        p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+        x = ox
+        for col, w in zip(self._COLS, self._COL_WIDTHS):
+            p.drawText(QRect(x, header_y, w, row_h),
+                       Qt.AlignmentFlag.AlignCenter, col)
+            x += w
+        p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
+        p.drawLine(ox, header_y + row_h, ox + total_col_w, header_y + row_h)
+
+        # Veri satırları
+        p.setFont(QFont("Courier New", 10))
+        for ri, (i, q, r, s, t) in enumerate(self._rows):
+            if ri >= self._reveal:
+                break
+            y = header_y + (ri + 1) * row_h + 2
+
+            is_gcd_row = (ri == gcd_row_idx)
+            is_terminator = (ri == len(self._rows) - 1)
+
+            # Vurgulama: GCD=1 satırı yeşil arka plan
+            if is_gcd_row:
+                fill = QColor(ANIM_COLORS["accent_green"])
+                fill.setAlpha(50)
+                p.setBrush(QBrush(fill))
+                p.setPen(Qt.PenStyle.NoPen)
+                p.drawRect(ox, y - 1, total_col_w, row_h)
+
+            # Hücre değerleri
+            x = ox
+            values = [str(i), str(q) if ri >= 2 else "—", str(r), str(s), str(t)]
+            if is_gcd_row:
+                colors = [
+                    ANIM_COLORS["text_primary"],
+                    ANIM_COLORS["text_primary"],
+                    ANIM_COLORS["accent_yellow"],          # kalan = 1
+                    ANIM_COLORS["text_primary"],
+                    ANIM_COLORS["accent_green"],           # t — d burada!
+                ]
+                font_weight = QFont.Weight.Bold
+            elif is_terminator:
+                muted = ANIM_COLORS["text_muted"]
+                colors = [muted, muted, muted, muted, muted]
+                font_weight = QFont.Weight.Normal
+            else:
+                colors = [
+                    ANIM_COLORS["text_muted"],
+                    ANIM_COLORS["text_secondary"],
+                    ANIM_COLORS["text_primary"],
+                    ANIM_COLORS["text_secondary"],
+                    ANIM_COLORS["accent_peach"],
+                ]
+                font_weight = QFont.Weight.Normal
+
+            font = QFont("Courier New", 10, font_weight)
+            p.setFont(font)
+            for val, w, col in zip(values, self._COL_WIDTHS, colors):
+                p.setPen(QColor(col))
+                p.drawText(QRect(x, y, w, row_h - 2),
+                           Qt.AlignmentFlag.AlignCenter, val)
+                x += w
+
+            # Sağ taraf açıklamalar
+            annot_x = ox + total_col_w + 8
+            if is_gcd_row:
+                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                p.drawText(QRect(annot_x, y, annot_w, row_h - 2),
+                           Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                           "← GCD = 1, t'yi al")
+            elif is_terminator:
+                p.setFont(QFont("Georgia", 9))
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(annot_x, y, annot_w, row_h - 2),
+                           Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                           "(durma satırı)")
+
+        # d hesaplama bloğu — kutu içinde, daha belirgin
+        last_t = self._rows[gcd_row_idx][4] if len(self._rows) >= 2 else 0
+        if self._reveal >= len(self._rows) + 1:
+            calc_y = header_y + (len(self._rows) + 1) * row_h + 12
+
+            # Açıklama (kısa Türkçe): t negatifse φ ekleyerek normalize ediyoruz
+            normalize_note = ""
+            if last_t < 0:
+                normalize_note = f"   (negatif → +φ ekle)"
+
+            p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["accent_green"]))
+            p.drawText(
+                QRect(0, calc_y, W, 22),
+                Qt.AlignmentFlag.AlignCenter,
+                f"d  =  t  mod  φ  =  {last_t}  mod  {_PHI}  =  {_D}",
+            )
+            if normalize_note:
+                p.setFont(QFont("Georgia", 8))
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(
+                    QRect(0, calc_y + 22, W, 16),
+                    Qt.AlignmentFlag.AlignCenter,
+                    normalize_note.strip(),
+                )
+
+        # Doğrulama
+        if self._reveal >= len(self._rows) + 2:
+            verify_y = header_y + (len(self._rows) + 1) * row_h + 50
+            p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+            check = (_E * _D) % _PHI
+            p.drawText(
+                QRect(0, verify_y, W, 20),
+                Qt.AlignmentFlag.AlignCenter,
+                f"Doğrulama:  e × d  mod  φ  =  {_E} × {_D}  mod  {_PHI}  =  {check}   ✓",
+            )
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# 7) Adım 6 — DER ve Base64 Kodlaması
+# ---------------------------------------------------------------------------
+
+class _DERByteFlowWidget(QWidget):
+    """
+    Sayılar → byte → DER yapısı → Base64 dönüşümü.
+    Son faz: Alice'in gerçek RSA-2048 anahtarlarının oluşumunu gösterir.
+    """
+
+    def __init__(
+        self, alice_b64: str, parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._alice_b64 = alice_b64
+        self.setMinimumHeight(360)  # Detaylı byte-grup görselleştirmesi için
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._phase = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._phase = 0
+        self.update()
+        self._timer.start(900)
+
+    def hideEvent(self, event) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def _tick(self) -> None:
+        if self._phase < 4:  # 0..4 (5 phases including Alice's keys)
+            self._phase += 1
+            self.update()
+        else:
+            self._timer.stop()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W = self.width()
+
+        # 1) Sayılar
+        y = 6
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "1)  Tam sayılar:")
+        y += 20
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
+                   f"n = {_N}    e = {_E}")
+
+        # 2) Byte gösterimi
+        y += 26
+        n_bytes = _N.to_bytes((_N.bit_length() + 7) // 8, "big")
+        e_bytes = _E.to_bytes(max(1, (_E.bit_length() + 7) // 8), "big")
+        if self._phase >= 1:
+            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       "2)  Big-endian byte dizisi:")
+            y += 20
+            n_hex = " ".join(f"{b:02X}" for b in n_bytes)
+            e_hex = " ".join(f"{b:02X}" for b in e_bytes)
+            p.setFont(QFont("Courier New", 10))
+            p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       f"n = {_N} → {n_hex}    e = {_E} → {e_hex}")
+
+        # 3) DER yapısı — kompakt tek-satır
+        y += 24
+        if self._phase >= 2:
+            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       "3)  ASN.1 / DER paketleme:")
+            y += 20
+            # SEQUENCE [ 02 len(n) <n_bytes>  02 len(e) <e_bytes> ]
+            der_hex = " ".join(f"{b:02X}" for b in _DER_SEQ)
+            p.setFont(QFont("Courier New", 9))
+            p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
+            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                       f"30 {len(_DER_SEQ)-2:02X}  ·  02 {len(_DER_N)-2:02X} {' '.join(f'{b:02X}' for b in _DER_N[2:])}"
+                       f"  ·  02 {len(_DER_E)-2:02X} {' '.join(f'{b:02X}' for b in _DER_E[2:])}")
+            y += 16
+            p.setFont(QFont("Georgia", 8))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                       "[SEQ] [INT n] [INT e]   →   ham byte dizisi")
+            y += 14
+            p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_primary"]))
+            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                       f"DER ({len(_DER_SEQ)} bayt): {der_hex}")
+
+        # 4) Base64 — byte gruplarını ve karakter eşleşmesini göster
+        y += 22
+        if self._phase >= 3:
+            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       "4)  Base64 dönüşümü  (her 3 bayt → 4 karakter):")
+            y += 20
+
+            # 3'lü byte gruplarını ve karşılık gelen 4'lü Base64 karakter gruplarını
+            # yan yana çiz
+            der = _DER_SEQ
+            b64 = _B64_DEMO
+            # Grup sayısı: ceil(len(der) / 3), Base64 padding ile len(b64) buna karşılık gelir
+            n_groups = (len(der) + 2) // 3
+            group_w = 100
+            total_groups_w = n_groups * group_w + (n_groups - 1) * 10
+            ox = max(8, (W - total_groups_w) // 2)
+
+            for gi in range(n_groups):
+                gx = ox + gi * (group_w + 10)
+                byte_chunk = der[gi * 3 : gi * 3 + 3]
+                b64_chunk = b64[gi * 4 : gi * 4 + 4]
+
+                # Üst: 3 byte'lık grup
+                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+                byte_hex = " ".join(f"{b:02X}" for b in byte_chunk)
+                p.drawText(QRect(gx, y, group_w, 16),
+                           Qt.AlignmentFlag.AlignCenter, byte_hex)
+
+                # Ok
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(gx, y + 14, group_w, 12),
+                           Qt.AlignmentFlag.AlignCenter, "↓")
+
+                # Alt: 4 base64 karakteri
+                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                p.drawText(QRect(gx, y + 26, group_w, 18),
+                           Qt.AlignmentFlag.AlignCenter, b64_chunk)
+
+            y += 46
+            # Toplam Base64
+            p.setFont(QFont("Georgia", 9))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                       f"= Base64 ({len(_B64_DEMO)} karakter): {_B64_DEMO}")
+            y += 14
+
+        # 5) ALICE'İN GERÇEK ANAHTARLARI — son faz
+        y += 26
+        if self._phase >= 4:
+            # Ayraç + başlık
+            p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1, Qt.PenStyle.DashLine))
+            p.drawLine(40, y, W - 40, y)
+            y += 6
+
+            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       "↓  Aynı yöntemle Alice'in gerçek RSA-2048 anahtarları:")
+            y += 22
+
+            # Açık anahtar (K⁺)
+            self._draw_real_key_box(
+                p, x=12, y=y, w=W - 24, h=24,
+                icon="K⁺", icon_color=ANIM_COLORS["accent_blue"],
+                label="Alice Açık Anahtarı:",
+                value=self._alice_b64,
+            )
+            y += 28
+
+            # Gizli anahtar (K⁻) — içerik gösterilmez (güvenlik)
+            self._draw_real_key_box(
+                p, x=12, y=y, w=W - 24, h=24,
+                icon="K⁻", icon_color=ANIM_COLORS["accent_green"],
+                label="Alice Gizli Anahtarı:",
+                value="(d, n) — yalnızca Alice'te tutulur",
+                value_color=ANIM_COLORS["text_muted"],
+                italic_value=True,
+            )
+        p.end()
+
+    @staticmethod
+    def _draw_real_key_box(
+        p: QPainter, x: int, y: int, w: int, h: int,
+        icon: str, icon_color: str,
+        label: str, value: str,
+        value_color: str | None = None,
+        italic_value: bool = False,
+    ) -> None:
+        # Çerçeve
+        fill = QColor(ANIM_COLORS["bg_input"])
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(QColor(icon_color), 1))
+        p.drawRoundedRect(x, y, w, h, 4, 4)
+
+        # K⁺ / K⁻ simge alanı (sol)
+        icon_w = 36
+        p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        p.setPen(QColor(icon_color))
+        p.drawText(QRect(x + 4, y, icon_w, h),
+                   Qt.AlignmentFlag.AlignCenter, icon)
+
+        # Etiket
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        label_w = 110
+        p.drawText(QRect(x + icon_w + 4, y, label_w, h),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                   label)
+
+        # Değer
+        font = QFont("Courier New", 8)
+        if italic_value:
+            font.setItalic(True)
+        p.setFont(font)
+        p.setPen(QColor(value_color or ANIM_COLORS["text_primary"]))
+        value_x = x + icon_w + 4 + label_w + 4
+        value_w = w - (value_x - x) - 6
+        # Tek satıra sığacak şekilde uzun b64'ü kırp
+        max_chars = max(20, value_w // 6)
+        display = value if len(value) <= max_chars else value[:max_chars - 1] + "…"
+        p.drawText(QRect(value_x, y, value_w, h),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                   display)
+
+
+# ---------------------------------------------------------------------------
+# 8) Adım 7 — Demo ↔ Gerçek Anahtar Eşleşmesi
+# ---------------------------------------------------------------------------
+
+class _KeyMatchWidget(QWidget):
+    """Demo değerler ile gerçek 2048-bit anahtarın yan yana karşılaştırması."""
+
+    def __init__(
+        self,
+        alice_b64: str,
+        bob_b64: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._alice_b64 = alice_b64
+        self._bob_b64 = bob_b64
+        self.setMinimumHeight(240)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(10, 8, 10, 8)
+        outer.setSpacing(8)
+
+        # Üst: yan yana iki kart
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(10)
+
+        # Sol: demo
+        demo = self._make_card(
+            "DEMO",
+            f"p = {_P}\n"
+            f"q = {_Q}\n"
+            f"n = {_N}\n"
+            f"φ(n) = {_PHI}\n"
+            f"e = {_E}\n"
+            f"d = {_D}\n"
+            f"Modülüs: 12 bit",
+            ANIM_COLORS["accent_blue"],
+        )
+        cards_row.addWidget(demo, stretch=1)
+
+        # Orta: ≈ sembolü
+        approx = QLabel("≈")
+        approx.setFont(QFont("Georgia", 28, QFont.Weight.Bold))
+        approx.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        approx.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        approx.setMaximumWidth(40)
+        cards_row.addWidget(approx)
+
+        # Sağ: gerçek
+        real = self._make_card(
+            "GERÇEK (RSA-2048)",
+            f"p, q ≈ 1024-bit asal\n"
+            f"n ≈ 617 ondalık hane\n"
+            f"e = 65537\n"
+            f"d ≈ 2048-bit\n"
+            f"Modülüs: 2048 bit\n"
+            f"Base64 ≈ 360 karakter",
+            ANIM_COLORS["accent_green"],
+        )
+        cards_row.addWidget(real, stretch=1)
+
+        outer.addLayout(cards_row)
+
+        # Gerçek anahtar önizlemesi (alt) — kelime kaydırma ile genişlikten bağımsız
+        keys_lbl = QLabel(
+            f"<b>Alice açık anahtarı:</b> {self._alice_b64[:48]}…<br>"
+            f"<b>Bob açık anahtarı:</b> {self._bob_b64[:48]}…"
+        )
+        keys_lbl.setFont(QFont("Courier New", 8))
+        keys_lbl.setStyleSheet(
+            f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
+            f"background: {ANIM_COLORS['bg_input']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 4px; padding: 4px 6px; }}"
+        )
+        keys_lbl.setWordWrap(True)
+        keys_lbl.setTextFormat(Qt.TextFormat.RichText)
+        outer.addWidget(keys_lbl)
+
+        # Alt: aynı matematik mesajı
+        msg = QLabel(
+            "Aynı matematik · farklı boyut: tüm adımlar gerçek 2048-bit p ve q ile aynen uygulanır."
+        )
+        msg.setFont(QFont("Georgia", 9))
+        msg.setStyleSheet(
+            f"QLabel {{ color: {ANIM_COLORS['accent_yellow']}; "
+            f"background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 5px; padding: 6px; }}"
+        )
+        msg.setWordWrap(True)
+        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(msg)
+
+    @staticmethod
+    def _make_card(title: str, body: str, color: str) -> QFrame:
+        f = QFrame()
+        f.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {color}; border-radius: 8px; }}"
+        )
+        lay = QVBoxLayout(f)
+        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setSpacing(2)
+
+        t = QLabel(title)
+        t.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        t.setStyleSheet(f"color: {color}; border: none;")
+        t.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(t)
+
+        b = QLabel(body)
+        b.setFont(QFont("Courier New", 9))
+        b.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
+        b.setWordWrap(True)
+        b.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        lay.addWidget(b, stretch=1)
+
+        return f
+
+
+# ---------------------------------------------------------------------------
+# 9) Ana Pencere
+# ---------------------------------------------------------------------------
 
 class RSAAnimationWindow(CryptoAnimationWindow):
     """
-    RSA-2048 anahtar üretimi animasyonu — 7 adım, manuel navigasyon.
+    RSA-2048 anahtar üretimi animasyonu — yeni görsel tasarım.
 
     Parametreler:
-      alice_pub_b64: Alice açık anahtarı Base64 (kısaltılmış)
-      bob_pub_b64  : Bob açık anahtarı Base64 (kısaltılmış)
+      alice_pub_b64: Alice'in açık anahtar Base64 önizlemesi
+      bob_pub_b64  : Bob'un açık anahtar Base64 önizlemesi
     """
 
     _TITLES = [
-        "Adım 1 — Asal Sayı Nedir?  p ve q Seçimi",
-        "Adım 2 — Modül Hesaplama  n = p × q",
-        "Adım 3 — Euler Totient  φ(n) = (p−1)(q−1)",
-        "Adım 4 — Açık Üs  e  Seçimi",
-        "Adım 5 — Gizli Anahtar  d  (Genişletilmiş Öklid)",
-        "Adım 6 — Anahtarın Karmaşık Yapıya Dönüşümü",
-        "Adım 7 — Gerçek Anahtar Eşleşmesi",
+        "Adım 1 / 7 — p ve q Seçimi",
+        "Adım 2 / 7 — n = p × q",
+        "Adım 3 / 7 — φ(n) = (p − 1)(q − 1)",
+        "Adım 4 / 7 — Açık Üs e Seçimi",
+        "Adım 5 / 7 — Gizli Üs d  (Genişletilmiş Öklid)",
+        "Adım 6 / 7 — DER ve Base64 Kodlaması",
+        "Adım 7 / 7 — Gerçek Anahtarlarla Eşleşme",
+    ]
+
+    _CAPTIONS = [
+        "p ve q rastgele iki büyük asaldır; n ve φ(n) hesabının temelini oluştururlar.",
+        "n = p × q  →  modülüs; hem açık hem gizli anahtarda yer alır.",
+        "φ(n) = (p − 1)(q − 1)  →  Euler totient fonksiyonu.",
+        "gcd(e, φ(n)) = 1  koşulu sağlanmalı; e açık anahtarın üs bileşenidir.",
+        "d, e'nin φ(n) modülünde tersidir:  e · d ≡ 1  (mod φ).",
+        "Anahtar dosyada DER yapısında, satır içinde Base64 olarak kodlanır.",
+        "Aynı matematik · farklı boyut: demo 12-bit n, gerçek 2048-bit n.",
     ]
 
     def __init__(
@@ -91,257 +1379,106 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _init_content(self) -> None:
-        # Kalıcı uyarı kartı — tüm adımlar boyunca görünür.
-        # Animasyonda gösterilen m^e mod n / m^d mod n "ham RSA"
-        # (textbook RSA) şemasıdır; pedagojik olarak doğrudur ancak
-        # gerçek projede kullanılan semantikle birebir aynı değildir.
-        # Projede:
-        #   - İmza için: RSA-2048 + PSS (rastgele tuzlu dolgu, MGF1-SHA256)
-        #   - Anahtar sarmalama için: RSA-2048 + OAEP (MGF1-SHA256)
-        # uygulanır. Bu kart, öğrencinin animasyon ile crypto_core.py
-        # arasındaki farkı yanlış anlamamasını sağlar.
-        self._banner = self._make_textbook_vs_production_banner()
-        self.content_layout.addWidget(self._banner)
-
+        # Üst: adım başlığı (kompakt)
         self._step_lbl = QLabel()
         self._step_lbl.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._step_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._step_lbl.setMaximumHeight(22)
         self.content_layout.addWidget(self._step_lbl)
 
-        card = QFrame()
-        card.setStyleSheet(
+        # Orta: yatay split — sol KeyBuilder, sağ Stack
+        split = QHBoxLayout()
+        split.setSpacing(6)
+        split.setContentsMargins(0, 0, 0, 0)
+
+        # Sol: KeyBuilder (dar)
+        kb_frame = QFrame()
+        kb_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 12, 16, 12)
+        kb_layout = QVBoxLayout(kb_frame)
+        kb_layout.setContentsMargins(0, 0, 0, 0)
+        self._kb = _RSAKeyBuilderWidget()
+        kb_layout.addWidget(self._kb)
+        kb_frame.setMinimumWidth(155)
+        kb_frame.setMaximumWidth(210)
+        split.addWidget(kb_frame, stretch=0)
 
-        self._body = QLabel()
-        self._body.setFont(QFont("Courier New", 10))
-        self._body.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
-        self._body.setWordWrap(True)
-        self._body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self._body.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        card_layout.addWidget(self._body)
+        # Sağ: 7 sayfalı stack
+        stack_frame = QFrame()
+        stack_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        stack_layout = QVBoxLayout(stack_frame)
+        stack_layout.setContentsMargins(4, 4, 4, 4)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(card)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        self.content_layout.addWidget(scroll, stretch=1)
+        self._stack = QStackedWidget()
+        self._page_widgets: list[QWidget] = [
+            _PrimeSieveWidget(),
+            _MultiplicationWidget(),
+            _TotientWidget(),
+            _GCDWidget(),
+            _EEAWidget(),
+            _DERByteFlowWidget(self._alice_b64),
+            _KeyMatchWidget(self._alice_b64, self._bob_b64),
+        ]
+        for w in self._page_widgets:
+            self._stack.addWidget(w)
+        stack_layout.addWidget(self._stack)
+        split.addWidget(stack_frame, stretch=1)
+
+        split_holder = QWidget()
+        split_holder.setLayout(split)
+        self.content_layout.addWidget(split_holder, stretch=1)
+
+        # Alt: kompakt açıklama
+        self._caption = QLabel()
+        self._caption.setFont(QFont("Georgia", 9))
+        self._caption.setStyleSheet(
+            f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
+            f"background: {ANIM_COLORS['bg_input']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 5px; padding: 4px 8px; }}"
+        )
+        self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._caption.setWordWrap(True)
+        self._caption.setMaximumHeight(40)
+        self.content_layout.addWidget(self._caption)
 
     # ------------------------------------------------------------------
-    # Kalıcı uyarı kartı
-    # ------------------------------------------------------------------
-
-    def _make_textbook_vs_production_banner(self) -> QFrame:
-        """Textbook RSA vs projedeki üretim modları uyarı kartını üretir.
-
-        Kart sade, kompakt ve tüm adımlar boyunca görünür kalır.
-        Öğrencinin animasyondaki ``m^e mod n`` formülünü projede
-        kullanılan şema sanmasını engeller.
-        """
-        banner = QFrame()
-        yellow = ANIM_COLORS["accent_yellow"]
-        banner.setStyleSheet(
-            f"QFrame {{ background: rgba(184, 134, 11, 0.10); "
-            f"border: 1px solid {yellow}; border-radius: 8px; }}"
-        )
-        lay = QHBoxLayout(banner)
-        lay.setContentsMargins(12, 8, 12, 8)
-        lay.setSpacing(10)
-
-        icon = QLabel("⚠")
-        icon.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        icon.setStyleSheet(f"color: {yellow};")
-        icon.setAlignment(Qt.AlignmentFlag.AlignTop)
-        lay.addWidget(icon)
-
-        text = QLabel(
-            "<b>Pedagojik Not — Textbook RSA ≠ Projedeki RSA</b><br>"
-            "Bu animasyon eğitim amaçlı <b>ham (textbook) RSA</b> "
-            "şemasını gösterir: <i>c = m<sup>e</sup> mod n</i> / "
-            "<i>m = c<sup>d</sup> mod n</i>. Projede "
-            "<code>crypto_core.py</code> içinde kullanılan şema "
-            "farklıdır:<br>"
-            "&nbsp;&nbsp;• <b>İmza:</b> RSA-2048 + <b>PSS</b> "
-            "(rastgele tuzlu dolgu, MGF1-SHA256)<br>"
-            "&nbsp;&nbsp;• <b>Oturum anahtarı sarma:</b> RSA-2048 + "
-            "<b>OAEP</b> (MGF1-SHA256)<br>"
-            "Ham RSA deterministik ve seçili-şifreli-metin (CCA) "
-            "saldırılarına açıktır; üretimde <b>asla doğrudan</b> "
-            "kullanılmaz. Burada gösterilen matematik (modüler üs "
-            "alma) hâlâ PSS/OAEP'in altında çalışır, ama üzerine "
-            "dolgu katmanı eklenir."
-        )
-        text.setFont(QFont("Segoe UI", 9))
-        text.setStyleSheet(f"color: {ANIM_COLORS['text_primary']};")
-        text.setWordWrap(True)
-        text.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        lay.addWidget(text, stretch=1)
-        return banner
-
-    # ------------------------------------------------------------------
-    # Adım render'ları
+    # Adım render'ı
     # ------------------------------------------------------------------
 
     def _render_step(self, idx: int) -> None:
         self._step_lbl.setText(self._TITLES[idx])
-        self._body.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
-        self._body.setText(_STEP_BODIES[idx])
+        self._stack.setCurrentIndex(idx)
+        self._kb.set_step(idx)
+        self._caption.setText(self._CAPTIONS[idx])
+        self._fade_in_current_page()
 
     def _show_match_result(self) -> None:
+        # Son adım — index 6
         self._step_lbl.setText(self._TITLES[6])
-        self._body.setTextFormat(Qt.TextFormat.RichText)
-        self._body.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
-        green = ANIM_COLORS['accent_green']
-        self._body.setText(
-            f"Demo Açık Anahtar:   (e={_E},  n={_N})<br>"
-            f"Demo Gizli Anahtar:  (d={_D},  n={_N})<br><br>"
-            f"{'─' * 60}<br><br>"
-            f"Bu projede kullanılan gerçek RSA-2048 anahtarları:<br><br>"
-            f"Alice Açık Anahtarı (Base64):<br>"
-            f"&nbsp;&nbsp;{self._alice_b64}<br><br>"
-            f"Bob Açık Anahtarı (Base64):<br>"
-            f"&nbsp;&nbsp;{self._bob_b64}<br><br>"
-            f"<span style='color: {ANIM_COLORS['accent_yellow']}; font-weight:bold;'>"
-            f"⚠ Demo değerler (p=61, q=53) eğitim içindir; gerçek anahtarlar farklı (p,q ≈ 1024-bit).</span><br><br>"
-            f"<span style='color: {green}; font-weight:bold;'>✅&nbsp;&nbsp;Aynı Matematik, Farklı Boyut</span><br><br>"
-            f"Demo'da gösterilen (e,n) → ASN.1 DER → Base64 adımlarının aynısı,<br>"
-            f"gerçek 2048-bit p ve q ile uygulanarak yukarıdaki anahtarları üretir."
-        )
+        self._stack.setCurrentIndex(6)
+        self._kb.set_step(6)
+        self._caption.setText(self._CAPTIONS[6])
+        self._fade_in_current_page()
 
+    def _fade_in_current_page(self) -> None:
+        """Aktif sayfaya 220 ms opacity 0→1 fade-in uygula."""
+        page = self._stack.currentWidget()
+        if page is None:
+            return
+        effect = QGraphicsOpacityEffect(page)
+        page.setGraphicsEffect(effect)
+        effect.setOpacity(0.0)
 
-# Adım metinleri (sınıf dışında tanımlanır; temiz tutar)
-_STEP_BODIES: list[str] = [
-    # Adım 0 — Asal sayı
-    (
-        "━━  ASAL SAYI NEDİR?  ━━\n\n"
-        "Asal sayı: sadece 1'e ve kendisine tam bölünebilen sayıdır.\n\n"
-        f"  p = {_P}  →  1 ve 61 dışında hiçbir sayıya bölünmez  ✓\n"
-        f"  q = {_Q}  →  1 ve 53 dışında hiçbir sayıya bölünmez  ✓\n\n"
-        "  Asal olmayan örnek:\n"
-        "  15 = 3 × 5  →  1, 3, 5, 15'e bölünür  ✗ ASAL DEĞİL\n\n"
-        "━━  NEDEN ÖNEMLİ?  ━━\n\n"
-        "Gerçek RSA-2048'de p ve q'nun her biri yaklaşık\n"
-        "309 haneli (1024-bit) kocaman asal sayılardır.\n\n"
-        "Bu iki sayıyı çarpıp n'yi elde etmek:\n"
-        "  → Saniyeler içinde hesaplanır  ⚡\n\n"
-        "Ama n'yi görüp p ve q'yu geri bulmaya çalışmak:\n"
-        "  → Dünyanın tüm bilgisayarları milyarlarca yıl\n"
-        "    uğraşsa bile bulamaz  🔒\n\n"
-        "İşte RSA'nın gücü bu 'tek yönlü yol'a dayanır."
-    ),
-    # Adım 1 — n = p × q
-    (
-        "━━  KİLİDİN İKİ PARÇASI BİRLEŞİYOR  ━━\n\n"
-        "İki asal sayıyı çarparak herkese açık 'kilit sayısı' n'yi üretiyoruz:\n\n"
-        f"  n  =  p  ×  q\n"
-        f"  n  =  {_P}  ×  {_Q}\n"
-        f"  n  =  {_N}\n\n"
-        "━━  NE İŞE YARAR?  ━━\n\n"
-        "n, hem açık anahtarın hem de gizli anahtarın içinde bulunur.\n"
-        "Sana mesaj göndermek isteyen herkes n'yi kullanır.\n\n"
-        "━━  GÜVENLİK?  ━━\n\n"
-        f"  {_N} sayısını görüp {_P} × {_Q} diye ayrıştırmak küçük\n"
-        f"  sayılarda kolaydır — ama 617 haneli bir sayı için\n"
-        f"  bu işlem imkânsız hale gelir.\n\n"
-        "n'yi herkes görebilir; ama n'den p ve q gizli kalır."
-    ),
-    # Adım 2 — φ(n)
-    (
-        "━━  GİZLİ FORMÜL: φ(n)  ━━\n\n"
-        "φ(n) (phi), gizli anahtarı hesaplamak için kullanılan\n"
-        "ara bir değerdir. Hiçbir zaman paylaşılmaz.\n\n"
-        "Hesabı çok basit — sadece p ve q bilinirse:\n\n"
-        f"  φ(n)  =  (p − 1)  ×  (q − 1)\n"
-        f"  φ(n)  =  ({_P} − 1)  ×  ({_Q} − 1)\n"
-        f"  φ(n)  =  {_P - 1}  ×  {_Q - 1}\n"
-        f"  φ(n)  =  {_PHI}\n\n"
-        "━━  NEDEN GİZLİ?  ━━\n\n"
-        "φ(n) bilinirse gizli anahtar d kolayca hesaplanabilir.\n"
-        "φ(n) bilinmezse (yani p ve q bilinmezse) d'yi bulmak\n"
-        "matematiksel olarak neredeyse imkânsızdır.\n\n"
-        "Kısacası:\n"
-        "  p ve q  →  φ(n) kolayca bulunur\n"
-        "  Ama  n  →  φ(n) bulunamaz  (çünkü p,q gizli)"
-    ),
-    # Adım 3 — e seçimi
-    (
-        "━━  HERKESİN BİLDİĞİ ŞİFRELEME GÜCÜ: e  ━━\n\n"
-        "e, açık anahtarın bir parçasıdır — herkesle paylaşılır.\n"
-        "Sana mesaj göndermek isteyen herkes e'yi kullanır.\n\n"
-        f"  Seçilen:  e = {_E}\n\n"
-        "━━  KURALI  ━━\n\n"
-        f"  · e, 1 ile {_PHI} arasında olmalı\n"
-        f"  · e ile {_PHI} 'aralarında asal' olmalı\n"
-        f"    (başka bir deyişle, aralarındaki ortak bölen sadece 1)\n\n"
-        f"  Kontrol:  OBEB({_E}, {_PHI}) = 1  ✓\n\n"
-        "━━  GERÇEK HAYATTA  ━━\n\n"
-        "Gerçek RSA'da e için neredeyse hep 65537 seçilir.\n"
-        "Bu sayı hem küçük olduğundan şifreleme hızlıdır,\n"
-        "hem de güvenlik açısından herhangi bir zayıflık içermez.\n\n"
-        "Açık anahtar = (e, n) çifti\n"
-        f"  →  (e={_E},  n={_N})"
-    ),
-    # Adım 4 — d hesabı (EEA)
-    (
-        "━━  SADECE SENİN ANAHTARIN: d  ━━\n\n"
-        "d, gizli anahtarın çekirdeğidir. Kimseyle paylaşılmaz.\n\n"
-        "d şu özelliği sağlamalı:\n\n"
-        f"  e × d  ≡  1  (mod φ(n))\n\n"
-        "Bu şu anlama gelir:\n"
-        f"  {_E} ile şifrelediğin bir mesajı, sadece {_D} ile çözebilirsin.\n\n"
-        "━━  NASIL BULUNUR?  ━━\n\n"
-        "Genişletilmiş Öklid Algoritması adım adım:\n\n"
-        + "\n".join(f"  {a}   {b}" for a, b in _EEA_STEPS)
-        + f"\n\n  Bulunan:  d = {_D}\n\n"
-        "━━  DOĞRULAMA  ━━\n\n"
-        f"  {_E} × {_D}  mod  {_PHI}  =  {(_E * _D) % _PHI}  ✓\n\n"
-        "Gizli anahtar = (d, n) çifti\n"
-        f"  →  (d={_D},  n={_N})\n"
-        f"\n━━  DOĞRULAMA — Gerçek Şifreleme/Deşifreleme  ━━\n\n"
-        f"  m = 65  (örnek mesaj)\n\n"
-        f"  Şifreleme:  c  =  m^e  mod  n\n"
-        f"             c  =  65^{_E}  mod  {_N}\n"
-        f"             c  =  {pow(65, _E, _N)}\n\n"
-        f"  Deşifreleme:  m  =  c^d  mod  n\n"
-        f"               m  =  {pow(65, _E, _N)}^{_D}  mod  {_N}\n"
-        f"               m  =  {pow(pow(65, _E, _N), _D, _N)}  ✓  (orijinal mesaj)\n\n"
-        f"Sadece d'yi bilen (yani gizli anahtarı bilen) {pow(65, _E, _N)}'i\n"
-        f"tekrar {pow(pow(65, _E, _N), _D, _N)}'ye dönüştürebilir.\n"
-    ),
-    # Adım 5 — Anahtar kodlama (gerçek byte dönüşümü)
-    (
-        "━━  SAYILARDAN ANAHTAR DOSYASINA: ADIM ADIM  ━━\n\n"
-        "Elimizde iki sayı var: e ve n\n"
-        f"  e = {_E}   →  şifreleme gücü\n"
-        f"  n = {_N}  →  kilit sayısı\n\n"
-        "━━  ADIM 1 — Sayıları byte'a çevir  ━━\n\n"
-        f"  n = {_N}  →  hex: {_N:04X}  →  byte: {' '.join(f'{b:02X}' for b in _N.to_bytes(2,'big'))}\n"
-        f"  e = {_E}   →  hex: {_E:02X}    →  byte: {_E:02X}\n\n"
-        "━━  ADIM 2 — DER etiketleri ekle (ASN.1 yapısı)  ━━\n\n"
-        "  02 = INTEGER etiketi\n"
-        "  30 = SEQUENCE etiketi\n\n"
-        f"  DER(n) = 02 {len(_DER_N)-2:02X} {' '.join(f'{b:02X}' for b in _DER_N[2:])}\n"
-        f"  DER(e) = 02 {len(_DER_E)-2:02X} {' '.join(f'{b:02X}' for b in _DER_E[2:])}\n"
-        f"  SEQUENCE = 30 {len(_DER_SEQ)-2:02X} DER(n) DER(e)\n\n"
-        f"  Tüm byte'lar: {_DER_HEX}\n\n"
-        "━━  ADIM 3 — Base64'e çevir  ━━\n\n"
-        "  Her 3 byte → 4 ASCII karakter\n\n"
-        f"  Demo sonucu:  {_B64_DEMO}\n\n"
-        "━━  GERÇEK ANAHTAR  ━━\n\n"
-        "Gerçek RSA-2048'de n = 256 byte (2048-bit) olduğundan\n"
-        "DER verisi ~270 byte → ~360 Base64 karakter olur.\n\n"
-        "PEM formatı:\n"
-        "  -----BEGIN PUBLIC KEY-----\n"
-        "  [Base64 satırları]\n"
-        "  -----END PUBLIC KEY-----\n\n"
-        "→ Sonraki adımda gerçek anahtarların eşleşmesini göreceksiniz."
-    ),
-    # Adım 6 — Eşleşme (_show_match_result tarafından işlenir)
-    "",
-]
+        anim = QPropertyAnimation(effect, b"opacity", page)
+        anim.setDuration(220)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)

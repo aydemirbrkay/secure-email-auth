@@ -799,7 +799,7 @@ class _EEAWidget(QWidget):
     Genişletilmiş Öklid Algoritması tablosu + canlı hesaplama şeridi.
 
     Faz makinesi (her satır için):
-      STRIP_SHOW (1100 ms) — sırada yerleştirilecek satırın altında bir
+      STRIP_SHOW (1120 ms) — sırada yerleştirilecek satırın altında bir
         hesaplama şeridi belirir; q, r, s, t formülleri sayısal değerleriyle
         görünür. Önceki satırın r₀, r₁, s₀, s₁, t₀, t₁ hücreleri vurgulanır.
       STRIP_FADE (400 ms) — şerit söner, satır tabloya yerleşir.

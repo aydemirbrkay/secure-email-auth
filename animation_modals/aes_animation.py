@@ -977,8 +977,15 @@ class _AddRoundKeyAnimWidget(QWidget):
         p.drawText(QRect(0, 26, W, 16), Qt.AlignmentFlag.AlignCenter,
                    "her byte:  state  ⊕  round_key  =  yeni state")
 
+        # round_key kaynak açıklaması — kullanıcı "bu anahtar bayt'ları nereden geldi" sorduğunda anlasın
+        p.setFont(QFont("Georgia", 8))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(0, 42, W, 14), Qt.AlignmentFlag.AlignCenter,
+                   f"(round_key: 256-bit ana anahtardan AES anahtar genişletme algoritmasıyla "
+                   f"türetilen Round {self._round_no} alt anahtarı — 16 bayt)")
+
         # 4 satır × 4 sütun XOR hesabı — pencere genişliğine adaptif
-        y_top = 50
+        y_top = 64
         row_h = 32
         cell_h = 22
         sym_w = 11    # ⊕ ve = sembol genişliği

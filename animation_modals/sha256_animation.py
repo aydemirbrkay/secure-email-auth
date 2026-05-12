@@ -522,6 +522,7 @@ class _WExpansionWidget(QWidget):
     _T_INPUTS_END = 24    # 1200 ms
     _T_ARROWS_END = 36    # +600 ms
     _T_RESULT_END = 44    # +400 ms
+    _NAV_HEIGHT = 40      # Üstteki navigasyon şeridi yüksekliği (paint y-offset'i)
 
     def __init__(
         self, expansion: list[dict] | None, parent: QWidget | None = None,
@@ -533,14 +534,15 @@ class _WExpansionWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
 
-        self.setMinimumHeight(380)
-        self.setMaximumHeight(440)
+        self.setMinimumHeight(420)
+        self.setMaximumHeight(480)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
-        # Alt navigasyon butonları — paint alanından sonra (çok büyük boşluk olmaz)
+        # Navigasyon ŞERİDİ ÜSTTE — AES'in round bar'ı gibi.
+        # Paint alanı buton şeridinin altında başlar (y_offset = _NAV_HEIGHT).
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(8, 8, 8, 8)
-        outer.addStretch(1)
+        outer.setContentsMargins(8, 4, 8, 4)
+        outer.setSpacing(0)
 
         nav = QHBoxLayout()
         nav.setSpacing(8)
@@ -552,17 +554,30 @@ class _WExpansionWidget(QWidget):
             b.setStyleSheet(
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
                 f"color: #FFFFFF; border: none; border-radius: 6px; "
-                f"padding: 6px 14px; font-weight: bold; }}"
+                f"padding: 4px 14px; font-weight: bold; }}"
                 f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
                 f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
                 f"color: {ANIM_COLORS['text_muted']}; }}"
             )
+            b.setFixedHeight(30)
         self._btn_prev.clicked.connect(self._prev_i)
         self._btn_next.clicked.connect(self._next_i)
         nav.addWidget(self._btn_prev)
+
+        # Buton şeridinde ortada sayaç — i = N/31 (curr/total)
+        self._counter_label = QLabel("")
+        self._counter_label.setStyleSheet(
+            f"color: {ANIM_COLORS['text_secondary']}; "
+            f"font-family: Georgia; font-weight: bold;"
+        )
+        self._counter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._counter_label.setMinimumWidth(140)
+        nav.addWidget(self._counter_label)
+
         nav.addWidget(self._btn_next)
         nav.addStretch(1)
         outer.addLayout(nav)
+        outer.addStretch(1)  # paint alanı buton şeridinin altında
 
         self._update_button_states()
 
@@ -603,11 +618,17 @@ class _WExpansionWidget(QWidget):
     def _update_button_states(self) -> None:
         self._btn_prev.setEnabled(self._cur > 0)
         self._btn_next.setEnabled(self._cur < len(self._exp) - 1)
+        if self._exp:
+            i_val = self._exp[self._cur]["i"]
+            self._counter_label.setText(
+                f"i = {i_val} / 31    ({self._cur + 1}/{len(self._exp)})"
+            )
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
+        y0 = self._NAV_HEIGHT  # paint alanı, üstteki nav butonlarının altından başlar
 
         if not self._exp:
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
@@ -620,18 +641,25 @@ class _WExpansionWidget(QWidget):
         entry = self._exp[self._cur]
         i_val = entry["i"]
 
-        # Üst: σ formülleri sabit referans
+        # W kaynak açıklaması — kullanıcı "bu değerler nereden geldi" sorduğunda anlasın
+        p.setFont(QFont("Georgia", 8))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, y0 + 2, W, 14), Qt.AlignmentFlag.AlignCenter,
+                   "W[0..15]: mesaj bloğunun 16 × 32-bit kelimesidir (ilk 64 baytı). "
+                   "W[16..63]: aşağıdaki σ fonksiyonlarıyla türetilir.")
+
+        # σ formülleri sabit referans
         p.setFont(QFont("Courier New", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 8, W, 18), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 18, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)")
-        p.drawText(QRect(0, 26, W, 18), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 36, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "σ1(x) = ROTR(x,17) ⊕ ROTR(x,19) ⊕ SHR(x,10)")
 
         # Başlık: i = N / 31
         p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-        p.drawText(QRect(0, 50, W, 22), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 60, W, 22), Qt.AlignmentFlag.AlignCenter,
                    f"W[{i_val}] = σ1(W[{i_val-2}]) + W[{i_val-7}] + "
                    f"σ0(W[{i_val-15}]) + W[{i_val-16}]   (mod 2³²)")
 
@@ -640,7 +668,7 @@ class _WExpansionWidget(QWidget):
         gap_x, gap_y = 30, 24
         total_w = 2 * box_w + gap_x
         ox = (W - total_w) // 2
-        oy = 90
+        oy = y0 + 100
 
         inputs = [
             (ox, oy,
@@ -712,11 +740,7 @@ class _WExpansionWidget(QWidget):
             self._draw_arrow_simple(p, node_x + 22, node_y + 44,
                                     W // 2, result_y, QColor(ANIM_COLORS["accent_green"]))
 
-        # Alt: navigasyon göstergesi
-        p.setFont(QFont("Georgia", 9))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, H - 80, W, 18), Qt.AlignmentFlag.AlignCenter,
-                   f"i = {i_val} / 31  ({self._cur + 1}/{len(self._exp)})")
+        # Alt sayaç burada DEĞİL — üstteki QLabel'da gösteriliyor
 
         p.end()
 

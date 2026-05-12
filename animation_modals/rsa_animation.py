@@ -1115,7 +1115,7 @@ class _DERByteFlowWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._alice_b64 = alice_b64
-        self.setMinimumHeight(360)  # Detaylı byte-grup görselleştirmesi için
+        self.setMinimumHeight(420)  # Base64 bit-çözümlemesi için ek alan
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._phase = 0
         self._timer = QTimer(self)
@@ -1171,6 +1171,12 @@ class _DERByteFlowWidget(QWidget):
             p.setPen(QColor(ANIM_COLORS["accent_blue"]))
             p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
                        f"n = {_N} → {n_hex}    e = {_E} → {e_hex}")
+            y += 16
+            p.setFont(QFont("Georgia", 8))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                       "(Sayılar ağ üzerinden bayt olarak iletildiği için "
+                       "big-endian bayt dizisine çevrilir; her bayt 2 hex hane.)")
 
         # 3) DER yapısı — kompakt tek-satır
         y += 24
@@ -1246,7 +1252,41 @@ class _DERByteFlowWidget(QWidget):
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
             p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                        f"= Base64 ({len(_B64_DEMO)} karakter): {_B64_DEMO}")
-            y += 14
+            y += 18
+
+            # — Bit-seviyesi açıklama (ilk 3-baytlık grup için) —
+            if len(_DER_SEQ) >= 3:
+                first3 = _DER_SEQ[:3]
+                first4 = _B64_DEMO[:4]
+                bits = "".join(f"{b:08b}" for b in first3)         # 24 bit
+                groups = [bits[i:i+6] for i in range(0, 24, 6)]    # 4 × 6-bit
+                indices = [int(g, 2) for g in groups]
+
+                p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+                p.drawText(
+                    QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                    "Nasıl: 24 bit → 6-bit gruplar → A-Z a-z 0-9 + / alfabesinde indeks",
+                )
+                y += 14
+                p.setFont(QFont("Courier New", 8))
+                p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+                hex_str = " ".join(f"{b:02X}" for b in first3)
+                bin_str = " ".join(f"{b:08b}" for b in first3)
+                p.drawText(
+                    QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                    f"{hex_str}  =  {bin_str}",
+                )
+                y += 12
+                mapping = "   ".join(
+                    f"{g}={idx}={ch}" for g, idx, ch in zip(groups, indices, first4)
+                )
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                p.drawText(
+                    QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                    f"→ {mapping}",
+                )
+                y += 14
 
         # 5) ALICE'İN GERÇEK ANAHTARLARI — son faz
         y += 26

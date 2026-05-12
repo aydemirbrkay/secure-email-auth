@@ -124,5 +124,67 @@ class TestAESMatrixViewAnimation(unittest.TestCase):
         self.assertIsNone(view._op)
 
 
+class TestAESStateCompareWidget(unittest.TestCase):
+    """_AESStateCompareWidget kapsayıcı widget."""
+
+    def _make_widget(self):
+        from animation_modals.aes_matrix_view import _AESStateCompareWidget
+        return _AESStateCompareWidget()
+
+    def test_class_exists(self):
+        from animation_modals import aes_matrix_view
+        self.assertTrue(hasattr(aes_matrix_view, "_AESStateCompareWidget"))
+
+    def test_constructs_without_error(self):
+        w = self._make_widget()
+        self.assertIsNotNone(w)
+        # Önceki ve şimdiki view'lar erişilebilir olmalı
+        self.assertTrue(hasattr(w, "_prev_view"))
+        self.assertTrue(hasattr(w, "_curr_view"))
+        # Yeniden Oynat butonu
+        self.assertTrue(hasattr(w, "_replay_btn"))
+
+    def test_start_step_sets_prev_state_and_plays_curr(self):
+        w = self._make_widget()
+        before = [[f"b{r}{c}" for c in range(4)] for r in range(4)]
+        after = [[f"a{r}{c}" for c in range(4)] for r in range(4)]
+        w.start_step("AddRoundKey", before, after, op_color="#5B8EC2")
+        # Önceki view'da before donmuş olmalı
+        self.assertEqual(w._prev_view._state, before)
+        # Şimdiki view animasyon başlatmış olmalı
+        self.assertEqual(w._curr_view._op, "AddRoundKey")
+        self.assertTrue(w._curr_view._anim_timer.isActive())
+
+    def test_start_step_sets_arrow_label(self):
+        w = self._make_widget()
+        w.start_step(
+            "ShiftRows",
+            [["00"] * 4] * 4, [["FF"] * 4] * 4,
+            op_color="#5B8EC2",
+        )
+        self.assertIn("ShiftRows", w._arrow_label.text())
+
+    def test_show_final_sets_both_to_same_state(self):
+        w = self._make_widget()
+        final = [[f"f{r}{c}" for c in range(4)] for r in range(4)]
+        w.show_final(final)
+        self.assertEqual(w._prev_view._state, final)
+        self.assertEqual(w._curr_view._state, final)
+        # Animasyon yok
+        self.assertIsNone(w._curr_view._op)
+
+    def test_replay_button_triggers_curr_replay(self):
+        w = self._make_widget()
+        before = [["00"] * 4] * 4
+        after = [["FF"] * 4] * 4
+        w.start_step("AddRoundKey", before, after, op_color="#5B8EC2")
+        # Sahte ilerleme
+        w._curr_view._tick = 30
+        # Butonu programatik tıkla
+        w._replay_btn.click()
+        # _tick sıfırlanmış olmalı
+        self.assertEqual(w._curr_view._tick, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

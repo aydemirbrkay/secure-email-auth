@@ -15,7 +15,9 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, QRect, QTimer
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
-from PyQt6.QtWidgets import QSizePolicy, QWidget
+from PyQt6.QtWidgets import (
+    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+)
 
 from .base import ANIM_COLORS
 
@@ -240,3 +242,102 @@ class _AESMatrixView(QWidget):
 
     def _draw_overlay_mixcolumns(self, p: QPainter, ox: int, oy: int) -> None:
         pass
+
+
+class _AESStateCompareWidget(QWidget):
+    """Yan yana iki _AESMatrixView + Yeniden Oynat butonu.
+
+    Sol: önceki state (donmuş, set_state ile)
+    Orta: aktif operasyon etiketi (renkli ok)
+    Sağ: şimdiki state (canlı, play_animation ile)
+    Üst sağ: Yeniden Oynat butonu
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 6, 8, 6)
+        outer.setSpacing(4)
+
+        # Üst sağ: Yeniden Oynat butonu
+        top_row = QHBoxLayout()
+        top_row.addStretch(1)
+        self._replay_btn = QPushButton("⟲  Yeniden Oynat")
+        self._replay_btn.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; border-radius: 6px; "
+            f"padding: 4px 14px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
+        self._replay_btn.setFixedHeight(28)
+        self._replay_btn.clicked.connect(self._on_replay)
+        top_row.addWidget(self._replay_btn)
+        outer.addLayout(top_row)
+
+        # Orta: önceki view → ok → şimdiki view
+        mid_row = QHBoxLayout()
+        mid_row.setSpacing(8)
+        mid_row.addStretch(1)
+
+        self._prev_view = _AESMatrixView(
+            label_title="ÖNCEKİ",
+            label_color=ANIM_COLORS["text_muted"],
+        )
+        mid_row.addWidget(self._prev_view)
+
+        self._arrow_label = QLabel("→")
+        self._arrow_label.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
+        self._arrow_label.setStyleSheet(
+            f"color: {ANIM_COLORS['text_muted']};"
+        )
+        self._arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._arrow_label.setMinimumWidth(120)
+        mid_row.addWidget(self._arrow_label)
+
+        self._curr_view = _AESMatrixView(
+            label_title="ŞİMDİKİ (canlı)",
+            label_color=ANIM_COLORS["accent_blue"],
+        )
+        mid_row.addWidget(self._curr_view)
+
+        mid_row.addStretch(1)
+        outer.addLayout(mid_row)
+        outer.addStretch(1)
+
+    def start_step(
+        self,
+        operation: str,
+        before: list[list[str]],
+        after: list[list[str]],
+        op_color: str,
+        *,
+        round_key: list[list[str]] | None = None,
+    ) -> None:
+        """Adımı başlat: önceki donmuş, şimdiki animasyonlu."""
+        # Önceki çalışan animasyonu durdur
+        self._curr_view.stop_animation()
+        # Önceki view'a donmuş before state
+        self._prev_view.set_state(before)
+        # Ok etiketini güncelle
+        self._arrow_label.setText(f"→  {operation}  →")
+        self._arrow_label.setStyleSheet(
+            f"color: {op_color}; font-weight: bold;"
+        )
+        # Şimdiki view'a animasyon
+        self._curr_view.play_animation(
+            operation, before, after, round_key=round_key,
+        )
+
+    def show_final(self, final_state: list[list[str]]) -> None:
+        """Round 14 sonrası: iki matris de final state, animasyon yok."""
+        self._curr_view.stop_animation()
+        self._prev_view.set_state(final_state)
+        self._curr_view.set_state(final_state)
+        self._arrow_label.setText("=  FINAL  =")
+        self._arrow_label.setStyleSheet(
+            f"color: {ANIM_COLORS['accent_green']}; font-weight: bold;"
+        )
+
+    def _on_replay(self) -> None:
+        self._curr_view.replay()

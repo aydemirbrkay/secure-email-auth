@@ -1512,13 +1512,22 @@ class _RSAEncryptDecryptWidget(QWidget):
         W, H = self.width(), self.height()
         t = self._tick
 
-        box_w, box_h = 110, 50
-        margin = 30
+        box_w, box_h = 100, 44
+        margin = 20
         ox = margin
-        center_x = W // 2
+
+        # Formül kutusu — m ve c arasında kalan boşluğa uyarlanır
+        formula_x = margin + box_w + 16
+        formula_right_lim = W - margin - box_w - 16
+        formula_w = max(180, formula_right_lim - formula_x)
+        formula_h = 64
+
+        # Anahtar kartı (formül altında ortalı)
+        card_w = 170
+        card_h = 36
 
         # ── Üst yol: Şifreleme ──
-        enc_y = 50
+        enc_y = 24
         # m kutusu
         if t >= 1:
             self._draw_box(
@@ -1530,19 +1539,21 @@ class _RSAEncryptDecryptWidget(QWidget):
         if t > self._T_PLAIN_IN_END:
             opacity = min(1.0, (t - self._T_PLAIN_IN_END) / (self._T_ENC_END - self._T_PLAIN_IN_END))
             self._draw_formula_box(
-                p, center_x - 130, enc_y - 10, 260, 70,
+                p, formula_x, enc_y - 10, formula_w, formula_h,
                 "c = m^e mod n",
                 f"= {self._M}^{_E} mod {_N}",
                 f"= {self._C}",
                 ANIM_COLORS["accent_mauve"],
                 lines_revealed=int(3 * opacity) + 1,
             )
-            # Açık anahtar kartı
+            # Açık anahtar kartı — formül kutusunun altında ortalı (c kutusunun altında değil)
             if t > self._T_PLAIN_IN_END + 4:
+                card_x = formula_x + (formula_w - card_w) // 2
                 self._draw_key_card(
-                    p, W - margin - 140, enc_y - 10,
+                    p, card_x, enc_y + box_h + 14,
                     "Açık Anahtar", f"(n={_N}, e={_E})",
                     ANIM_COLORS["accent_blue"],
+                    width=card_w, height=card_h,
                 )
         # c kutusu
         if t >= self._T_ENC_END:
@@ -1553,7 +1564,8 @@ class _RSAEncryptDecryptWidget(QWidget):
             )
 
         # ── Alt yol: Deşifreleme ──
-        dec_y = enc_y + 130
+        # enc satırı + enc kartı toplam yer: box_h + 14 + card_h + 18 boşluk
+        dec_y = enc_y + box_h + 14 + card_h + 18  # 24 + 44 + 14 + 36 + 18 = 136
         # c (alt yolda sol)
         if t >= self._T_CIPHER_IN_END:
             self._draw_box(
@@ -1564,7 +1576,7 @@ class _RSAEncryptDecryptWidget(QWidget):
         if t > self._T_CIPHER_IN_END:
             opacity = min(1.0, (t - self._T_CIPHER_IN_END) / (self._T_DEC_END - self._T_CIPHER_IN_END))
             self._draw_formula_box(
-                p, center_x - 130, dec_y - 10, 260, 70,
+                p, formula_x, dec_y - 10, formula_w, formula_h,
                 "m' = c^d mod n",
                 f"= {self._C}^{_D} mod {_N}",
                 f"= {self._M_PRIME}",
@@ -1572,10 +1584,12 @@ class _RSAEncryptDecryptWidget(QWidget):
                 lines_revealed=int(3 * opacity) + 1,
             )
             if t > self._T_CIPHER_IN_END + 4:
+                card_x = formula_x + (formula_w - card_w) // 2
                 self._draw_key_card(
-                    p, W - margin - 140, dec_y - 10,
+                    p, card_x, dec_y + box_h + 14,
                     "Gizli Anahtar", f"(n={_N}, d={_D})",
                     ANIM_COLORS["accent_mauve"],
+                    width=card_w, height=card_h,
                 )
         # m' kutusu
         if t >= self._T_DEC_END:
@@ -1636,19 +1650,23 @@ class _RSAEncryptDecryptWidget(QWidget):
 
     def _draw_key_card(
         self, p: QPainter, x: int, y: int, title: str, val: str, color: str,
+        width: int = 140, height: int = 60,
     ) -> None:
         col = QColor(color)
         fill = QColor(color)
         fill.setAlphaF(0.20)
         p.setBrush(QBrush(fill))
         p.setPen(QPen(col, 1))
-        p.drawRoundedRect(x, y, 140, 60, 6, 6)
+        p.drawRoundedRect(x, y, width, height, 6, 6)
         p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
         p.setPen(col)
-        p.drawText(QRect(x, y + 6, 140, 18), Qt.AlignmentFlag.AlignCenter, title)
+        title_h = max(14, height // 3)
+        p.drawText(QRect(x, y + 2, width, title_h),
+                   Qt.AlignmentFlag.AlignCenter, title)
         p.setFont(QFont("Courier New", 9))
         p.setPen(QColor(ANIM_COLORS["text_primary"]))
-        p.drawText(QRect(x, y + 28, 140, 26), Qt.AlignmentFlag.AlignCenter, val)
+        p.drawText(QRect(x, y + title_h + 2, width, height - title_h - 4),
+                   Qt.AlignmentFlag.AlignCenter, val)
 
 
 # ---------------------------------------------------------------------------

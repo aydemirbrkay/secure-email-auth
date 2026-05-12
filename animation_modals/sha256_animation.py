@@ -534,9 +534,10 @@ class _WExpansionWidget(QWidget):
         self._timer.timeout.connect(self._on_tick)
 
         self.setMinimumHeight(380)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMaximumHeight(440)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
-        # Alt navigasyon butonları
+        # Alt navigasyon butonları — paint alanından sonra (çok büyük boşluk olmaz)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)
         outer.addStretch(1)
@@ -835,7 +836,7 @@ class _MatchAssemblyWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(480)
+        self.setMinimumHeight(510)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._pre_h: list[str] = ["--------"] * 8
         self._working: list[str] = ["--------"] * 8
@@ -900,9 +901,11 @@ class _MatchAssemblyWidget(QWidget):
     def _draw_phase1(self, p: QPainter, W: int, t: int) -> None:
         """8 H başlangıç + 8 A-H çalışma değişkeni (üstte yan yana)."""
         y = 8
-        x_start = 12
-        box_w = 90
         gap = 4
+        # Pencere genişliğine göre adaptif kutu boyutu — 8 kutu her zaman sığar
+        box_w = max(60, min(96, (W - 24 - 7 * gap) // 8))
+        total_w = 8 * box_w + 7 * gap
+        x_start = (W - total_w) // 2
         h_lit = min(8, max(0, t // 2)) if t < self._T_F1_END else 8
         for i in range(8):
             x = x_start + i * (box_w + gap)
@@ -932,7 +935,8 @@ class _MatchAssemblyWidget(QWidget):
 
     def _draw_phase2(self, p: QPainter, W: int, t: int) -> None:
         """Önceki H + Çalışma = Yeni H toplama tablosu (8 satır × 4 tick)."""
-        oy = 130
+        # Faz 1 sütunlarının altında, üst üste binme olmaz
+        oy = 150
         row_h = 22
         p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
@@ -972,7 +976,8 @@ class _MatchAssemblyWidget(QWidget):
 
     def _draw_phase3(self, p: QPainter, W: int, H_total: int, t: int) -> None:
         """8 yeni H'nin tek bir 256-bit şeride birleşmesi."""
-        y = 320
+        # Faz 2'nin altında (faz 2: 150 + 8*22 = 326)
+        y = 340
         max_t = self._T_F3_END - self._T_F2_END
         progress = min(1.0, t / max_t)
         full_hash = "".join(self._parts)
@@ -1002,7 +1007,8 @@ class _MatchAssemblyWidget(QWidget):
     def _draw_phase4(self, p: QPainter, W: int, H_total: int, t: int) -> None:
         """crypto_core ile karakter karakter eşleşme + sonuç kartı."""
         chars_revealed = min(64, t * 4)
-        y = 380
+        # Faz 3 şeridinin altında (faz 3: y=340, h=40, biter ~380)
+        y = 400
 
         p.setFont(QFont("Courier New", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
@@ -1010,7 +1016,8 @@ class _MatchAssemblyWidget(QWidget):
                    Qt.AlignmentFlag.AlignCenter, "crypto_core çıktısı:")
 
         y_chars = y + 18
-        char_w = 11
+        # char_w pencere genişliğine adaptif — 64 hex karakter her zaman sığar
+        char_w = max(7, min(11, (W - 40) // 64))
         row_w = 64 * char_w
         ox = (W - row_w) // 2
         for i in range(min(chars_revealed, 64)):

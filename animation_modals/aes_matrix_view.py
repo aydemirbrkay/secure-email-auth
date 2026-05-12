@@ -15,9 +15,7 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, QRect, QTimer
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
-from PyQt6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
-)
+from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 from .base import ANIM_COLORS
 

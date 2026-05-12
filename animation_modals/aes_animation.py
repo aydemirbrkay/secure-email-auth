@@ -1467,17 +1467,34 @@ class AESAnimationWindow(CryptoAnimationWindow):
         mat_frame = QFrame()
         mat_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+            f"border: 2px solid {ANIM_COLORS['accent_blue']}; border-radius: 8px; }}"
         )
         mat_lay = QVBoxLayout(mat_frame)
         mat_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._matrix = MatrixWidget(parent=self)
+        mat_lay.setContentsMargins(8, 6, 8, 6)
+        mat_lay.setSpacing(4)
+
+        # Üst etiket — "State Matrisi" başlığı, prominence için belirgin
+        mat_title = QLabel("State Matrisi  (4×4 byte, hex)")
+        mat_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        mat_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        mat_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mat_lay.addWidget(mat_title)
+
+        # İşlem-bağlam alt başlığı — "Round 1 — ShiftRows: 2. satır 1 bayt sola"
+        # _render_step her adımda günceller; kullanıcı şu an hangi
+        # satır/sütun üzerinde işlem yapıldığını net görür.
+        self._matrix_context = QLabel("")
+        self._matrix_context.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        self._matrix_context.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._matrix_context.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._matrix_context.setWordWrap(True)
+        mat_lay.addWidget(self._matrix_context)
+
+        # Matrisin kendisi — satır/sütun etiketleri ile (r0..r3, c0..c3)
+        self._matrix = MatrixWidget(parent=self, show_labels=True)
         mat_lay.addWidget(self._matrix, alignment=Qt.AlignmentFlag.AlignCenter)
-        mat_lbl = QLabel("State Matrisi  (4×4 byte, hex)")
-        mat_lbl.setFont(QFont("IBM Plex Sans", 9))
-        mat_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        mat_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mat_lay.addWidget(mat_lbl)
+
         content_row.addWidget(mat_frame)
 
         # Sağ panel — operasyona göre değişir
@@ -1664,6 +1681,15 @@ class AESAnimationWindow(CryptoAnimationWindow):
     # Adım render
     # ------------------------------------------------------------------
 
+    # Operasyon başına state matrix bağlam metni — kullanıcı şu an hangi
+    # satır/sütun üzerinde işlem yapıldığını anında görür.
+    _MATRIX_CONTEXT_BY_OP: dict[str, str] = {
+        "AddRoundKey": "Tüm 16 byte → round_key ile XOR'lanır",
+        "SubBytes":    "Her byte → S-Box[byte] (hücre-hücre dönüşüm)",
+        "ShiftRows":   "r0 sabit · r1 ←1 bayt · r2 ←2 bayt · r3 ←3 bayt",
+        "MixColumns":  "Her sütun → GF(2⁸) çarpımı (4 sütun bağımsız)",
+    }
+
     def _render_step(self, step_idx: int) -> None:
         if self._stack.currentWidget() != self._round_page:
             self._stack.setCurrentWidget(self._round_page)
@@ -1677,6 +1703,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._desc_lbl.setText(step["description"])
 
         op = step["operation"]
+
+        # State matrix bağlam başlığını güncelle — hangi satır/sütun aktif
+        self._matrix_context.setText(
+            f"{op}: {self._MATRIX_CONTEXT_BY_OP.get(op, '')}"
+        )
+        self._matrix_context.setStyleSheet(f"color: {step['color']};")
 
         # Bir önceki adımın matrisi (before state)
         before = (

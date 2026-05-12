@@ -2,6 +2,10 @@
 """
 MatrixWidget — 4×4 QLabel grid.
 AES state matrisi ve SHA-256 blok görselleştirmesi için paylaşımlı bileşen.
+
+İsteğe bağlı r0..r3 satır etiketleri ve c0..c3 sütun etiketleri vardır
+(``show_labels=True``); böylece kullanıcı matrisin hangi satır/sütununda
+işlem yapıldığını net görür.
 """
 from __future__ import annotations
 from PyQt6.QtCore import Qt, QTimer
@@ -10,15 +14,37 @@ from PyQt6.QtWidgets import QGridLayout, QLabel, QWidget
 
 _DEFAULT_BG = "#536070"
 _DEFAULT_FG = "#F1F3F7"
+_LABEL_FG = "#8896A8"
 
 
 class MatrixWidget(QWidget):
-    """4×4 hücrelik görsel matris. Her hücre renkli QLabel."""
+    """4×4 hücrelik görsel matris. Her hücre renkli QLabel.
 
-    def __init__(self, rows: int = 4, cols: int = 4, parent: QWidget | None = None):
+    Args:
+        rows: satır sayısı (varsayılan 4)
+        cols: sütun sayısı (varsayılan 4)
+        show_labels: True ise satır (r0..r3) ve sütun (c0..c3) etiketleri
+            grid'in dış kenarında görünür — kullanıcının "hangi satırda
+            işlem var" sorusunu anında yanıtlar.
+        cell_size: (genişlik, yükseklik) — hücre minimum boyutu
+        cell_font_pt: hücre değerlerinin font puntosu
+    """
+
+    def __init__(
+        self,
+        rows: int = 4,
+        cols: int = 4,
+        parent: QWidget | None = None,
+        show_labels: bool = False,
+        cell_size: tuple[int, int] = (60, 48),
+        cell_font_pt: int = 11,
+    ):
         super().__init__(parent)
         self._rows = rows
         self._cols = cols
+        self._show_labels = show_labels
+        self._cell_size = cell_size
+        self._cell_font_pt = cell_font_pt
         self._cells: list[list[QLabel]] = []
         self._sub_timer: QTimer | None = None
         self._init_ui()
@@ -27,15 +53,43 @@ class MatrixWidget(QWidget):
         layout = QGridLayout(self)
         layout.setSpacing(4)
         layout.setContentsMargins(8, 8, 8, 8)
+
+        # Sütun etiketleri (üstte) — show_labels açıksa
+        if self._show_labels:
+            for c in range(self._cols):
+                col_lbl = QLabel(f"c{c}")
+                col_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                col_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                col_lbl.setStyleSheet(
+                    f"color: {_LABEL_FG}; background: transparent;"
+                )
+                # Grid satır 0 etikete ayrılır, hücreler satır 1'den başlar
+                layout.addWidget(col_lbl, 0, c + 1)
+
+        cell_w, cell_h = self._cell_size
+
+        row_offset = 1 if self._show_labels else 0
+        col_offset = 1 if self._show_labels else 0
+
         for r in range(self._rows):
+            # Satır etiketi (solda)
+            if self._show_labels:
+                row_lbl = QLabel(f"r{r}")
+                row_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                row_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                row_lbl.setStyleSheet(
+                    f"color: {_LABEL_FG}; background: transparent;"
+                )
+                layout.addWidget(row_lbl, r + row_offset, 0)
+
             row: list[QLabel] = []
             for c in range(self._cols):
                 cell = QLabel("00")
                 cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                cell.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
-                cell.setMinimumSize(60, 48)
+                cell.setFont(QFont("Courier New", self._cell_font_pt, QFont.Weight.Bold))
+                cell.setMinimumSize(cell_w, cell_h)
                 cell.setStyleSheet(self._cell_style(_DEFAULT_BG))
-                layout.addWidget(cell, r, c)
+                layout.addWidget(cell, r + row_offset, c + col_offset)
                 row.append(cell)
             self._cells.append(row)
 

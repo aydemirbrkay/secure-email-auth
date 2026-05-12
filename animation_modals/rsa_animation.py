@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
-from math import gcd
 
 from PyQt6.QtCore import (
     Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect, QPoint,
@@ -28,7 +27,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
-    QGraphicsOpacityEffect, QSizePolicy, QGridLayout,
+    QGraphicsOpacityEffect, QSizePolicy,
 )
 
 from .base import CryptoAnimationWindow, ANIM_COLORS
@@ -832,6 +831,7 @@ class _EEAWidget(QWidget):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
+        self._final_timer: QTimer | None = None
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
@@ -842,11 +842,15 @@ class _EEAWidget(QWidget):
         self._phase = "STRIP_SHOW"
         self._phase_tick = 0
         self._final_reveal = 0
+        if self._final_timer is not None:
+            self._final_timer.stop()
         self.update()
         self._timer.start(self._TICK_MS)
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()
+        if self._final_timer is not None:
+            self._final_timer.stop()
         super().hideEvent(event)
 
     def _tick(self) -> None:

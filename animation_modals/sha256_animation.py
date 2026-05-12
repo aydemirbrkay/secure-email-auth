@@ -1001,7 +1001,6 @@ class _MatchAssemblyWidget(QWidget):
 
     def _draw_phase4(self, p: QPainter, W: int, H_total: int, t: int) -> None:
         """crypto_core ile karakter karakter eşleşme + sonuç kartı."""
-        max_t = self._T_F4_END - self._T_F3_END
         chars_revealed = min(64, t * 4)
         y = 380
 

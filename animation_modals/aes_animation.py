@@ -4,11 +4,14 @@ AESAnimationWindow — AES-256-GCM şifreleme sürecini görselleştirir.
 
 Yapı:
   1. Giriş animasyonu: AES-256 round yapısı adım adım belirir (otomatik, QTimer)
-  2. Round görünümü: 14 round, tıklanabilir round bar, manuel navigasyon
-     - SubBytes: hücre-hücre highlight (MatrixWidget.highlight_cells_sequential)
-     - ShiftRows: satır kaydırma okları + animate_row_shift
-     - MixColumns: sütun karıştırma görsel açıklaması
-     - AddRoundKey: XOR highlight
+  2. Round görünümü: 14 round, tıklanabilir round bar, manuel navigasyon.
+     State matrisi `_AESStateCompareWidget` ile yan yana iki QPainter
+     matrisi olarak gösterilir (önceki + şimdiki), her operasyon kendi
+     koreografisini şimdiki matrisin üzerinde oynatır:
+     SubBytes / ShiftRows / MixColumns / AddRoundKey.
+     Sağ panel, operasyona göre detaylı matematik anlatımı sunan
+     yardımcı widget'lara (_SubBytesAnimWidget, _ShiftRowsAnimWidget,
+     _MixColumnsAnimWidget, _AddRoundKeyAnimWidget) bağlanır.
 """
 from __future__ import annotations
 from collections.abc import Callable
@@ -19,7 +22,6 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 from .base import CryptoAnimationWindow, ANIM_COLORS
-from .matrix_widget import MatrixWidget
 from .aes_matrix_view import _AESStateCompareWidget
 from .aes_pure import aes256_encrypt_with_rounds
 

@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 from .base import CryptoAnimationWindow, ANIM_COLORS
 from .matrix_widget import MatrixWidget
+from .aes_matrix_view import _AESStateCompareWidget
 from .aes_pure import aes256_encrypt_with_rounds
 
 _COLORS_OP = {
@@ -1470,20 +1471,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"border: 2px solid {ANIM_COLORS['accent_blue']}; border-radius: 8px; }}"
         )
         mat_lay = QVBoxLayout(mat_frame)
-        mat_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         mat_lay.setContentsMargins(8, 6, 8, 6)
         mat_lay.setSpacing(4)
 
-        # Üst etiket — "State Matrisi" başlığı, prominence için belirgin
-        mat_title = QLabel("State Matrisi  (4×4 byte, hex)")
-        mat_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
-        mat_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        mat_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mat_lay.addWidget(mat_title)
-
-        # İşlem-bağlam alt başlığı — "Round 1 — ShiftRows: 2. satır 1 bayt sola"
-        # _render_step her adımda günceller; kullanıcı şu an hangi
-        # satır/sütun üzerinde işlem yapıldığını net görür.
+        # İşlem-bağlam alt başlığı — _render_step her adımda günceller
         self._matrix_context = QLabel("")
         self._matrix_context.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
         self._matrix_context.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
@@ -1491,9 +1482,9 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._matrix_context.setWordWrap(True)
         mat_lay.addWidget(self._matrix_context)
 
-        # Matrisin kendisi — satır/sütun etiketleri ile (r0..r3, c0..c3)
-        self._matrix = MatrixWidget(parent=self, show_labels=True)
-        mat_lay.addWidget(self._matrix, alignment=Qt.AlignmentFlag.AlignCenter)
+        # Yeni: yan yana iki QPainter matris + Yeniden Oynat butonu
+        self._matrix_pair = _AESStateCompareWidget(parent=self)
+        mat_lay.addWidget(self._matrix_pair)
 
         content_row.addWidget(mat_frame)
 
@@ -1718,63 +1709,35 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
         after = step["matrix"]
 
+        # Sağ panel — operasyona göre değişir (eskisi gibi)
+        rnd = step["round"]
+        rk: list[list[str]] | None = None
         if op == "SubBytes":
-            # Sağ panel: byte → S-Box[byte] görselleştirmesi
             self._side_stack.setCurrentIndex(3)
             self._sub_widget.set_data(before, after)
-            # Ana matris: hücre hücre canlandır
-            ops = [(r, c, after[r][c]) for r in range(4) for c in range(4)]
-            self._matrix.highlight_cells_sequential(
-                ops, step["color"], interval_ms=60, callback=None
-            )
-
         elif op == "ShiftRows":
             self._side_stack.setCurrentIndex(1)
-            # Sağ panel: animasyonlu ok diyagramı (önce → sonra)
             self._shift_widget.set_data(before, after)
-            # Ana matris: satır kaydırma animasyonu
-            for row_idx, shift in enumerate([0, 1, 2, 3]):
-                if shift > 0:
-                    self._matrix.animate_row_shift(row_idx, shift, step["color"])
-                else:
-                    for c in range(4):
-                        self._matrix.update_cell(row_idx, c, after[row_idx][c])
-            # Animasyon bittikten sonra satır renklerini default'a döndür —
-            # böylece "hangi satırı kullanıyoruz" karışıklığı olmaz, sağ paneldeki
-            # renk kodu zaten hangi satırın kaç bayt kaydığını net anlatıyor.
-            QTimer.singleShot(900, self._matrix.reset_colors)
-
         elif op == "MixColumns":
             self._side_stack.setCurrentIndex(2)
-            # Sağ panel: animasyonlu sütun karıştırma diyagramı
             self._mix_widget.set_data(before, after)
-            # Ana matris: sütun renkleriyle güncelle
-            col_colors = [
-                ANIM_COLORS["accent_blue"],
-                ANIM_COLORS["accent_mauve"],
-                ANIM_COLORS["accent_yellow"],
-                ANIM_COLORS["accent_peach"],
-            ]
-            for col in range(4):
-                for row in range(4):
-                    self._matrix.update_cell(row, col, after[row][col], col_colors[col])
-
         else:  # AddRoundKey
-            # Sağ panel: state ⊕ round_key = yeni state byte-bazlı XOR
             self._side_stack.setCurrentIndex(4)
-            rnd = step["round"]
-            rk = self._round_keys_hex[rnd] if rnd < len(self._round_keys_hex) else None
-            if rk is not None:
+            if rnd < len(self._round_keys_hex):
+                rk = self._round_keys_hex[rnd]
                 self._ark_widget.set_data(before, after, rk, rnd)
-            self._matrix.set_matrix(after, step["color"])
-            QTimer.singleShot(250, self._matrix.reset_colors)
+
+        # State matrisi: yan yana iki matris + animasyon (tek satıra indi)
+        self._matrix_pair.start_step(
+            op, before, after, step["color"], round_key=rk,
+        )
 
     def _show_match_result(self) -> None:
         self._stack.setCurrentWidget(self._match_page)
         self._update_round_bar(14)
         last = self._steps_data[-1]
         mat = last["matrix"]   # 4×4 liste
-        self._matrix.set_matrix(mat, ANIM_COLORS["accent_green"])
+        self._matrix_pair.show_final(mat)
 
         # ── Final state matrisi → şifreli metin byte sırası ──
         # AES, state matrisini sütun-öncelikli (column-major) okur

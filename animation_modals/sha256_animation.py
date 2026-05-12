@@ -835,7 +835,7 @@ class _MatchAssemblyWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(420)
+        self.setMinimumHeight(480)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._pre_h: list[str] = ["--------"] * 8
         self._working: list[str] = ["--------"] * 8
@@ -1016,7 +1016,7 @@ class _MatchAssemblyWidget(QWidget):
         ox = (W - row_w) // 2
         for i in range(min(chars_revealed, 64)):
             x = ox + i * char_w
-            actual_char = self._expected[i] if i < len(self._expected) else "?"
+            ref_char = self._expected[i] if i < len(self._expected) else "?"
             match = (i < len(self._computed) and i < len(self._expected)
                      and self._computed[i] == self._expected[i])
             col = QColor(ANIM_COLORS["accent_green"] if match
@@ -1024,7 +1024,7 @@ class _MatchAssemblyWidget(QWidget):
             p.setPen(col)
             p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
             p.drawText(QRect(x, y_chars, char_w, 16),
-                       Qt.AlignmentFlag.AlignCenter, actual_char)
+                       Qt.AlignmentFlag.AlignCenter, ref_char)
 
         if chars_revealed >= 64:
             match_all = self._computed == self._expected

@@ -182,37 +182,40 @@ class _AESIntroWidget(QWidget):
 
     def _init_ui(self) -> None:
         main = QVBoxLayout(self)
-        main.setContentsMargins(10, 6, 10, 6)
-        main.setSpacing(4)
+        main.setContentsMargins(8, 4, 8, 4)
+        main.setSpacing(3)
 
         title = QLabel("AES-256  Şifreleme Süreci")
-        title.setFont(QFont("Georgia", 13, QFont.Weight.Bold))
+        title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(title)
 
         # ── Yatay bölüm: sol=canlı matris, sağ=akış şeması ──
         h_row = QHBoxLayout()
-        h_row.setSpacing(12)
+        h_row.setSpacing(8)
         main.addLayout(h_row)
 
-        # Sol: canlı matris animasyonu
+        # Sol: canlı matris animasyonu (kompakt)
         left_frame = QFrame()
         left_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
         left_lay = QVBoxLayout(left_frame)
-        left_lay.setContentsMargins(12, 8, 12, 8)
-        left_lay.setSpacing(4)
+        left_lay.setContentsMargins(6, 4, 6, 4)
+        left_lay.setSpacing(2)
         demo_title = QLabel("Canlı Şifreleme Önizlemesi")
-        demo_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        demo_title.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
         demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         demo_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         left_lay.addWidget(demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
-        h_row.addWidget(left_frame, stretch=2)
+        # Sol panel daha dar tutuluyor → sağ akış için yer açar
+        left_frame.setMinimumWidth(180)
+        left_frame.setMaximumWidth(260)
+        h_row.addWidget(left_frame, stretch=0)
 
         # Sağ: akış şeması
         right_w = QWidget()
@@ -220,13 +223,13 @@ class _AESIntroWidget(QWidget):
         right_lay.setContentsMargins(0, 0, 0, 0)
         right_lay.setSpacing(0)
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
-        h_row.addWidget(right_w, stretch=3)
+        h_row.addWidget(right_w, stretch=1)
 
         # ── Sağ taraf: akış şeması widget'ları ──
 
         # Giriş kutusu
         self._intro_plain = self._make_box(
-            "📄  Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"]
+            "Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"]
         )
         right_lay.addWidget(self._intro_plain)
         self._intro_plain.setVisible(False)
@@ -238,7 +241,7 @@ class _AESIntroWidget(QWidget):
         self._widgets.append(arr0)
 
         self._box_r0 = self._make_round_box(
-            "🔑  Initial Round  (Round 0)",
+            "Initial Round  (Round 0)",
             ["AddRoundKey"],
             ANIM_COLORS["accent_peach"],
         )
@@ -252,7 +255,7 @@ class _AESIntroWidget(QWidget):
         self._widgets.append(arr1)
 
         self._box_main = self._make_round_box(
-            "🔄  Ana Roundlar  (R1 – R13)",
+            "Ana Roundlar  (R1 – R13)",
             ["1-SubBytes", "2-ShiftRows", "3-MixColumns", "4-AddRoundKey"],
             ANIM_COLORS["accent_blue"],
         )
@@ -266,7 +269,7 @@ class _AESIntroWidget(QWidget):
         self._widgets.append(arr2)
 
         self._box_r14 = self._make_round_box(
-            "🏁  Son Round  (R14)",
+            "Son Round  (R14)",
             ["1-SubBytes", "2-ShiftRows", "3-AddRoundKey  (MixColumns yok)"],
             ANIM_COLORS["accent_green"],
         )
@@ -280,7 +283,7 @@ class _AESIntroWidget(QWidget):
         self._widgets.append(arr3)
 
         self._intro_cipher = self._make_box(
-            "🔒  Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"]
+            "Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"]
         )
         right_lay.addWidget(self._intro_cipher)
         self._intro_cipher.setVisible(False)
@@ -289,7 +292,7 @@ class _AESIntroWidget(QWidget):
         right_lay.addSpacing(16)
 
         # Başla butonu
-        self._btn_start = QPushButton("▶  Görselleştirmeyi Başlat")
+        self._btn_start = QPushButton("Görselleştirmeyi Başlat")
         self._btn_start.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
         self._btn_start.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
@@ -391,7 +394,8 @@ class _ShiftRowsAnimWidget(QWidget):
         self._revealed = 0   # kaç satır animasyonda gösterildi
         self._anim_timer = QTimer(self)
         self._anim_timer.timeout.connect(self._advance)
-        self.setMinimumHeight(340)
+        # 4 satır × 92 + header(18) + alt boşluk(8) ≈ 394
+        self.setMinimumHeight(400)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
     def set_data(self, before: list[list[str]], after: list[list[str]]) -> None:
@@ -414,17 +418,18 @@ class _ShiftRowsAnimWidget(QWidget):
 
         W = self.width()
         cell_w = max(38, min(52, (W - 24) // 4 - 4))
-        cell_h = 30
+        cell_h = 28
         gap = 4
         grid_w = 4 * cell_w + 3 * gap
         x0 = max(4, (W - grid_w) // 2)
-        row_section = 84  # height per row (before + arrow area + after)
+        # Yeni layout: before(28) + label(14) + arrow(12) + after(28) + boşluk(8) = 90
+        row_section = 92
 
         font_val = QFont("Courier New", 8, QFont.Weight.Bold)
-        font_lbl = QFont("IBM Plex Sans", 8)
+        font_lbl = QFont("IBM Plex Sans", 8, QFont.Weight.Bold)
 
         # Header
-        p.setFont(font_lbl)
+        p.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         p.drawText(QRect(x0, 0, grid_w, 14), Qt.AlignmentFlag.AlignCenter,
                    "ÖNCEKİ  →  SONRAKI")
@@ -448,44 +453,48 @@ class _ShiftRowsAnimWidget(QWidget):
                 p.drawText(QRect(x, y_top, cell_w, cell_h),
                            Qt.AlignmentFlag.AlignCenter, self._before[row][c])
 
-            # ── Ok ve shift etiketi ──
-            arr_y = y_top + cell_h + 6
-            lbl_y = arr_y + 2
+            # ── Ok ve shift etiketi (BAĞIMSIZ alanlar — üst üste binmiyor) ──
+            # Layout (y_top + cell_h sonrası):
+            #   +2  : etiket başlangıcı (h=14)
+            #   +18 : ok çizgisi (1 piksel)
+            #   +28 : after hücreleri başlangıcı
+            label_y = y_top + cell_h + 2     # etiket alanı: 14 piksel
+            arrow_y = y_top + cell_h + 20    # ok çizgisi: 1 piksel
+            y_bot   = y_top + cell_h + 28    # sonra hücreleri
+
             if revealed:
                 if shift == 0:
-                    # Kesikli çizgi: sabit
-                    pen_d = QPen(QColor(ANIM_COLORS["text_muted"]), 1, Qt.PenStyle.DashLine)
-                    p.setPen(pen_d)
-                    p.drawLine(x0, arr_y + 8, x0 + grid_w, arr_y + 8)
+                    # Önce etiket (üstte, çizgiyle çakışmıyor)
                     p.setFont(font_lbl)
                     p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                    p.drawText(QRect(x0, lbl_y, grid_w, 14),
-                               Qt.AlignmentFlag.AlignCenter, "──  sabit  ──")
+                    p.drawText(QRect(x0, label_y, grid_w, 14),
+                               Qt.AlignmentFlag.AlignCenter, "sabit")
+                    # Sonra kesikli çizgi (etiketin ALTI, ayrı satır)
+                    pen_d = QPen(QColor(ANIM_COLORS["text_muted"]), 1, Qt.PenStyle.DashLine)
+                    p.setPen(pen_d)
+                    p.drawLine(x0, arrow_y, x0 + grid_w, arrow_y)
                 else:
-                    # Sol ok: kaydırma yönü
+                    # Önce etiket
+                    p.setFont(font_lbl)
+                    p.setPen(QColor(color))
+                    p.drawText(QRect(x0, label_y, grid_w, 14),
+                               Qt.AlignmentFlag.AlignCenter,
+                               self._SHIFT_LABELS[row])
+                    # Sonra ok çizgisi (etiketin ALTI, ayrı satır)
                     ax_end = x0
                     ax_start = x0 + grid_w
                     pen_a = QPen(QColor(color), 2)
                     p.setPen(pen_a)
-                    mid_arr = arr_y + 8
-                    p.drawLine(ax_start, mid_arr, ax_end + 8, mid_arr)
-                    # Ok ucu (sola)
+                    p.drawLine(ax_start, arrow_y, ax_end + 8, arrow_y)
                     pts = QPolygon([
-                        QPoint(ax_end, mid_arr),
-                        QPoint(ax_end + 9, mid_arr - 5),
-                        QPoint(ax_end + 9, mid_arr + 5),
+                        QPoint(ax_end, arrow_y),
+                        QPoint(ax_end + 9, arrow_y - 5),
+                        QPoint(ax_end + 9, arrow_y + 5),
                     ])
                     p.setBrush(QBrush(QColor(color)))
                     p.drawPolygon(pts)
-                    # Shift miktarı etiketi
-                    p.setFont(font_lbl)
-                    p.setPen(QColor(color))
-                    p.drawText(QRect(x0, lbl_y, grid_w, 14),
-                               Qt.AlignmentFlag.AlignCenter,
-                               self._SHIFT_LABELS[row])
 
             # ── Sonra (after) hücreleri ──
-            y_bot = arr_y + 22
             for c in range(4):
                 x = x0 + c * (cell_w + gap)
                 if revealed:
@@ -542,7 +551,8 @@ class _MixColumnsAnimWidget(QWidget):
         self._active_col = -1   # -1 = başlamadı, 0-3 = aktif sütun, 4 = hepsi tamam
         self._anim_timer = QTimer(self)
         self._anim_timer.timeout.connect(self._advance)
-        self.setMinimumHeight(300)
+        # Output hücreleri (4×27=108) + giriş + matris + formüller + başlık ≈ 380
+        self.setMinimumHeight(380)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
     def set_data(self, before: list[list[str]], after: list[list[str]]) -> None:
@@ -705,16 +715,28 @@ class _MixColumnsAnimWidget(QWidget):
                 p.drawText(QRect(x_col + 2, y, cell_w, cell_h),
                            Qt.AlignmentFlag.AlignCenter, val)
 
-            # Formula labels for the active column (drawn below output cells)
-            if is_active:
-                fml_y = y2_start + 4 * (cell_h + gap_y) + 4
-                p.setFont(font_fml)
-                p.setPen(QColor(color))
-                for fi, fml in enumerate(self._FORMULAS):
-                    fml_x = max(0, x_col - col_section_w // 2)
-                    fml_w = min(col_section_w * 2, W - fml_x)
-                    p.drawText(QRect(fml_x, fml_y + fi * 11, fml_w, 11),
-                               Qt.AlignmentFlag.AlignLeft, fml)
+        # Aktif sütunun formüllerini en altta tek blok olarak göster
+        active_idx = self._active_col - 1
+        if 0 <= active_idx < 4:
+            color = self._COL_COLORS[active_idx]
+            fml_y = y2_start + 4 * (cell_h + gap_y) + 8
+
+            # Başlık satırı: hangi sütun için
+            p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+            p.setPen(QColor(color))
+            p.drawText(QRect(0, fml_y, W, 14),
+                       Qt.AlignmentFlag.AlignCenter,
+                       f"S{active_idx + 1} sütununun GF(2⁸) çıkış formülleri:")
+            fml_y += 16
+
+            # 4 formül — Courier 9pt, satırlar açık aralıklı (h=14)
+            p.setFont(QFont("Courier New", 9))
+            p.setPen(QColor(ANIM_COLORS["text_primary"]))
+            line_h = 14
+            for fi, fml in enumerate(self._FORMULAS):
+                p.drawText(QRect(8, fml_y + fi * line_h, W - 16, line_h),
+                           Qt.AlignmentFlag.AlignCenter,
+                           f"out[{fi}] = {fml}")
 
         p.end()
 
@@ -763,6 +785,540 @@ def _build_steps(rounds_data: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# SubBytes animasyonlu S-Box arama widget'ı
+# ---------------------------------------------------------------------------
+
+class _SubBytesAnimWidget(QWidget):
+    """
+    SubBytes operasyonunun byte-bazlı S-Box dönüşümünü gösterir.
+    16 byte için 'giriş → çıkış' şekilde 4×4 düzende listelenir;
+    her satır 700ms aralıkla canlanır.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._before: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._after: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._revealed = 0
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._advance)
+        self.setMinimumHeight(330)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    def set_data(self, before: list[list[str]], after: list[list[str]]) -> None:
+        self._before = before
+        self._after = after
+        self._revealed = 0
+        self._anim_timer.start(420)
+        self.update()
+
+    def _advance(self) -> None:
+        self._revealed += 1
+        if self._revealed >= 4:
+            self._revealed = 4
+            self._anim_timer.stop()
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W = self.width()
+        color = ANIM_COLORS["accent_yellow"]
+
+        # Başlık
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(color))
+        p.drawText(QRect(0, 6, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "SubBytes — S-Box ile byte değiştirme")
+
+        # Açıklama
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 26, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "her byte:  giriş  →  S-Box[giriş]  =  çıkış")
+
+        # 4 satır × 4 dönüşüm (4×4=16 byte)
+        # Her satır: "R0:  49→3b   7e→f3   15→59   16→47"
+        y_top = 50
+        row_h = 30
+        cell_box_w = 28
+        cell_box_h = 22
+        sep = 8           # giriş ↔ çıkış arası ok
+        pair_w = cell_box_w * 2 + sep   # ~64
+        pair_gap = 6
+        total_pair_w = 4 * pair_w + 3 * pair_gap
+        ox = max(8, (W - 24 - total_pair_w) // 2 + 24)
+
+        for r in range(4):
+            y = y_top + r * row_h
+            revealed_row = r < self._revealed
+
+            # Satır etiketi
+            p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"] if revealed_row
+                            else ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(2, y, 22, cell_box_h),
+                       Qt.AlignmentFlag.AlignCenter, f"r{r}")
+
+            for c in range(4):
+                gx = ox + c * (pair_w + pair_gap)
+                in_byte = self._before[r][c]
+                out_byte = self._after[r][c]
+
+                if revealed_row:
+                    # Giriş kutusu
+                    in_bg = QColor(ANIM_COLORS["bg_input"])
+                    p.setBrush(QBrush(in_bg))
+                    p.setPen(QPen(QColor(ANIM_COLORS["text_muted"]), 1))
+                    p.drawRoundedRect(gx, y, cell_box_w, cell_box_h, 3, 3)
+                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                    p.drawText(QRect(gx, y, cell_box_w, cell_box_h),
+                               Qt.AlignmentFlag.AlignCenter, in_byte)
+
+                    # Ok
+                    arr_x = gx + cell_box_w
+                    arr_mid = y + cell_box_h // 2
+                    p.setPen(QPen(QColor(color), 2))
+                    p.drawLine(arr_x + 1, arr_mid, arr_x + sep - 3, arr_mid)
+                    pts = QPolygon([
+                        QPoint(arr_x + sep - 1, arr_mid),
+                        QPoint(arr_x + sep - 5, arr_mid - 3),
+                        QPoint(arr_x + sep - 5, arr_mid + 3),
+                    ])
+                    p.setBrush(QBrush(QColor(color)))
+                    p.drawPolygon(pts)
+
+                    # Çıkış kutusu
+                    out_bg = QColor(color)
+                    out_bg.setAlpha(80)
+                    p.setBrush(QBrush(out_bg))
+                    p.setPen(QPen(QColor(color), 1))
+                    p.drawRoundedRect(gx + cell_box_w + sep, y,
+                                      cell_box_w, cell_box_h, 3, 3)
+                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                    p.drawText(QRect(gx + cell_box_w + sep, y,
+                                     cell_box_w, cell_box_h),
+                               Qt.AlignmentFlag.AlignCenter, out_byte)
+                else:
+                    # Soluk yer-tutucu
+                    p.setBrush(QBrush(QColor(ANIM_COLORS["bg_input"])))
+                    p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1, Qt.PenStyle.DashLine))
+                    p.drawRoundedRect(gx, y, pair_w, cell_box_h, 3, 3)
+
+        # Alt notu
+        note_y = y_top + 4 * row_h + 8
+        p.setFont(QFont("Georgia", 8))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(8, note_y, W - 16, 14),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "S-Box: 256 girişli, FIPS 197'de tanımlı sabit tablo.")
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# AddRoundKey animasyonlu XOR widget'ı
+# ---------------------------------------------------------------------------
+
+class _AddRoundKeyAnimWidget(QWidget):
+    """
+    AddRoundKey operasyonunun byte-bazlı XOR hesabını gösterir.
+    16 byte için 'state ⊕ key = sonuç' şekilde 4×4 düzende listelenir;
+    her satır 420ms aralıkla canlanır.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._before: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._after: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._round_key: list[list[str]] = [["--"] * 4 for _ in range(4)]
+        self._round_no: int = 0
+        self._revealed = 0
+        self._anim_timer = QTimer(self)
+        self._anim_timer.timeout.connect(self._advance)
+        self.setMinimumHeight(340)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    def set_data(
+        self, before: list[list[str]], after: list[list[str]],
+        round_key: list[list[str]], round_no: int,
+    ) -> None:
+        self._before = before
+        self._after = after
+        self._round_key = round_key
+        self._round_no = round_no
+        self._revealed = 0
+        self._anim_timer.start(420)
+        self.update()
+
+    def _advance(self) -> None:
+        self._revealed += 1
+        if self._revealed >= 4:
+            self._revealed = 4
+            self._anim_timer.stop()
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W = self.width()
+        color = ANIM_COLORS["accent_peach"]
+
+        # Başlık
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(color))
+        p.drawText(QRect(0, 6, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   f"AddRoundKey — Round {self._round_no} anahtarı ile XOR")
+
+        # Açıklama
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 26, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "her byte:  state  ⊕  round_key  =  yeni state")
+
+        # 4 satır × 4 sütun XOR hesabı — pencere genişliğine adaptif
+        y_top = 50
+        row_h = 32
+        cell_h = 22
+        sym_w = 11    # ⊕ ve = sembol genişliği
+        slot_gap = 4
+        # Kullanılabilir genişlik: pencere - sol etiket alanı (24) - kenar boşluğu (8)
+        avail_w = max(280, W - 32)
+        # Her slot: 3 kutu + 2 sembol. 4 slot + 3 boşluk toplam:
+        # 4*(3*cell_w + 2*sym_w) + 3*slot_gap ≤ avail_w
+        # 12*cell_w + 8*sym_w + 12 ≤ avail_w
+        cell_w = max(18, (avail_w - 8 * sym_w - 12) // 12)
+        cell_w = min(cell_w, 30)
+        slot_w = cell_w * 3 + 2 * sym_w
+        total_w = 4 * slot_w + 3 * slot_gap
+        # İçerik uzun olabilir, ortala
+        ox = max(24, (W - total_w) // 2)
+
+        for r in range(4):
+            y = y_top + r * row_h
+            revealed_row = r < self._revealed
+
+            # Satır etiketi
+            p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"] if revealed_row
+                            else ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(2, y, 22, cell_h),
+                       Qt.AlignmentFlag.AlignCenter, f"r{r}")
+
+            for c in range(4):
+                sx = ox + c * (slot_w + slot_gap)
+                state_byte = self._before[r][c]
+                key_byte = self._round_key[r][c]
+                out_byte = self._after[r][c]
+
+                if revealed_row:
+                    # state hücresi (mavi-soluk)
+                    p.setBrush(QBrush(QColor(ANIM_COLORS["accent_blue"] + "55")))
+                    p.setPen(QPen(QColor(ANIM_COLORS["accent_blue"]), 1))
+                    p.drawRoundedRect(sx, y, cell_w, cell_h, 3, 3)
+                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                    p.drawText(QRect(sx, y, cell_w, cell_h),
+                               Qt.AlignmentFlag.AlignCenter, state_byte)
+
+                    # ⊕ sembolü
+                    p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+                    p.setPen(QColor(color))
+                    p.drawText(QRect(sx + cell_w, y, sym_w, cell_h),
+                               Qt.AlignmentFlag.AlignCenter, "⊕")
+
+                    # key hücresi (şeftali-soluk)
+                    kx = sx + cell_w + sym_w
+                    p.setBrush(QBrush(QColor(color + "55")))
+                    p.setPen(QPen(QColor(color), 1))
+                    p.drawRoundedRect(kx, y, cell_w, cell_h, 3, 3)
+                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                    p.drawText(QRect(kx, y, cell_w, cell_h),
+                               Qt.AlignmentFlag.AlignCenter, key_byte)
+
+                    # = sembolü
+                    p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+                    p.drawText(QRect(kx + cell_w, y, sym_w, cell_h),
+                               Qt.AlignmentFlag.AlignCenter, "=")
+
+                    # result hücresi (yeşil-canlı)
+                    rx = kx + cell_w + sym_w
+                    p.setBrush(QBrush(QColor(ANIM_COLORS["accent_green"] + "55")))
+                    p.setPen(QPen(QColor(ANIM_COLORS["accent_green"]), 1))
+                    p.drawRoundedRect(rx, y, cell_w, cell_h, 3, 3)
+                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                    p.drawText(QRect(rx, y, cell_w, cell_h),
+                               Qt.AlignmentFlag.AlignCenter, out_byte)
+                else:
+                    # Soluk yer-tutucu
+                    p.setBrush(QBrush(QColor(ANIM_COLORS["bg_input"])))
+                    p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1, Qt.PenStyle.DashLine))
+                    p.drawRoundedRect(sx, y, slot_w, cell_h, 3, 3)
+
+        # Alt notu — XOR'un nasıl çalıştığı
+        note_y = y_top + 4 * row_h + 8
+        p.setFont(QFont("Georgia", 8))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(8, note_y, W - 16, 14),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "XOR: bit-bazında karşılaştırma; aynı → 0, farklı → 1.")
+        p.end()
+
+
+# ---------------------------------------------------------------------------
+# AES Round Flow Widget — FIPS 197 tarzı tüm round görünümü
+# ---------------------------------------------------------------------------
+
+class _AESRoundFlowWidget(QWidget):
+    """
+    Tüm 14 AES-256 round'unu video tarzı dikey listede gösterir.
+
+    Her satır tek bir round'un beş aşamasını yan yana sunar:
+      [Başlangıç] → [SubBytes] → [ShiftRows] → [MixColumns]  ⊕  [Round Key]
+
+    Round 0 sadece AddRoundKey içerir; round 14'te MixColumns atlanır.
+    Her satırda sağdaki 'Round Key' XOR'lanarak bir sonraki satırın
+    'Başlangıç' state'i elde edilir.
+    """
+
+    # Hücre ve mizanpaj boyutları
+    _CELL_W = 56
+    _CELL_H = 56
+    _ARROW_W = 16
+    _XOR_W = 18
+    _COL_GAP = 2
+    _ROW_H = 70
+    _HEADER_H = 28
+    _LEFT_LABEL_W = 60
+    _BYTE_FONT = QFont("Courier New", 7, QFont.Weight.Bold)
+
+    _COL_TITLES = ["Başlangıç", "SubBytes", "ShiftRows", "MixColumns", "Round Key"]
+    _COL_COLORS = [
+        ANIM_COLORS["text_secondary"],     # Başlangıç (gri)
+        ANIM_COLORS["accent_yellow"],      # SubBytes
+        ANIM_COLORS["accent_blue"],        # ShiftRows
+        ANIM_COLORS["accent_mauve"],       # MixColumns
+        ANIM_COLORS["accent_peach"],       # Round Key
+    ]
+
+    def __init__(
+        self,
+        rounds_data: list[dict],
+        round_keys_hex: list[list[list[str]]],
+        initial_state_hex: list[list[str]],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._rounds = rounds_data
+        self._round_keys = round_keys_hex
+        self._initial = initial_state_hex
+        # 15 satır: Round 0..14
+        rows_count = 15
+        total_h = self._HEADER_H + rows_count * self._ROW_H + 16
+        # 5 sütun + 3 ok + 1 ⊕
+        total_w = (
+            self._LEFT_LABEL_W + 12
+            + 5 * self._CELL_W
+            + 3 * (self._ARROW_W + 2 * self._COL_GAP)
+            + (self._XOR_W + 2 * self._COL_GAP)
+            + 16
+        )
+        self.setMinimumSize(total_w, total_h)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Sütun x koordinatları
+        x = self._LEFT_LABEL_W + 8
+        col_x = []
+        # Sütun 0: Başlangıç
+        col_x.append(x); x += self._CELL_W + self._COL_GAP
+        # → SubBytes
+        col_x.append(x + self._ARROW_W + self._COL_GAP)
+        x = col_x[1] + self._CELL_W + self._COL_GAP
+        # → ShiftRows
+        col_x.append(x + self._ARROW_W + self._COL_GAP)
+        x = col_x[2] + self._CELL_W + self._COL_GAP
+        # → MixColumns
+        col_x.append(x + self._ARROW_W + self._COL_GAP)
+        x = col_x[3] + self._CELL_W + self._COL_GAP
+        # ⊕ Round Key
+        col_x.append(x + self._XOR_W + self._COL_GAP)
+
+        # === Header ===
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        for i, (cx, title) in enumerate(zip(col_x, self._COL_TITLES)):
+            p.setPen(QColor(self._COL_COLORS[i]))
+            p.drawText(QRect(cx, 4, self._CELL_W, self._HEADER_H - 4),
+                       Qt.AlignmentFlag.AlignCenter, title)
+
+        # Header altı ayraç çizgi
+        p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
+        p.drawLine(8, self._HEADER_H - 1, self.width() - 8, self._HEADER_H - 1)
+
+        # === Satırlar (Round 0..14) ===
+        for ri in range(15):
+            y = self._HEADER_H + 4 + ri * self._ROW_H
+            self._draw_round_row(p, ri, y, col_x)
+
+        p.end()
+
+    def _draw_round_row(
+        self, p: QPainter, ri: int, y: int, col_x: list[int],
+    ) -> None:
+        """Tek bir round'un satırını çizer."""
+        # Sol etiket: "Input", "Round 1", ..., "Round 14"
+        label = "Input" if ri == 0 else f"Round {ri}"
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.drawText(QRect(4, y, self._LEFT_LABEL_W, self._CELL_H),
+                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                   label + "  ")
+
+        # Bu round'un veri kaynakları
+        rd = self._rounds[ri]
+
+        # ── Sütun 0: Başlangıç state ──
+        if ri == 0:
+            start_state = self._initial
+        else:
+            # Önceki round'un sonu = bu round'un başı
+            start_state = self._rounds[ri - 1]["after_add_round_key"]
+        self._draw_matrix(p, col_x[0], y, start_state, self._COL_COLORS[0])
+
+        # ── Round 0: sadece Round Key gösterilir, ortadakiler boş ──
+        if ri == 0:
+            # Boş orta sütunlar
+            for ci in (1, 2, 3):
+                self._draw_empty(p, col_x[ci], y, self._COL_COLORS[ci])
+            # ⊕ ve RK
+            self._draw_xor(p, col_x[4] - self._XOR_W - self._COL_GAP, y)
+            self._draw_matrix(p, col_x[4], y,
+                              self._round_keys[0], self._COL_COLORS[4])
+            # Notu sağa
+            self._draw_note(p, col_x[4] + self._CELL_W + 6, y,
+                            "→ Round 1\nbaşlangıcı")
+            return
+
+        # ── Round 1..13: tüm sütunlar mevcut ──
+        # → SubBytes
+        self._draw_arrow(p, col_x[1] - self._ARROW_W - self._COL_GAP, y,
+                         self._COL_COLORS[1])
+        self._draw_matrix(p, col_x[1], y,
+                          rd["after_sub_bytes"], self._COL_COLORS[1])
+        # → ShiftRows
+        self._draw_arrow(p, col_x[2] - self._ARROW_W - self._COL_GAP, y,
+                         self._COL_COLORS[2])
+        self._draw_matrix(p, col_x[2], y,
+                          rd["after_shift_rows"], self._COL_COLORS[2])
+        # → MixColumns (round 14'te yok)
+        if ri < 14:
+            self._draw_arrow(p, col_x[3] - self._ARROW_W - self._COL_GAP, y,
+                             self._COL_COLORS[3])
+            self._draw_matrix(p, col_x[3], y,
+                              rd["after_mix_columns"], self._COL_COLORS[3])
+        else:
+            # MixColumns atlandı — soluk gri "yok" kutusu
+            self._draw_empty(p, col_x[3], y, self._COL_COLORS[3],
+                             label="MixColumns\natlandı")
+
+        # ⊕ Round Key
+        self._draw_xor(p, col_x[4] - self._XOR_W - self._COL_GAP, y)
+        self._draw_matrix(p, col_x[4], y,
+                          self._round_keys[ri], self._COL_COLORS[4])
+
+        # Final round için "→ ÇIKTI" etiketi
+        if ri == 14:
+            p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["accent_green"]))
+            p.drawText(QRect(col_x[4] + self._CELL_W + 4, y,
+                             80, self._CELL_H),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       "→  Şifreli\n     blok")
+
+    def _draw_matrix(
+        self, p: QPainter, x: int, y: int,
+        matrix: list[list[str]], color: str,
+    ) -> None:
+        """4×4 hex matrisi (x, y) konumuna çizer."""
+        cell = self._CELL_W // 4
+        # Çerçeve
+        bg = QColor(color)
+        bg.setAlpha(45)
+        p.setBrush(QBrush(bg))
+        p.setPen(QPen(QColor(color), 1))
+        p.drawRoundedRect(x, y, self._CELL_W, self._CELL_H, 4, 4)
+
+        # Hex değerler — sütun-yönlü AES gösterimi (matris[row][col])
+        p.setFont(self._BYTE_FONT)
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        for r in range(4):
+            for c in range(4):
+                cx = x + c * cell
+                cy = y + r * cell
+                p.drawText(QRect(cx, cy, cell, cell),
+                           Qt.AlignmentFlag.AlignCenter, matrix[r][c])
+
+    def _draw_empty(
+        self, p: QPainter, x: int, y: int, color: str,
+        label: str = "",
+    ) -> None:
+        """Boş yer-tutucu hücre (round 0'ın orta kolonları, vs.)."""
+        bg = QColor(ANIM_COLORS["bg_input"])
+        p.setBrush(QBrush(bg))
+        pen = QPen(QColor(ANIM_COLORS["border"]), 1, Qt.PenStyle.DashLine)
+        p.setPen(pen)
+        p.drawRoundedRect(x, y, self._CELL_W, self._CELL_H, 4, 4)
+        if label:
+            p.setFont(QFont("Georgia", 7))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(x + 2, y + 2, self._CELL_W - 4, self._CELL_H - 4),
+                       Qt.AlignmentFlag.AlignCenter, label)
+
+    def _draw_arrow(self, p: QPainter, x: int, y: int, color: str) -> None:
+        """Yatay ok çizer."""
+        mid_y = y + self._CELL_H // 2
+        pen = QPen(QColor(color), 2)
+        p.setPen(pen)
+        p.drawLine(x + 2, mid_y, x + self._ARROW_W - 4, mid_y)
+        pts = QPolygon([
+            QPoint(x + self._ARROW_W - 1, mid_y),
+            QPoint(x + self._ARROW_W - 7, mid_y - 4),
+            QPoint(x + self._ARROW_W - 7, mid_y + 4),
+        ])
+        p.setBrush(QBrush(QColor(color)))
+        p.drawPolygon(pts)
+
+    def _draw_xor(self, p: QPainter, x: int, y: int) -> None:
+        """⊕ sembolü."""
+        mid_y = y + self._CELL_H // 2
+        cx = x + self._XOR_W // 2
+        # Çember
+        r = 7
+        p.setBrush(QBrush(QColor(ANIM_COLORS["accent_peach"] + "33")))
+        p.setPen(QPen(QColor(ANIM_COLORS["accent_peach"]), 1))
+        p.drawEllipse(QPoint(cx, mid_y), r, r)
+        # Artı işareti
+        p.setPen(QPen(QColor(ANIM_COLORS["accent_peach"]), 1))
+        p.drawLine(cx - r + 2, mid_y, cx + r - 2, mid_y)
+        p.drawLine(cx, mid_y - r + 2, cx, mid_y + r - 2)
+
+    def _draw_note(self, p: QPainter, x: int, y: int, text: str) -> None:
+        """Sağ tarafta kısa açıklama notu."""
+        p.setFont(QFont("Georgia", 8))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(x, y, 80, self._CELL_H),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                   text)
+
+
+# ---------------------------------------------------------------------------
 # AES Animasyon Penceresi
 # ---------------------------------------------------------------------------
 
@@ -795,6 +1351,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         aes_result = aes256_encrypt_with_rounds(key, plaintext)
         self._steps_data = _build_steps(aes_result["rounds_data"])
         self._final_block_hex = aes_result["final_block_hex"]
+        # Round flow widget için ek veri
+        self._rounds_data = aes_result["rounds_data"]
+        self._round_keys_hex = aes_result["round_keys_hex"]
+        self._initial_state_hex = aes_result["initial_state_hex"]
 
         # round → ilk step indeksini hesapla
         self._round_start: dict[int, int] = {}
@@ -805,7 +1365,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         # Başlangıçta intro görünür; manual_mode round görünümü için
         super().__init__(
-            "🔒  AES-256-GCM Şifreleme Animasyonu",
+            "AES-256-GCM Şifreleme Animasyonu",
             len(self._steps_data),
             manual_mode=True,
             on_close=on_close,
@@ -823,11 +1383,15 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._intro = _AESIntroWidget(on_complete=self._switch_to_rounds)
         self._stack.addWidget(self._intro)
 
-        # Sayfa 1 — Round görünümü
+        # Sayfa 1 — Round görünümü (tek round detayı)
         self._round_page = self._make_round_page()
         self._stack.addWidget(self._round_page)
 
-        # Sayfa 2 — Eşleşme sonucu
+        # Sayfa 2 — Tüm Roundlar Akışı (FIPS 197 tarzı)
+        self._flow_page = self._make_flow_page()
+        self._stack.addWidget(self._flow_page)
+
+        # Sayfa 3 — Eşleşme sonucu
         self._match_page = self._make_match_page()
         self._stack.addWidget(self._match_page)
 
@@ -858,6 +1422,20 @@ class AESAnimationWindow(CryptoAnimationWindow):
             btn.clicked.connect(lambda checked, r=i: self._jump_to_round(r))
             rb_lay.addWidget(btn)
             self._round_btns.append(btn)
+
+        # Tüm Roundlar Akışı butonu (FIPS 197 tarzı görünüm)
+        rb_lay.addStretch()
+        flow_btn = QPushButton("Tüm Akış")
+        flow_btn.setFixedHeight(28)
+        flow_btn.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        flow_btn.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; border-radius: 5px; "
+            f"padding: 4px 12px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
+        flow_btn.clicked.connect(self._switch_to_flow_view)
+        rb_lay.addWidget(flow_btn)
         lay.addWidget(rb_frame)
 
         # Operasyon başlığı
@@ -900,10 +1478,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._side_stack.setMinimumWidth(320)
         self._side_stack.setMaximumWidth(430)
 
-        empty = QWidget()  # boş panel (AddRoundKey ve SubBytes için)
+        empty = QWidget()  # boş panel (yedek)
         self._side_stack.addWidget(empty)                    # index 0
 
-        # ShiftRows: scroll area içinde (4 satır × 84px = ~360px gerektirir)
+        # ShiftRows: scroll area içinde (4 satır × 92px = ~400px gerektirir)
         from PyQt6.QtWidgets import QScrollArea
         self._shift_widget = _ShiftRowsAnimWidget()
         shift_scroll = QScrollArea()
@@ -915,9 +1493,95 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._mix_widget = _MixColumnsAnimWidget()           # MixColumns için
         self._side_stack.addWidget(self._mix_widget)         # index 2
 
+        # SubBytes: byte → S-Box[byte] görselleştirmesi
+        self._sub_widget = _SubBytesAnimWidget()
+        sub_scroll = QScrollArea()
+        sub_scroll.setWidget(self._sub_widget)
+        sub_scroll.setWidgetResizable(True)
+        sub_scroll.setStyleSheet("background: transparent; border: none;")
+        self._side_stack.addWidget(sub_scroll)               # index 3
+
+        # AddRoundKey: state ⊕ round_key = yeni state
+        self._ark_widget = _AddRoundKeyAnimWidget()
+        ark_scroll = QScrollArea()
+        ark_scroll.setWidget(self._ark_widget)
+        ark_scroll.setWidgetResizable(True)
+        ark_scroll.setStyleSheet("background: transparent; border: none;")
+        self._side_stack.addWidget(ark_scroll)               # index 4
+
         content_row.addWidget(self._side_stack)
         lay.addLayout(content_row, stretch=1)   # stretch=1: content_row fills remaining height
         return w
+
+    def _make_flow_page(self) -> QWidget:
+        """FIPS 197 tarzı tüm round akışı sayfası — scroll'lu liste."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(8, 4, 8, 4)
+        lay.setSpacing(6)
+
+        # Üst bar — geri dönüş + başlık
+        top_row = QHBoxLayout()
+        back_btn = QPushButton("◀  Tek Round Detayı")
+        back_btn.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        back_btn.setFixedHeight(30)
+        back_btn.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
+            f"color: {ANIM_COLORS['text_secondary']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 5px; padding: 4px 12px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; }}"
+        )
+        back_btn.clicked.connect(self._back_to_round_view)
+        top_row.addWidget(back_btn)
+
+        title = QLabel("Tüm 14 Round Akışı  (FIPS 197 referans biçimi)")
+        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        top_row.addWidget(title, stretch=1)
+        top_row.addStretch()
+        lay.addLayout(top_row)
+
+        # Açıklayıcı alt başlık
+        legend = QLabel(
+            "Her satır bir round'u gösterir. Soldan sağa: Başlangıç → SubBytes → "
+            "ShiftRows → MixColumns ⊕ Round Key.   "
+            "Round 0 sadece AddRoundKey içerir; Round 14'te MixColumns atlanır."
+        )
+        legend.setFont(QFont("IBM Plex Sans", 9))
+        legend.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        legend.setWordWrap(True)
+        legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(legend)
+
+        # Scroll area içine yeni round flow widget'ı
+        from PyQt6.QtWidgets import QScrollArea
+        flow = _AESRoundFlowWidget(
+            rounds_data=self._rounds_data,
+            round_keys_hex=self._round_keys_hex,
+            initial_state_hex=self._initial_state_hex,
+        )
+        scroll = QScrollArea()
+        scroll.setWidget(flow)
+        scroll.setWidgetResizable(False)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        scroll.setStyleSheet(
+            f"QScrollArea {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        lay.addWidget(scroll, stretch=1)
+        return w
+
+    def _switch_to_flow_view(self) -> None:
+        """Round detay görünümünden Tüm Roundlar Akışı'na geçer."""
+        self._stack.setCurrentWidget(self._flow_page)
+
+    def _back_to_round_view(self) -> None:
+        """Akış görünümünden tek-round detayına döner."""
+        self._stack.setCurrentWidget(self._round_page)
 
     def _make_match_page(self) -> QWidget:
         w = QWidget()
@@ -1016,7 +1680,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         after = step["matrix"]
 
         if op == "SubBytes":
-            self._side_stack.setCurrentIndex(0)
+            # Sağ panel: byte → S-Box[byte] görselleştirmesi
+            self._side_stack.setCurrentIndex(3)
+            self._sub_widget.set_data(before, after)
+            # Ana matris: hücre hücre canlandır
             ops = [(r, c, after[r][c]) for r in range(4) for c in range(4)]
             self._matrix.highlight_cells_sequential(
                 ops, step["color"], interval_ms=60, callback=None
@@ -1033,6 +1700,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
                 else:
                     for c in range(4):
                         self._matrix.update_cell(row_idx, c, after[row_idx][c])
+            # Animasyon bittikten sonra satır renklerini default'a döndür —
+            # böylece "hangi satırı kullanıyoruz" karışıklığı olmaz, sağ paneldeki
+            # renk kodu zaten hangi satırın kaç bayt kaydığını net anlatıyor.
+            QTimer.singleShot(900, self._matrix.reset_colors)
 
         elif op == "MixColumns":
             self._side_stack.setCurrentIndex(2)
@@ -1050,7 +1721,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
                     self._matrix.update_cell(row, col, after[row][col], col_colors[col])
 
         else:  # AddRoundKey
-            self._side_stack.setCurrentIndex(0)
+            # Sağ panel: state ⊕ round_key = yeni state byte-bazlı XOR
+            self._side_stack.setCurrentIndex(4)
+            rnd = step["round"]
+            rk = self._round_keys_hex[rnd] if rnd < len(self._round_keys_hex) else None
+            if rk is not None:
+                self._ark_widget.set_data(before, after, rk, rnd)
             self._matrix.set_matrix(after, step["color"])
             QTimer.singleShot(250, self._matrix.reset_colors)
 

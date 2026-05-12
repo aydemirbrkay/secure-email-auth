@@ -92,6 +92,12 @@ _D:   int = pow(_E, -1, _PHI)    # 2753
 
 assert (_E * _D) % _PHI == 1, "RSA invariant ihlal edildi: e · d ≢ 1 (mod φ)"
 
+# Tam sayıyı Unicode üst-simgeye çevir (RSA formüllerinde m^e yerine mᵉ için)
+_SUP_TRANS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+def _to_sup(n: int | str) -> str:
+    return str(n).translate(_SUP_TRANS)
+
 _DER_N:   bytes = _der_int(_N)
 _DER_E:   bytes = _der_int(_E)
 _DER_SEQ: bytes = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
@@ -1540,8 +1546,8 @@ class _RSAEncryptDecryptWidget(QWidget):
             opacity = min(1.0, (t - self._T_PLAIN_IN_END) / (self._T_ENC_END - self._T_PLAIN_IN_END))
             self._draw_formula_box(
                 p, formula_x, enc_y - 10, formula_w, formula_h,
-                "c = m^e mod n",
-                f"= {self._M}^{_E} mod {_N}",
+                "c = mᵉ mod n",
+                f"= {self._M}{_to_sup(_E)} mod {_N}",
                 f"= {self._C}",
                 ANIM_COLORS["accent_mauve"],
                 lines_revealed=int(3 * opacity) + 1,
@@ -1577,8 +1583,8 @@ class _RSAEncryptDecryptWidget(QWidget):
             opacity = min(1.0, (t - self._T_CIPHER_IN_END) / (self._T_DEC_END - self._T_CIPHER_IN_END))
             self._draw_formula_box(
                 p, formula_x, dec_y - 10, formula_w, formula_h,
-                "m' = c^d mod n",
-                f"= {self._C}^{_D} mod {_N}",
+                "m' = cᵈ mod n",
+                f"= {self._C}{_to_sup(_D)} mod {_N}",
                 f"= {self._M_PRIME}",
                 ANIM_COLORS["accent_green"],
                 lines_revealed=int(3 * opacity) + 1,

@@ -690,9 +690,13 @@ class _WExpansionWidget(QWidget):
             arrow_progress = min(1.0,
                 (self._tick - self._T_INPUTS_END) /
                 (self._T_ARROWS_END - self._T_INPUTS_END))
-            for bx, by, _, _, _, color in inputs:
-                self._draw_arrow_to_node(p, bx + box_w // 2, by + box_h,
-                                          node_x + 22, node_y + 22,
+            # Üst satır kutuları (idx 0,1): okun ALT kenarından başla (aşağı düğüme git)
+            # Alt satır kutuları (idx 2,3): okun ÜST kenarından başla (yukarı düğüme git)
+            # Bu sayede oklar kutuların içinden geçmez.
+            for idx, (bx, by, _, _, _, color) in enumerate(inputs):
+                src_y = (by + box_h) if idx < 2 else by
+                self._draw_arrow_to_node(p, bx + box_w // 2, src_y,
+                                          node_x + 22, node_y + 22, 22,
                                           QColor(color), arrow_progress)
 
         # Sonuç kutusu altta
@@ -756,16 +760,24 @@ class _WExpansionWidget(QWidget):
         p.drawText(QRect(x, y, 44, 44), Qt.AlignmentFlag.AlignCenter, "+")
 
     def _draw_arrow_to_node(
-        self, p: QPainter, x1: int, y1: int, x2: int, y2: int,
-        color: QColor, progress: float,
+        self, p: QPainter, x1: int, y1: int, node_cx: int, node_cy: int,
+        node_r: int, color: QColor, progress: float,
     ) -> None:
-        """x1,y1'den x2,y2'ye giden okun progress kadarını çiz."""
+        """(x1,y1)'den düğüm dairesinin KENARINA (merkezine değil) giden okun
+        progress kadarını çiz. Düğümün merkezindeki '+' işareti üstüne
+        bindirilmez."""
+        dx = node_cx - x1
+        dy = node_cy - y1
+        dist = max(1.0, (dx * dx + dy * dy) ** 0.5)
+        # Hedef nokta: düğüm dairesinin kenarı, kaynak yönüne bakan
+        end_x = x1 + dx * (dist - node_r) / dist
+        end_y = y1 + dy * (dist - node_r) / dist
         col = QColor(color)
         col.setAlphaF(progress)
         p.setPen(QPen(col, 2))
-        cx = int(x1 + (x2 - x1) * progress)
-        cy = int(y1 + (y2 - y1) * progress)
-        p.drawLine(x1, y1, cx, cy)
+        cx = int(x1 + (end_x - x1) * progress)
+        cy = int(y1 + (end_y - y1) * progress)
+        p.drawLine(int(x1), int(y1), cx, cy)
 
     def _draw_arrow_simple(
         self, p: QPainter, x1: int, y1: int, x2: int, y2: int,

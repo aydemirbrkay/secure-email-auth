@@ -7,8 +7,10 @@ _AESMatrixView: tek 4×4 matris, statik veya animasyonlu mod.
 _AESStateCompareWidget: yan yana iki _AESMatrixView (Önceki / Şimdiki)
                         + Yeniden Oynat butonu.
 
-Operasyon başına koreografi `_draw_overlay_<op>` metodlarında tanımlı
-(Task 4-7'de doldurulacak).
+Operasyon başına koreografi `_draw_overlay_<op>` metodlarında tanımlıdır:
+AddRoundKey (round_key reveal + XOR per cell), SubBytes (hücre hücre
+S-Box dönüşümü), ShiftRows (satır vurgusu + ok rozeti), MixColumns
+(sütun sütun GF(2⁸) dönüşümü).
 """
 from __future__ import annotations
 from collections.abc import Callable
@@ -224,7 +226,7 @@ class _AESMatrixView(QWidget):
         return x, y
 
     def _draw_overlay(self, p: QPainter, ox: int, oy: int) -> None:
-        """Operasyon-özgü overlay. Task 4-7'de doldurulacak."""
+        """Operasyon-özgü overlay — aktif _op'a göre koreografi seçer."""
         op = self._op
         if op == "AddRoundKey":
             self._draw_overlay_addroundkey(p, ox, oy)
@@ -235,7 +237,7 @@ class _AESMatrixView(QWidget):
         elif op == "MixColumns":
             self._draw_overlay_mixcolumns(p, ox, oy)
 
-    # Koreografi hook'ları — Task 4-7'de doldurulacak.
+    # Operasyon başına koreografi metodları.
     def _draw_overlay_addroundkey(self, p: QPainter, ox: int, oy: int) -> None:
         """AddRoundKey koreografisi — round_key sağdan kayarak gelir,
         16 hücreye sırayla ⊕ sembolü ve sonuç değeri yerleşir.

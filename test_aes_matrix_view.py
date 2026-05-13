@@ -123,6 +123,23 @@ class TestAESMatrixViewAnimation(unittest.TestCase):
         view.replay()  # hata olmamalı
         self.assertIsNone(view._op)
 
+    def test_addroundkey_overlay_draws_without_error(self):
+        """AddRoundKey overlay paint event'i hata vermeden çağrılır."""
+        from PyQt6.QtGui import QPainter, QPixmap
+        view = self._make_view()
+        view.play_animation(
+            "AddRoundKey",
+            [["00"] * 4 for _ in range(4)],
+            [["FF"] * 4 for _ in range(4)],
+            round_key=[["AA"] * 4 for _ in range(4)],
+        )
+        view._tick = 30  # XOR_PER_ROW fazı
+        # Bir QPixmap'a render et — pixel doğrulamayız ama hata fırlamamalı
+        pix = QPixmap(view.width(), view.height())
+        p = QPainter(pix)
+        view._draw_overlay(p, 24, 24)
+        p.end()
+
 
 class TestAESStateCompareWidget(unittest.TestCase):
     """_AESStateCompareWidget kapsayıcı widget."""

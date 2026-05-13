@@ -232,7 +232,68 @@ class _AESMatrixView(QWidget):
 
     # Koreografi hook'ları — Task 4-7'de doldurulacak.
     def _draw_overlay_addroundkey(self, p: QPainter, ox: int, oy: int) -> None:
-        pass
+        """AddRoundKey koreografisi — round_key sağdan kayar gelir,
+        16 hücreye sırayla ⊕ sembolü ve sonuç değeri yerleşir.
+
+        Faz haritası (toplam 60 tick):
+          0–15 : KEY_REVEAL    — round_key sağdan kayarak gelir
+          16–55: XOR_PER_ROW   — 4 satır × 10 tick, her satırda 4 hücre yanar
+          56–59: FADEOUT       — round_key fade-out
+        """
+        if self._round_key is None:
+            return
+
+        t = self._tick
+        accent = QColor(ANIM_COLORS["accent_peach"])
+
+        # round_key overlay'in başlangıç ve son x pozisyonu
+        rk_w = 4 * self._CELL_W + 3 * self._CELL_GAP
+        rk_target_x = ox + rk_w + 16   # matrisin sağında, 16px gap
+        rk_start_x = self.width() + 10
+        if t <= 15:
+            progress = t / 15.0
+            rk_x = int(rk_start_x + (rk_target_x - rk_start_x) * progress)
+            rk_alpha = progress
+        elif t < 56:
+            rk_x = rk_target_x
+            rk_alpha = 1.0
+        else:
+            # Fadeout
+            progress = (t - 55) / 5.0
+            rk_x = rk_target_x
+            rk_alpha = max(0.0, 1.0 - progress)
+
+        # round_key 4×4 grid çiz
+        for r in range(4):
+            for c in range(4):
+                cx, cy = self._cell_xy(rk_x, oy, r, c)
+                self._draw_cell(
+                    p, cx, cy, self._round_key[r][c],
+                    bg=ANIM_COLORS["accent_peach"], border=ANIM_COLORS["accent_peach"],
+                    alpha=rk_alpha * 0.35,
+                )
+
+        # Faz 2: sırayla hücreleri XOR
+        if 16 <= t < 56:
+            phase_t = t - 16  # 0..39
+            cells_active = min(16, phase_t // 2 + 1)  # her 2 tick'te 1 yeni hücre
+            for idx in range(cells_active):
+                r = idx // 4
+                c = idx % 4
+                cx, cy = self._cell_xy(ox, oy, r, c)
+                # Hücre üstüne ⊕ + sonuç (önceden _state'e yazıldı)
+                # Görsel olarak vurgu: kalın çerçeve + üzerinde ⊕ rozeti
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.setPen(QPen(accent, 2))
+                p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+                # Mini ⊕ rozeti
+                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                p.setPen(accent)
+                p.drawText(QRect(cx + self._CELL_W - 14, cy + 2, 12, 12),
+                           Qt.AlignmentFlag.AlignCenter, "⊕")
+                # _state'i bu hücre için after değerine yükselt
+                if (self._state[r][c] != self._after[r][c]):
+                    self._state[r][c] = self._after[r][c]
 
     def _draw_overlay_subbytes(self, p: QPainter, ox: int, oy: int) -> None:
         pass

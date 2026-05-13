@@ -154,6 +154,21 @@ class TestAESMatrixViewAnimation(unittest.TestCase):
         view._draw_overlay(p, 24, 24)
         p.end()
 
+    def test_shiftrows_overlay_draws_without_error(self):
+        from PyQt6.QtGui import QPainter, QPixmap
+        view = self._make_view()
+        view.play_animation(
+            "ShiftRows",
+            [[f"{r}{c}" for c in range(4)] for r in range(4)],
+            [[f"{r}{(c+r)%4}" for c in range(4)] for r in range(4)],
+        )
+        for tick in (5, 20, 40, 60, 75):
+            view._tick = tick
+            pix = QPixmap(view.width(), view.height())
+            p = QPainter(pix)
+            view._draw_overlay(p, 24, 24)
+            p.end()
+
 
 class TestAESStateCompareWidget(unittest.TestCase):
     """_AESStateCompareWidget kapsayıcı widget."""

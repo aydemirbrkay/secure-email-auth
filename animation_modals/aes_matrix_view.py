@@ -388,7 +388,60 @@ class _AESMatrixView(QWidget):
                        Qt.AlignmentFlag.AlignCenter, badge_text)
 
     def _draw_overlay_shiftrows(self, p: QPainter, ox: int, oy: int) -> None:
-        pass
+        """ShiftRows koreografisi — satır vurgusu + ok rozeti.
+
+        Faz haritası (toplam 80 tick):
+          0–9  : Satır 0 vurgulanır, "sabit" rozeti
+          10–29: Satır 1 — vurgu + "← 1 bayt" rozeti, ilk yarıda
+                 _state row 1'i _after'a kaydır
+          30–49: Satır 2 — vurgu + "← 2 bayt" rozeti
+          50–69: Satır 3 — vurgu + "← 3 bayt" rozeti
+          70–79: Tüm vurgu söner, matris final after state'inde
+        """
+        t = self._tick
+        row_phases = [
+            (0, 10, 0, 0),    # satır 0, sabit
+            (10, 30, 1, 1),   # satır 1, shift 1
+            (30, 50, 2, 2),   # satır 2, shift 2
+            (50, 70, 3, 3),   # satır 3, shift 3
+        ]
+        accent = QColor(ANIM_COLORS["accent_blue"])
+
+        for r_start, r_end, row, shift in row_phases:
+            if r_start <= t < r_end:
+                phase_t = t - r_start
+                phase_len = r_end - r_start
+
+                # Aktif satırı vurgula (4 hücre çerçevesi)
+                for c in range(4):
+                    cx, cy = self._cell_xy(ox, oy, row, c)
+                    p.setBrush(Qt.BrushStyle.NoBrush)
+                    p.setPen(QPen(accent, 2))
+                    p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+
+                # Satırın sağına ok rozeti / "sabit" etiketi
+                row_y = oy + row * (self._CELL_H + self._CELL_GAP)
+                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                p.setPen(accent)
+                lbl = "sabit" if shift == 0 else f"← {shift} bayt"
+                p.drawText(
+                    QRect(ox + 4 * (self._CELL_W + self._CELL_GAP) + 4,
+                          row_y, 90, self._CELL_H),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    lbl,
+                )
+
+                # Faz ortasına geldiğimizde _state'i bu satır için _after'a kaydır
+                # (görsel olarak "kayma tamamlandı" hissi)
+                if phase_len > 0 and phase_t >= phase_len // 2:
+                    for c in range(4):
+                        self._state[row][c] = self._after[row][c]
+                return  # her tick yalnızca bir satır aktif
+
+        # 70-79: tüm satırlar tamamlandı, _state hepsi _after
+        for r in range(4):
+            for c in range(4):
+                self._state[r][c] = self._after[r][c]
 
     def _draw_overlay_mixcolumns(self, p: QPainter, ox: int, oy: int) -> None:
         pass

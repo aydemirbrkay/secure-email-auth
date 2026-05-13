@@ -328,7 +328,64 @@ class _AESMatrixView(QWidget):
                     self._state[r][c] = self._after[r][c]
 
     def _draw_overlay_subbytes(self, p: QPainter, ox: int, oy: int) -> None:
-        pass
+        """SubBytes koreografisi — 16 hücre row-major sırayla S-Box dönüşümü.
+
+        Hücre başına 4 tick (toplam 64):
+          tick 0 : mavi çerçeve (aktif vurgu)
+          tick 1 : 'S[xy]=zz' rozeti hücrenin üstünde
+          tick 2 : hücre değeri eski → yeni (color flash turuncu→yeşil)
+          tick 3 : rozet söner, vurgu kalır
+        """
+        t = self._tick
+        cells_total = 16
+        ticks_per_cell = 4
+
+        cell_idx = min(cells_total - 1, t // ticks_per_cell)
+        phase_t = t % ticks_per_cell
+
+        accent_blue = QColor(ANIM_COLORS["accent_blue"])
+        accent_peach = QColor(ANIM_COLORS["accent_peach"])
+        accent_green = QColor(ANIM_COLORS["accent_green"])
+
+        # Tamamlanmış önceki hücreleri yeni değerle güncelle
+        for idx in range(cell_idx):
+            r = idx // 4
+            c = idx % 4
+            self._state[r][c] = self._after[r][c]
+
+        # Aktif hücre — vurgu + rozet
+        ar = cell_idx // 4
+        ac = cell_idx % 4
+        cx, cy = self._cell_xy(ox, oy, ar, ac)
+
+        # Vurgu çerçevesi (her zaman aktif hücrede)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(accent_blue, 2))
+        p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+
+        # Hücre değeri color flash:
+        # phase 0-1: turuncu (eski) → phase 2: yeşil (yeni)
+        if phase_t >= 2:
+            self._state[ar][ac] = self._after[ar][ac]
+            flash_color = accent_green
+        else:
+            flash_color = accent_peach
+        flash = QColor(flash_color)
+        flash.setAlphaF(0.30)
+        p.setBrush(QBrush(flash))
+        p.setPen(QPen(flash_color, 1))
+        p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+
+        # Rozet (phase 1-2): "S[xy]=zz"
+        if 1 <= phase_t <= 2:
+            before_val = self._before[ar][ac]
+            after_val = self._after[ar][ac]
+            p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            p.setPen(accent_blue)
+            badge_text = f"S[{before_val}]={after_val}"
+            badge_y = cy - 14 if cy > 18 else cy + self._CELL_H + 2
+            p.drawText(QRect(cx - 10, badge_y, self._CELL_W + 20, 14),
+                       Qt.AlignmentFlag.AlignCenter, badge_text)
 
     def _draw_overlay_shiftrows(self, p: QPainter, ox: int, oy: int) -> None:
         pass

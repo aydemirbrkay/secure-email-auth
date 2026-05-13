@@ -229,5 +229,35 @@ class TestRSAThesisConstants(unittest.TestCase):
         self.assertEqual((_E * _D) % _PHI, 1)
 
 
+class TestAESMatrixViewIntegration(unittest.TestCase):
+    """AES penceresi yeni matris widget'ını kullanıyor mu?"""
+
+    def test_module_imports(self):
+        from animation_modals import aes_matrix_view
+        self.assertTrue(hasattr(aes_matrix_view, "_AESMatrixView"))
+        self.assertTrue(hasattr(aes_matrix_view, "_AESStateCompareWidget"))
+
+    def test_aes_window_imports_compare_widget(self):
+        """AES animasyon modülü _AESStateCompareWidget'ı import etmeli."""
+        from animation_modals import aes_animation
+        # _AESStateCompareWidget veya aes_matrix_view referansı olmalı
+        import inspect
+        source = inspect.getsource(aes_animation)
+        self.assertIn("_AESStateCompareWidget", source)
+
+    def test_aes_matrix_view_total_ticks_are_positive(self):
+        from animation_modals.aes_matrix_view import _AESMatrixView
+        for op, ticks in _AESMatrixView._TICKS_BY_OP.items():
+            with self.subTest(op=op):
+                self.assertGreater(ticks, 0, f"{op}: tick sayısı pozitif olmalı")
+                self.assertLess(ticks, 200, f"{op}: tick sayısı makul olmalı (<200)")
+
+    def test_aes_matrix_view_supports_all_four_ops(self):
+        from animation_modals.aes_matrix_view import _AESMatrixView
+        for op in ("AddRoundKey", "SubBytes", "ShiftRows", "MixColumns"):
+            with self.subTest(op=op):
+                self.assertIn(op, _AESMatrixView._TICKS_BY_OP)
+
+
 if __name__ == "__main__":
     unittest.main()

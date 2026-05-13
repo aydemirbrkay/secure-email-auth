@@ -76,7 +76,12 @@ class _AESMatrixView(QWidget):
 
         # Boyut
         title_h = self._TITLE_H if label_title else 0
-        total_w = self._LABEL_W + 4 * self._CELL_W + 3 * self._CELL_GAP + 12
+        # AddRoundKey overlay için round_key (yarı-boyutlu 4×4 grid) sağda
+        # gösterilir: 4*28 + 3*2 = 118 + 14 gap + 12 right margin = 144 px ek alan
+        rk_extra = 4 * (self._CELL_W // 2) + 3 * 2 + 14 + 12  # 144
+        total_w = (
+            self._LABEL_W + 4 * self._CELL_W + 3 * self._CELL_GAP + 12 + rk_extra
+        )
         total_h = (
             title_h + self._LABEL_H + 4 * self._CELL_H + 3 * self._CELL_GAP + 12
         )
@@ -232,13 +237,16 @@ class _AESMatrixView(QWidget):
 
     # Koreografi hook'ları — Task 4-7'de doldurulacak.
     def _draw_overlay_addroundkey(self, p: QPainter, ox: int, oy: int) -> None:
-        """AddRoundKey koreografisi — round_key sağdan kayar gelir,
+        """AddRoundKey koreografisi — round_key sağdan kayarak gelir,
         16 hücreye sırayla ⊕ sembolü ve sonuç değeri yerleşir.
 
         Faz haritası (toplam 60 tick):
           0–15 : KEY_REVEAL    — round_key sağdan kayarak gelir
           16–55: XOR_PER_ROW   — 4 satır × 10 tick, her satırda 4 hücre yanar
           56–59: FADEOUT       — round_key fade-out
+
+        round_key, yan widget'a sığması için yarı boyutlu hücrelerle
+        gösterilir (28×22 yerine main matrix'in 56×44'üne).
         """
         if self._round_key is None:
             return
@@ -246,9 +254,16 @@ class _AESMatrixView(QWidget):
         t = self._tick
         accent = QColor(ANIM_COLORS["accent_peach"])
 
+        # round_key hücre boyutu — main matrix'in YARISI
+        rk_cw = self._CELL_W // 2     # 28
+        rk_ch = self._CELL_H // 2     # 22
+        rk_gap = 2
+        rk_w = 4 * rk_cw + 3 * rk_gap  # 118
+
         # round_key overlay'in başlangıç ve son x pozisyonu
-        rk_w = 4 * self._CELL_W + 3 * self._CELL_GAP
-        rk_target_x = ox + rk_w + 16   # matrisin sağında, 16px gap
+        # Hedef: main matrix'in sağında, 14 px boşlukla
+        matrix_right = ox + 4 * self._CELL_W + 3 * self._CELL_GAP
+        rk_target_x = matrix_right + 14
         rk_start_x = self.width() + 10
         if t <= 15:
             progress = t / 15.0
@@ -263,17 +278,35 @@ class _AESMatrixView(QWidget):
             rk_x = rk_target_x
             rk_alpha = max(0.0, 1.0 - progress)
 
-        # round_key 4×4 grid çiz
+        # "rk" başlığı
+        title_col = QColor(ANIM_COLORS["accent_peach"])
+        title_col.setAlphaF(rk_alpha)
+        p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+        p.setPen(title_col)
+        p.drawText(QRect(rk_x, oy - 14, rk_w, 12),
+                   Qt.AlignmentFlag.AlignCenter, "round_key")
+
+        # round_key 4×4 grid çiz (yarı boyutta)
         for r in range(4):
             for c in range(4):
-                cx, cy = self._cell_xy(rk_x, oy, r, c)
-                self._draw_cell(
-                    p, cx, cy, self._round_key[r][c],
-                    bg=ANIM_COLORS["accent_peach"], border=ANIM_COLORS["accent_peach"],
-                    alpha=rk_alpha * 0.35,
-                )
+                cx = rk_x + c * (rk_cw + rk_gap)
+                cy = oy + r * (rk_ch + rk_gap)
+                # Yarı-boyutlu hücre — _draw_cell kullanma, inline çiz
+                bg_color = QColor(ANIM_COLORS["accent_peach"])
+                bg_color.setAlphaF(rk_alpha * 0.35)
+                border_color = QColor(ANIM_COLORS["accent_peach"])
+                border_color.setAlphaF(rk_alpha)
+                p.setBrush(QBrush(bg_color))
+                p.setPen(QPen(border_color, 1))
+                p.drawRoundedRect(cx, cy, rk_cw, rk_ch, 3, 3)
+                text_col = QColor(ANIM_COLORS["text_primary"])
+                text_col.setAlphaF(rk_alpha)
+                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+                p.setPen(text_col)
+                p.drawText(QRect(cx, cy, rk_cw, rk_ch),
+                           Qt.AlignmentFlag.AlignCenter, self._round_key[r][c])
 
-        # Faz 2: sırayla hücreleri XOR
+        # Faz 2: sırayla hücreleri XOR (main matrix'te)
         if 16 <= t < 56:
             phase_t = t - 16  # 0..39
             cells_active = min(16, phase_t // 2 + 1)  # her 2 tick'te 1 yeni hücre
@@ -281,8 +314,7 @@ class _AESMatrixView(QWidget):
                 r = idx // 4
                 c = idx % 4
                 cx, cy = self._cell_xy(ox, oy, r, c)
-                # Hücre üstüne ⊕ + sonuç (önceden _state'e yazıldı)
-                # Görsel olarak vurgu: kalın çerçeve + üzerinde ⊕ rozeti
+                # Vurgu çerçevesi
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.setPen(QPen(accent, 2))
                 p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)

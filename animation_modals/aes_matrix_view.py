@@ -444,7 +444,71 @@ class _AESMatrixView(QWidget):
                 self._state[r][c] = self._after[r][c]
 
     def _draw_overlay_mixcolumns(self, p: QPainter, ox: int, oy: int) -> None:
-        pass
+        """MixColumns koreografisi — 4 sütun sırayla GF(2⁸) dönüşümü.
+
+        Faz haritası (toplam 80 tick), sütun başına 20 tick:
+          tick 0–4   : Sütun vurgusu (4 hücre çerçevesi sütun rengi)
+          tick 5–14  : Sütun yanında formül balonu, 4 hücre tek tek güncellenir
+          tick 15–19 : Balon söner
+        """
+        t = self._tick
+        ticks_per_col = 20
+        col_idx = min(3, t // ticks_per_col)
+        phase_t = t % ticks_per_col
+
+        col_colors = [
+            ANIM_COLORS["accent_blue"],
+            ANIM_COLORS["accent_mauve"],
+            ANIM_COLORS["accent_yellow"],
+            ANIM_COLORS["accent_peach"],
+        ]
+        col_color = QColor(col_colors[col_idx])
+
+        # Tamamlanmış önceki sütunları kalıcı renkle çiz
+        for completed_c in range(col_idx):
+            cc = QColor(col_colors[completed_c])
+            for r in range(4):
+                cx, cy = self._cell_xy(ox, oy, r, completed_c)
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.setPen(QPen(cc, 2))
+                p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+                self._state[r][completed_c] = self._after[r][completed_c]
+
+        # Aktif sütun vurgusu
+        for r in range(4):
+            cx, cy = self._cell_xy(ox, oy, r, col_idx)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(col_color, 2))
+            p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+
+        # Faz 2: 4 hücreyi sırayla yenisiyle değiştir
+        if 5 <= phase_t < 15:
+            rows_done = min(4, (phase_t - 5) // 2 + 1)
+            for r in range(rows_done):
+                self._state[r][col_idx] = self._after[r][col_idx]
+                cx, cy = self._cell_xy(ox, oy, r, col_idx)
+                # Color flash — yeşil
+                flash = QColor(ANIM_COLORS["accent_green"])
+                flash.setAlphaF(0.30)
+                p.setBrush(QBrush(flash))
+                p.setPen(QPen(QColor(ANIM_COLORS["accent_green"]), 1))
+                p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+
+        # Formül balonu (sütunun sağında)
+        if 4 <= phase_t < 18:
+            balloon_x = ox + 4 * (self._CELL_W + self._CELL_GAP) + 4
+            balloon_y = oy + 4
+            p.setFont(QFont("Courier New", 8))
+            p.setPen(col_color)
+            p.drawText(QRect(balloon_x, balloon_y, 120, 14),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       f"Sütun {col_idx}: GF(2⁸) ×")
+            p.drawText(QRect(balloon_x, balloon_y + 16, 120, 14),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       "2·a₀ ⊕ 3·a₁ ⊕")
+            p.drawText(QRect(balloon_x, balloon_y + 32, 120, 14),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       "a₂ ⊕ a₃  (vb.)")
 
 
 class _AESStateCompareWidget(QWidget):

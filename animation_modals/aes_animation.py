@@ -1381,6 +1381,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
             on_close=on_close,
         )
 
+        # Intro ekranı kompakt — sadece akış şeması + Başlat butonu sığar.
+        # _switch_to_rounds ile round görünümüne geçince ekran büyür.
+        if on_close is None:
+            self.resize(820, 620)
+
     # ------------------------------------------------------------------
     # İçerik kurulumu
     # ------------------------------------------------------------------
@@ -1476,15 +1481,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         mat_lay.setContentsMargins(8, 6, 8, 6)
         mat_lay.setSpacing(4)
 
-        # İşlem-bağlam alt başlığı — _render_step her adımda günceller
-        self._matrix_context = QLabel("")
-        self._matrix_context.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-        self._matrix_context.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
-        self._matrix_context.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._matrix_context.setWordWrap(True)
-        mat_lay.addWidget(self._matrix_context)
-
-        # Yeni: yan yana iki QPainter matris + Yeniden Oynat butonu
+        # Yan yana iki QPainter matris + Yeniden Oynat butonu.
+        # Operasyon adı zaten _op_title (üstte) ve _arrow_label
+        # (matrislerin arasında "→ OperationName →") tarafından
+        # gösterildiği için ayrı bir matrix_context etiketi yok.
         self._matrix_pair = _AESStateCompareWidget(parent=self)
         mat_lay.addWidget(self._matrix_pair)
 
@@ -1632,7 +1632,20 @@ class AESAnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _switch_to_rounds(self) -> None:
-        """Intro'dan round görünümüne geç."""
+        """Intro'dan round görünümüne geç — pencereyi tam boyuta büyüt."""
+        # Pencere büyütülür çünkü round görünümünde yan yana iki matris +
+        # sağ panel + round bar sığması gerekir.
+        if self._on_close is None:
+            from PyQt6.QtWidgets import QApplication
+            screen = QApplication.primaryScreen()
+            if screen:
+                g = screen.availableGeometry()
+                self.resize(int(g.width() * 0.82), int(g.height() * 0.85))
+                # Pencereyi tekrar ekranın merkezine kaydır
+                self.move(
+                    (g.width() - self.width()) // 2,
+                    (g.height() - self.height()) // 2,
+                )
         self._stack.setCurrentWidget(self._round_page)
         self._render_step(0)
         self._progress.setValue(1)
@@ -1674,15 +1687,6 @@ class AESAnimationWindow(CryptoAnimationWindow):
     # Adım render
     # ------------------------------------------------------------------
 
-    # Operasyon başına state matrix bağlam metni — kullanıcı şu an hangi
-    # satır/sütun üzerinde işlem yapıldığını anında görür.
-    _MATRIX_CONTEXT_BY_OP: dict[str, str] = {
-        "AddRoundKey": "Tüm 16 byte → round_key ile XOR'lanır",
-        "SubBytes":    "Her byte → S-Box[byte] (hücre-hücre dönüşüm)",
-        "ShiftRows":   "r0 sabit · r1 ←1 bayt · r2 ←2 bayt · r3 ←3 bayt",
-        "MixColumns":  "Her sütun → GF(2⁸) çarpımı (4 sütun bağımsız)",
-    }
-
     def _render_step(self, step_idx: int) -> None:
         if self._stack.currentWidget() != self._round_page:
             self._stack.setCurrentWidget(self._round_page)
@@ -1696,12 +1700,6 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._desc_lbl.setText(step["description"])
 
         op = step["operation"]
-
-        # State matrix bağlam başlığını güncelle — hangi satır/sütun aktif
-        self._matrix_context.setText(
-            f"{op}: {self._MATRIX_CONTEXT_BY_OP.get(op, '')}"
-        )
-        self._matrix_context.setStyleSheet(f"color: {step['color']};")
 
         # Bir önceki adımın matrisi (before state)
         before = (

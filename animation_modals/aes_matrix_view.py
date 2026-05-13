@@ -205,12 +205,26 @@ class _AESMatrixView(QWidget):
         *, bg: str | None = None, border: str | None = None,
         alpha: float = 1.0,
     ) -> None:
-        bg_color = QColor(bg or ANIM_COLORS["bg_card"])
-        bg_color.setAlphaF(alpha)
-        border_color = QColor(border or ANIM_COLORS["border"])
-        border_color.setAlphaF(alpha)
+        # Varsayılan: hücre arka planı bg_input + hafif mavi tint
+        # ve 2 px accent_blue çerçeve — bg_card/border gri ikilisinden
+        # çok daha belirgin (kullanıcının "matrisi belirgin renge sok"
+        # geri bildirimi sonrası).
+        if bg is None:
+            bg_color = QColor(ANIM_COLORS["accent_blue"])
+            bg_color.setAlphaF(alpha * 0.18)
+        else:
+            bg_color = QColor(bg)
+            bg_color.setAlphaF(alpha)
+        if border is None:
+            border_color = QColor(ANIM_COLORS["accent_blue"])
+            border_color.setAlphaF(alpha)
+            border_w = 2
+        else:
+            border_color = QColor(border)
+            border_color.setAlphaF(alpha)
+            border_w = 1
         p.setBrush(QBrush(bg_color))
-        p.setPen(QPen(border_color, 1))
+        p.setPen(QPen(border_color, border_w))
         p.drawRoundedRect(x, y, self._CELL_W, self._CELL_H, 4, 4)
         text_col = QColor(ANIM_COLORS["text_primary"])
         text_col.setAlphaF(alpha)

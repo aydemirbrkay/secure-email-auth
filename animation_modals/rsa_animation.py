@@ -713,8 +713,10 @@ class _GCDWidget(QWidget):
         super().__init__(parent)
         self.setMinimumHeight(220)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # Öklid adımları: gcd(17, 3120)
-        a, b = _E, _PHI
+        # Öklid adımları: gcd(3120, 17) — büyükten küçüğe başla
+        # (küçük olan zaten büyük olanda aranmaz; ilk anlamlı bölme
+        # 3120 ÷ 17 olur).
+        a, b = max(_E, _PHI), min(_E, _PHI)
         steps = []
         while b != 0:
             steps.append((a, b, a % b))
@@ -802,26 +804,16 @@ class _GCDWidget(QWidget):
 
 class _EEAWidget(QWidget):
     """
-    Genişletilmiş Öklid Algoritması tablosu + canlı hesaplama şeridi.
+    Genişletilmiş Öklid Algoritması — STATİK matematik gösterimi.
 
-    Faz makinesi (her satır için):
-      STRIP_SHOW (1120 ms) — sırada yerleştirilecek satırın altında bir
-        hesaplama şeridi belirir; q, r, s, t formülleri sayısal değerleriyle
-        görünür. Önceki satırın r₀, r₁, s₀, s₁, t₀, t₁ hücreleri vurgulanır.
-      STRIP_FADE (400 ms) — şerit söner, satır tabloya yerleşir.
-      Sonraki satıra geç.
+    Adım 4 (Aday e seçimi, _GCDWidget) gibi animasyonsuz; satır satır
+    ham matematik akışı:
 
-    Tüm satırlar yerleşince GCD=1 vurgusu, "(durma satırı)", d hesabı,
-    doğrulama satırı sırayla görünür (mevcut hâliyle).
+      r₀ = q × r₁ + r        ⇒  s = s₀ − q·s₁,   t = t₀ − q·t₁
+
+    Her satır bölüm denklemiyle birlikte güncellenmiş s ve t katsayılarını
+    da gösterir. GCD = 1 satırından t alınır, d = t mod φ olarak yazılır.
     """
-
-    _COLS = ["i", "bölüm", "kalan", "s", "t"]
-    _COL_WIDTHS = [32, 60, 76, 76, 76]
-
-    # Faz tick aralığı (ms) — base interval, fazlar bunun katlarıyla biter
-    _TICK_MS = 80
-    _STRIP_SHOW_TICKS = 14   # 14 × 80 = 1120 ms
-    _STRIP_FADE_TICKS = 5    # 5 × 80 = 400 ms
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -829,275 +821,125 @@ class _EEAWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._rows = _eea_steps(_PHI, _E)
 
-        # Faz makinesi durumu
-        self._placed_count = 0   # tabloya yerleşmiş satır sayısı
-        self._phase = "DONE"     # "STRIP_SHOW" | "STRIP_FADE" | "BETWEEN" | "DONE"
-        self._phase_tick = 0
-        self._final_reveal = 0   # 0=hiç, 1=d kutusu, 2=doğrulama satırı
-
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._final_timer: QTimer | None = None
-
-    def showEvent(self, event) -> None:  # type: ignore[override]
-        super().showEvent(event)
-        # Sıfırla ve baştan başlat
-        # İlk iki satır seed (i=0, i=1) — bunlar şeritle gösterilmez
-        # Direkt yerleşir; faz makinesi i=2'den başlar.
-        self._placed_count = 2
-        self._phase = "STRIP_SHOW"
-        self._phase_tick = 0
-        self._final_reveal = 0
-        if self._final_timer is not None:
-            self._final_timer.stop()
-        self.update()
-        self._timer.start(self._TICK_MS)
-
-    def hideEvent(self, event) -> None:  # type: ignore[override]
-        self._timer.stop()
-        if self._final_timer is not None:
-            self._final_timer.stop()
-        super().hideEvent(event)
-
-    def _tick(self) -> None:
-        self._phase_tick += 1
-
-        if self._phase == "STRIP_SHOW" and self._phase_tick >= self._STRIP_SHOW_TICKS:
-            self._phase = "STRIP_FADE"
-            self._phase_tick = 0
-        elif self._phase == "STRIP_FADE" and self._phase_tick >= self._STRIP_FADE_TICKS:
-            # Şerit söndü — satır artık yerleşmiş kabul edilir
-            self._placed_count += 1
-            self._phase_tick = 0
-            if self._placed_count >= len(self._rows):
-                self._phase = "DONE"
-                # Final ortaya çıkma: d kutusu, sonra doğrulama
-                self._final_reveal = 0
-                self._final_timer = QTimer(self)
-                self._final_timer.timeout.connect(self._final_tick)
-                self._final_timer.start(420)
-                self._timer.stop()
-                self.update()
-                return
-            self._phase = "STRIP_SHOW"
-
-        self.update()
-
-    def _final_tick(self) -> None:
-        self._final_reveal += 1
-        if self._final_reveal >= 2:
-            self._final_timer.stop()
-        self.update()
-
-    # --- Çizim ---
-
     def paintEvent(self, event) -> None:  # type: ignore[override]
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
+        cx = W // 2
 
         # Başlık
-        p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-        p.drawText(QRect(0, 4, W, 22), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
                    "Genişletilmiş Öklid Algoritması")
+
+        # Alt başlık — amaç + φ, e
         p.setFont(QFont("Georgia", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 26, W, 18), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, 34, W, 18), Qt.AlignmentFlag.AlignCenter,
                    f"Amaç: e·d ≡ 1 (mod φ)   ·   φ = {_PHI},  e = {_E}")
 
-        # Tablo merkezleme
-        total_col_w = sum(self._COL_WIDTHS)
-        annot_w = 130
-        ox = (W - total_col_w - annot_w) // 2
-        header_y = 50
-        row_h = 20
+        # s, t katsayı kuralı
+        p.setFont(QFont("Georgia", 8))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 52, W, 14), Qt.AlignmentFlag.AlignCenter,
+                   "(Her adımda  s = s₀ − q·s₁,   t = t₀ − q·t₁  güncellenir.)")
 
+        # Satırlar — rows[2..]: gerçek bölme adımları
         gcd_row_idx = len(self._rows) - 2
+        row_y = 78
+        line_h = 24
+        eq_col_w = 200    # bölüm denklemi sütunu
+        arrow_w = 26
+        st_col_w = 180    # s, t katsayıları sütunu
+        annot_x = cx + arrow_w // 2 + st_col_w // 2 + 12  # GCD/durma etiketi konumu
+        annot_w = 130
 
-        # Başlık satırı
-        p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
-        p.setPen(QColor(ANIM_COLORS["accent_blue"]))
-        x = ox
-        for col, w in zip(self._COLS, self._COL_WIDTHS):
-            p.drawText(QRect(x, header_y, w, row_h),
-                       Qt.AlignmentFlag.AlignCenter, col)
-            x += w
-        p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
-        p.drawLine(ox, header_y + row_h, ox + total_col_w, header_y + row_h)
+        for ri in range(2, len(self._rows)):
+            i, q, r, s, t = self._rows[ri]
+            _, _, r1, _, _ = self._rows[ri - 1]
+            _, _, r0, _, _ = self._rows[ri - 2]
 
-        # Yerleşmiş satırlar
-        # Aktif olan satır indeksi (şerit gösterilen) self._placed_count
-        active_row_idx = (
-            self._placed_count
-            if self._phase in ("STRIP_SHOW", "STRIP_FADE")
-            else -1
-        )
-        prev_row_idx = active_row_idx - 1 if active_row_idx > 1 else -1
+            is_gcd = (ri == gcd_row_idx)
+            is_term = (r == 0)
 
-        # Yerleşmiş satırları çiz (önceki satırın hücreleri gerekirse vurgulanır)
-        for ri in range(self._placed_count):
-            self._draw_row(
-                p, ri, ox, header_y, row_h, total_col_w, annot_w, gcd_row_idx,
-                highlight_operands=(ri == prev_row_idx and self._phase == "STRIP_SHOW"),
-            )
+            if is_gcd:
+                color = ANIM_COLORS["accent_green"]
+            elif is_term:
+                color = ANIM_COLORS["text_muted"]
+            else:
+                color = ANIM_COLORS["text_secondary"]
 
-        # Aktif şerit (varsa)
-        if self._phase in ("STRIP_SHOW", "STRIP_FADE"):
-            strip_y = header_y + (self._placed_count + 1) * row_h + 8
-            opacity = 1.0
-            if self._phase == "STRIP_FADE":
-                opacity = 1.0 - (self._phase_tick / self._STRIP_FADE_TICKS)
-            self._draw_strip(
-                p, ox, strip_y, total_col_w + annot_w, active_row_idx, opacity,
-            )
+            y = row_y + (ri - 2) * line_h
 
-        # d hesaplama bloğu — tüm satırlar yerleşince
-        last_t = self._rows[gcd_row_idx][4]
-        if self._phase == "DONE" and self._final_reveal >= 1:
-            calc_y = header_y + (len(self._rows) + 1) * row_h + 12
-            p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
-            p.setPen(QColor(ANIM_COLORS["accent_green"]))
+            # Sol: bölüm denklemi
+            p.setFont(QFont("Courier New", 11))
+            p.setPen(QColor(color))
+            text_left = f"{r0}  =  {q} × {r1}  +  {r}"
             p.drawText(
-                QRect(0, calc_y, W, 22),
-                Qt.AlignmentFlag.AlignCenter,
-                f"d  =  t  mod  φ  =  {last_t}  mod  {_PHI}  =  {_D}",
+                QRect(cx - eq_col_w - arrow_w // 2, y, eq_col_w, line_h),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                text_left,
             )
-            if last_t < 0:
-                p.setFont(QFont("Georgia", 8))
+
+            # Orta: ⇒
+            p.drawText(
+                QRect(cx - arrow_w // 2, y, arrow_w, line_h),
+                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
+                "⇒",
+            )
+
+            # Sağ: s, t katsayıları
+            text_right = f"s={s},  t={t}"
+            p.drawText(
+                QRect(cx + arrow_w // 2, y, st_col_w, line_h),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                text_right,
+            )
+
+            # Etiket — GCD=1 veya durma
+            if is_gcd:
+                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                p.drawText(
+                    QRect(annot_x, y, annot_w, line_h),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    "← GCD = 1, t'yi al",
+                )
+            elif is_term:
+                p.setFont(QFont("Georgia", 9))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
                 p.drawText(
-                    QRect(0, calc_y + 22, W, 16),
-                    Qt.AlignmentFlag.AlignCenter,
-                    "(negatif → +φ ekle)",
+                    QRect(annot_x, y, annot_w, line_h),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    "(durma satırı)",
                 )
 
-        # Doğrulama
-        if self._phase == "DONE" and self._final_reveal >= 2:
-            verify_y = header_y + (len(self._rows) + 1) * row_h + 50
-            p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
-            p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-            check = (_E * _D) % _PHI
-            p.drawText(
-                QRect(0, verify_y, W, 20),
-                Qt.AlignmentFlag.AlignCenter,
-                f"Doğrulama:  e × d  mod  φ  =  {_E} × {_D}  mod  {_PHI}  =  {check}   ✓",
-            )
-        p.end()
+        # d hesaplama
+        n_rows = len(self._rows) - 2
+        last_t = self._rows[gcd_row_idx][4]
+        calc_y = row_y + n_rows * line_h + 12
 
-    def _draw_row(
-        self, p: QPainter, ri: int, ox: int, header_y: int, row_h: int,
-        total_col_w: int, annot_w: int, gcd_row_idx: int,
-        highlight_operands: bool,
-    ) -> None:
-        i, q, r, s, t = self._rows[ri]
-        y = header_y + (ri + 1) * row_h + 2
-
-        is_gcd_row = (ri == gcd_row_idx) and self._placed_count > gcd_row_idx
-        is_terminator = ri == len(self._rows) - 1 and self._placed_count == len(self._rows)
-
-        # Vurgulama: GCD=1 satırı yeşil arka plan
-        if is_gcd_row:
-            fill = QColor(ANIM_COLORS["accent_green"])
-            fill.setAlpha(50)
-            p.setBrush(QBrush(fill))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawRect(ox, y - 1, total_col_w, row_h)
-
-        # "Önceki satır operand vurgusu" — şerit aktifken bu satır vurgulanırsa
-        if highlight_operands:
-            fill = QColor(ANIM_COLORS["accent_blue"])
-            fill.setAlpha(35)
-            p.setBrush(QBrush(fill))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawRect(ox, y - 1, total_col_w, row_h)
-
-        # Hücre değerleri
-        x = ox
-        values = [str(i), str(q) if ri >= 2 else "—", str(r), str(s), str(t)]
-        if is_gcd_row:
-            colors = [
-                ANIM_COLORS["text_primary"],
-                ANIM_COLORS["text_primary"],
-                ANIM_COLORS["accent_yellow"],
-                ANIM_COLORS["text_primary"],
-                ANIM_COLORS["accent_green"],
-            ]
-            font_weight = QFont.Weight.Bold
-        elif is_terminator:
-            muted = ANIM_COLORS["text_muted"]
-            colors = [muted, muted, muted, muted, muted]
-            font_weight = QFont.Weight.Normal
-        else:
-            colors = [
-                ANIM_COLORS["text_muted"],
-                ANIM_COLORS["text_secondary"],
-                ANIM_COLORS["text_primary"],
-                ANIM_COLORS["text_secondary"],
-                ANIM_COLORS["accent_peach"],
-            ]
-            font_weight = QFont.Weight.Normal
-
-        font = QFont("Courier New", 10, font_weight)
-        p.setFont(font)
-        for val, w, col in zip(values, self._COL_WIDTHS, colors):
-            p.setPen(QColor(col))
-            p.drawText(QRect(x, y, w, row_h - 2),
-                       Qt.AlignmentFlag.AlignCenter, val)
-            x += w
-
-        # Sağ taraf açıklamalar
-        annot_x = ox + total_col_w + 8
-        if is_gcd_row:
-            p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-            p.setPen(QColor(ANIM_COLORS["accent_green"]))
-            p.drawText(QRect(annot_x, y, annot_w, row_h - 2),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       "← GCD = 1, t'yi al")
-        elif is_terminator:
-            p.setFont(QFont("Georgia", 9))
+        p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        p.drawText(QRect(0, calc_y, W, 24), Qt.AlignmentFlag.AlignCenter,
+                   f"d  =  t  mod  φ  =  {last_t}  mod  {_PHI}  =  {_D}")
+        if last_t < 0:
+            p.setFont(QFont("Georgia", 8))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(annot_x, y, annot_w, row_h - 2),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       "(durma satırı)")
+            p.drawText(QRect(0, calc_y + 22, W, 14),
+                       Qt.AlignmentFlag.AlignCenter,
+                       "(negatif → +φ ekle)")
 
-    def _draw_strip(
-        self, p: QPainter, ox: int, y: int, w: int,
-        active_row_idx: int, opacity: float,
-    ) -> None:
-        """Aktif satır için q, r, s, t formüllerini sayısal değerleriyle çiz."""
-        if active_row_idx < 2 or active_row_idx >= len(self._rows):
-            return
-        # Önceki satır indeks: active - 1 → r₁ ve s₁,t₁ (current); active - 2 → r₀, s₀, t₀
-        i, q, r, s, t = self._rows[active_row_idx]
-        _, _, r1, s1, t1 = self._rows[active_row_idx - 1]
-        _, _, r0, s0, t0 = self._rows[active_row_idx - 2]
+        # Doğrulama
+        verify_y = calc_y + 44
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        check = (_E * _D) % _PHI
+        p.drawText(QRect(0, verify_y, W, 22), Qt.AlignmentFlag.AlignCenter,
+                   f"Doğrulama:  e × d  mod  φ  =  {_E} × {_D}  mod  {_PHI}  =  {check}   ✓")
 
-        # Şerit kutusu
-        strip_h = 90
-        bg = QColor(ANIM_COLORS["bg_input"])
-        bg.setAlphaF(opacity * 0.9)
-        border = QColor(ANIM_COLORS["accent_blue"])
-        border.setAlphaF(opacity)
-        p.setBrush(QBrush(bg))
-        p.setPen(QPen(border, 1))
-        p.drawRoundedRect(ox, y, w, strip_h, 6, 6)
-
-        text_col = QColor(ANIM_COLORS["text_primary"])
-        text_col.setAlphaF(opacity)
-
-        p.setFont(QFont("Courier New", 10))
-        p.setPen(text_col)
-        lines = [
-            f"q = ⌊{r0} / {r1}⌋ = {q}",
-            f"r = {r0} − {q}·{r1} = {r}",
-            f"s = {s0} − {q}·{s1} = {s}",
-            f"t = {t0} − {q}·{t1} = {t}",
-        ]
-        for li, line in enumerate(lines):
-            p.drawText(QRect(ox + 12, y + 6 + li * 20, w - 24, 18),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       line)
+        p.end()
 
 
 # ---------------------------------------------------------------------------
@@ -1254,32 +1096,39 @@ class _DERByteFlowWidget(QWidget):
                        f"= Base64 ({len(_B64_DEMO)} karakter): {_B64_DEMO}")
             y += 18
 
-            # — Bit-seviyesi açıklama (ilk 3-baytlık grup için) —
-            if len(_DER_SEQ) >= 3:
-                first3 = _DER_SEQ[:3]
-                first4 = _B64_DEMO[:4]
-                bits = "".join(f"{b:08b}" for b in first3)         # 24 bit
-                groups = [bits[i:i+6] for i in range(0, 24, 6)]    # 4 × 6-bit
+            # — Bit-seviyesi açıklama — DEMO yerine ALICE'in GERÇEK
+            # anahtarının ilk 4 b64 karakteri ile gösterilir. Kullanıcı
+            # "alice'in açık anahtarının başını" net görür.
+            alice_first4 = self._alice_b64[:4]   # ör. "MIIB"
+            try:
+                alice_first3 = base64.b64decode(alice_first4 + "==")[:3]
+            except Exception:
+                alice_first3 = b""
+
+            if len(alice_first3) == 3:
+                bits = "".join(f"{b:08b}" for b in alice_first3)     # 24 bit
+                groups = [bits[i:i+6] for i in range(0, 24, 6)]      # 4 × 6-bit
                 indices = [int(g, 2) for g in groups]
 
                 p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
                 p.drawText(
                     QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
-                    "Nasıl: 24 bit → 6-bit gruplar → A-Z a-z 0-9 + / alfabesinde indeks",
+                    "Nasıl: 24 bit → 6-bit gruplar → A-Z a-z 0-9 + / alfabesinde indeks "
+                    "(Alice'in gerçek anahtarının ilk 4 b64 karakteri):",
                 )
                 y += 14
                 p.setFont(QFont("Courier New", 8))
                 p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-                hex_str = " ".join(f"{b:02X}" for b in first3)
-                bin_str = " ".join(f"{b:08b}" for b in first3)
+                hex_str = " ".join(f"{b:02X}" for b in alice_first3)
+                bin_str = " ".join(f"{b:08b}" for b in alice_first3)
                 p.drawText(
                     QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
                     f"{hex_str}  =  {bin_str}",
                 )
                 y += 12
                 mapping = "   ".join(
-                    f"{g}={idx}={ch}" for g, idx, ch in zip(groups, indices, first4)
+                    f"{g}={idx}={ch}" for g, idx, ch in zip(groups, indices, alice_first4)
                 )
                 p.setPen(QColor(ANIM_COLORS["accent_green"]))
                 p.drawText(
@@ -1637,15 +1486,21 @@ class _RSAEncryptDecryptWidget(QWidget):
                     ANIM_COLORS["accent_mauve"],
                     width=card_w, height=card_h,
                 )
-        # m' kutusu
+        # m' kutusu — başarı etiketinde m' = 65 = m ✓ 13 karakterlik metin
+        # 100 px sığmıyor; bu yüzden son fazda kutu genişletilir ve sola
+        # kaydırılır ki c kutusuyla çakışmasın, içerik (özellikle "m' "
+        # apostrofu) kırpılmadan görünsün.
         if t >= self._T_DEC_END:
             opacity = min(1.0, (t - self._T_DEC_END) / (self._T_PLAIN_OUT_END - self._T_DEC_END))
-            label = f"m' = {self._M_PRIME}"
             if t >= self._T_PLAIN_OUT_END:
                 label = f"m' = {self._M_PRIME} = m ✓"
+                final_box_w = 170
+            else:
+                label = f"m' = {self._M_PRIME}"
+                final_box_w = box_w
             color = ANIM_COLORS["accent_green"] if t >= self._T_PLAIN_OUT_END else ANIM_COLORS["accent_blue"]
             self._draw_box(
-                p, W - margin - box_w, dec_y, box_w, box_h,
+                p, W - margin - final_box_w, dec_y, final_box_w, box_h,
                 label, color, opacity=opacity,
                 pulse=(t >= self._T_PLAIN_OUT_END and t < self._T_MATCH_END),
             )

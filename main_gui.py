@@ -26,7 +26,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-
     QSplitter,
     QVBoxLayout,
     QWidget,

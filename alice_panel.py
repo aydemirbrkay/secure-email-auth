@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 
 from crypto_core import StepResult
 from theme import COLORS, STEP_COLORS_ALICE
-from utils import _build_step_content, _make_step_box, _svg_pixmap
+from utils import _build_step_content, _make_step_box
 from bob_panel import BobDecryptDiagramWidget
 
 
@@ -50,11 +50,8 @@ class AlicePanel(QWidget):
         self._title_widget = QWidget()
         _th = QHBoxLayout(self._title_widget)
         _th.setContentsMargins(0, 0, 0, 0)
-        _th.setSpacing(8)
+        _th.setSpacing(0)
         _th.addStretch()
-        _icon_lbl = QLabel()
-        _icon_lbl.setPixmap(_svg_pixmap("alice_sender.svg", COLORS["accent_mauve"], 26))
-        _th.addWidget(_icon_lbl)
         self._title = QLabel("Gönderici — Alice")
         self._title.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
         self._title.setStyleSheet(f"color: {COLORS['accent_mauve']};")

@@ -42,7 +42,8 @@ _SPEED_MAP: dict[str, int] = {"Yavaş": 2000, "Normal": 1500, "Hızlı": 800}
 _BTN_STYLE = (
     f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
     f"color: #FFFFFF; border: none; "
-    f"border-radius: 5px; padding: 5px 14px; font-weight: bold; font-size: 11px; }}"
+    f"border-radius: 6px; padding: 8px 22px; font-weight: bold; font-size: 13px; "
+    f"min-height: 34px; min-width: 96px; }}"
     f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
     f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
     f"color: {ANIM_COLORS['text_muted']}; }}"
@@ -51,7 +52,8 @@ _BTN_STYLE = (
 _CLOSE_STYLE = (
     f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
     f"color: {ANIM_COLORS['text_secondary']}; border: 1px solid {ANIM_COLORS['border']}; "
-    f"border-radius: 5px; padding: 5px 12px; font-size: 11px; }}"
+    f"border-radius: 6px; padding: 8px 18px; font-size: 13px; "
+    f"min-height: 34px; }}"
     f"QPushButton:hover {{ background: {ANIM_COLORS['accent_peach']}; "
     f"color: #FFFFFF; }}"
 )

@@ -308,7 +308,7 @@ class BobDecryptDiagramWidget(QWidget):
 
 from crypto_core import EncryptedPacket, StepResult
 from theme import COLORS, STEP_COLORS_BOB
-from utils import _build_step_content, _make_step_box, _svg_pixmap
+from utils import _build_step_content, _make_step_box
 
 
 class BobPanel(QWidget):
@@ -337,11 +337,8 @@ class BobPanel(QWidget):
         self._title_widget = QWidget()
         _th = QHBoxLayout(self._title_widget)
         _th.setContentsMargins(0, 0, 0, 0)
-        _th.setSpacing(8)
+        _th.setSpacing(0)
         _th.addStretch()
-        _icon_lbl = QLabel()
-        _icon_lbl.setPixmap(_svg_pixmap("shield_check.svg", COLORS["accent_green"], 24))
-        _th.addWidget(_icon_lbl)
         self._title_label = QLabel("Alıcı — Bob")
         self._title_label.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
         self._title_label.setStyleSheet(f"color: {COLORS['accent_green']};")

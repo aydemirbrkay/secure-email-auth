@@ -166,4 +166,13 @@ def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
 
     final_bytes = bytes(state[r][c] for c in range(4) for r in range(4))
 
-    return {"rounds_data": rounds_data, "final_block_hex": final_bytes.hex()}
+    # Round flow görünümü için: tüm round_key'ler ve ilk state matrisi
+    round_keys_hex = [_state_to_hex(rk) for rk in round_keys]
+    initial_state_hex = _state_to_hex(_bytes_to_state(block))
+
+    return {
+        "rounds_data": rounds_data,
+        "final_block_hex": final_bytes.hex(),
+        "round_keys_hex": round_keys_hex,
+        "initial_state_hex": initial_state_hex,
+    }

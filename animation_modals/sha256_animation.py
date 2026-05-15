@@ -60,9 +60,13 @@ class _SHA256DiagramWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(360)
+        # Içerik ~330 px sığar; min/max sabitleyerek pencere ne kadar büyük
+        # olursa olsun widget büyümez, aşağıdaki ileri/geri butonları
+        # daima ekranda kalır.
+        self.setMinimumHeight(340)
+        self.setMaximumHeight(360)
         self.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         # Varsayılan veri
         self._regs_in: list[str] = ["--------"] * 8
@@ -120,9 +124,12 @@ class _SHA256DiagramWidget(QWidget):
         total = 8 * box_w + 7 * gap
         ox = (W - total) // 2
 
-        top_y = 12
-        mid_y = top_y + box_h + 50
-        bot_y = mid_y + 90
+        # top_y = 24: aşama etiketi (y=0-16) ile register kutuları (y=24+)
+        # arasında 8 px boşluk kalır → 'D + T1 → E' etiketi ile A register
+        # kutusunun üst kenarı artık çakışmaz.
+        top_y = 24
+        mid_y = top_y + box_h + 36
+        bot_y = mid_y + 84
 
         font_lbl = QFont("Georgia", 9, QFont.Weight.Bold)
         font_val = QFont("Courier New", 8)
@@ -522,64 +529,23 @@ class _WExpansionWidget(QWidget):
     _T_INPUTS_END = 24    # 1200 ms
     _T_ARROWS_END = 36    # +600 ms
     _T_RESULT_END = 44    # +400 ms
-    _NAV_HEIGHT = 40      # Üstteki navigasyon şeridi yüksekliği (paint y-offset'i)
+    _NAV_HEIGHT = 0       # Navigasyon kaldırıldı — tek örnek gösterilir
 
     def __init__(
         self, expansion: list[dict] | None, parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._exp: list[dict] = expansion or []
-        self._cur = 0  # mevcut i'nin _exp listesindeki indeksi (0..15)
+        # Tek örnek — kullanıcı isteğine göre 16 i-navigasyonu yerine
+        # W[16] için tek detaylı animasyon. W[17..63] aynı formülle hesaplanır.
+        self._cur = 0
         self._tick = 0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
 
-        self.setMinimumHeight(420)
-        self.setMaximumHeight(480)
+        self.setMinimumHeight(400)
+        self.setMaximumHeight(460)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-
-        # Navigasyon ŞERİDİ ÜSTTE — AES'in round bar'ı gibi.
-        # Paint alanı buton şeridinin altında başlar (y_offset = _NAV_HEIGHT).
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(8, 4, 8, 4)
-        outer.setSpacing(0)
-
-        nav = QHBoxLayout()
-        nav.setSpacing(8)
-        nav.addStretch(1)
-
-        self._btn_prev = QPushButton("◀ Önceki i")
-        self._btn_next = QPushButton("Sonraki i ▶")
-        for b in (self._btn_prev, self._btn_next):
-            b.setStyleSheet(
-                f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-                f"color: #FFFFFF; border: none; border-radius: 6px; "
-                f"padding: 4px 14px; font-weight: bold; }}"
-                f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-                f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
-                f"color: {ANIM_COLORS['text_muted']}; }}"
-            )
-            b.setFixedHeight(30)
-        self._btn_prev.clicked.connect(self._prev_i)
-        self._btn_next.clicked.connect(self._next_i)
-        nav.addWidget(self._btn_prev)
-
-        # Buton şeridinde ortada sayaç — i = N/31 (curr/total)
-        self._counter_label = QLabel("")
-        self._counter_label.setStyleSheet(
-            f"color: {ANIM_COLORS['text_secondary']}; "
-            f"font-family: Georgia; font-weight: bold;"
-        )
-        self._counter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._counter_label.setMinimumWidth(140)
-        nav.addWidget(self._counter_label)
-
-        nav.addWidget(self._btn_next)
-        nav.addStretch(1)
-        outer.addLayout(nav)
-        outer.addStretch(1)  # paint alanı buton şeridinin altında
-
-        self._update_button_states()
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
@@ -599,36 +565,11 @@ class _WExpansionWidget(QWidget):
         else:
             self._timer.stop()
 
-    def _prev_i(self) -> None:
-        if self._cur > 0:
-            self._cur -= 1
-            self._restart_animation()
-
-    def _next_i(self) -> None:
-        if self._cur < len(self._exp) - 1:
-            self._cur += 1
-            self._restart_animation()
-
-    def _restart_animation(self) -> None:
-        self._tick = 0
-        self._update_button_states()
-        self.update()
-        self._timer.start(self._TICK_MS)
-
-    def _update_button_states(self) -> None:
-        self._btn_prev.setEnabled(self._cur > 0)
-        self._btn_next.setEnabled(self._cur < len(self._exp) - 1)
-        if self._exp:
-            i_val = self._exp[self._cur]["i"]
-            self._counter_label.setText(
-                f"i = {i_val} / 31    ({self._cur + 1}/{len(self._exp)})"
-            )
-
     def paintEvent(self, event) -> None:  # type: ignore[override]
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
-        y0 = self._NAV_HEIGHT  # paint alanı, üstteki nav butonlarının altından başlar
+        y0 = 0  # paint alanı widget'ın en üstünden başlar (nav yok)
 
         if not self._exp:
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
@@ -641,25 +582,30 @@ class _WExpansionWidget(QWidget):
         entry = self._exp[self._cur]
         i_val = entry["i"]
 
-        # W kaynak açıklaması — kullanıcı "bu değerler nereden geldi" sorduğunda anlasın
+        # Tek-örnek bilgi satırı + kaynak açıklaması (iki satır)
+        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, y0 + 4, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   f"Örnek: W[{i_val}] hesaplanışı   "
+                   f"·   W[{i_val+1}..63] aynı formülle türetilir")
         p.setFont(QFont("Georgia", 8))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, y0 + 2, W, 14), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 22, W, 14), Qt.AlignmentFlag.AlignCenter,
                    "W[0..15]: mesaj bloğunun 16 × 32-bit kelimesidir (ilk 64 baytı). "
                    "W[16..63]: aşağıdaki σ fonksiyonlarıyla türetilir.")
 
-        # σ formülleri sabit referans
+        # σ formülleri sabit referans (tek-örnek banner'ı altına kayar)
         p.setFont(QFont("Courier New", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, y0 + 18, W, 18), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 40, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)")
-        p.drawText(QRect(0, y0 + 36, W, 18), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 58, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "σ1(x) = ROTR(x,17) ⊕ ROTR(x,19) ⊕ SHR(x,10)")
 
-        # Başlık: i = N / 31
+        # Başlık formülü
         p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-        p.drawText(QRect(0, y0 + 60, W, 22), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, y0 + 82, W, 22), Qt.AlignmentFlag.AlignCenter,
                    f"W[{i_val}] = σ1(W[{i_val-2}]) + W[{i_val-7}] + "
                    f"σ0(W[{i_val-15}]) + W[{i_val-16}]   (mod 2³²)")
 
@@ -668,7 +614,7 @@ class _WExpansionWidget(QWidget):
         gap_x, gap_y = 30, 24
         total_w = 2 * box_w + gap_x
         ox = (W - total_w) // 2
-        oy = y0 + 100
+        oy = y0 + 116
 
         inputs = [
             (ox, oy,
@@ -1431,6 +1377,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 4, 8, 4)
+        lay.setSpacing(4)
 
         self._diag_title = QLabel()
         self._diag_title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
@@ -1438,12 +1385,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._diag_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._diag_title)
 
+        # Diyagram widget'ı sabit yükseklikte (max 360 px); scroll yok ki
+        # alt navigasyon butonları (◀ Geri / İleri ▶) hep ekranda kalsın.
         self._diag_widget = _SHA256DiagramWidget()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self._diag_widget)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        lay.addWidget(scroll, stretch=1)
+        lay.addWidget(self._diag_widget, stretch=0)
 
         # Hash zinciri göstergesi (alt)
         self._chain_lbl = QLabel()
@@ -1452,6 +1397,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._chain_lbl.setWordWrap(True)
         self._chain_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._chain_lbl)
+
+        # Geri kalan boşluk altta — content yukarda, alt nav butonları
+        # window-level layout'ta zaten görünür konumda.
+        lay.addStretch(1)
         return w
 
     def _make_match_page(self) -> QWidget:

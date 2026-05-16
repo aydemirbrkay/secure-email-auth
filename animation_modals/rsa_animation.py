@@ -955,7 +955,7 @@ class _EEAWidget(QWidget):
             y = row_y + (ri - 2) * line_h
 
             # Sol: bölüm denklemi — daha küçük font, "3120 = 183 × 17 + 9" sığar
-            p.setFont(QFont("Courier New", 10))
+            p.setFont(QFont("Courier New", 11))
             p.setPen(QColor(color))
             text_left = f"{r0} = {q} × {r1} + {r}"
             p.drawText(
@@ -1003,9 +1003,9 @@ class _EEAWidget(QWidget):
         last_t = self._rows[gcd_row_idx][4]
         calc_y = row_y + n_rows * line_h + 16
 
-        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
-        p.drawText(QRect(0, calc_y, W, 22), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, calc_y, W, 24), Qt.AlignmentFlag.AlignCenter,
                    f"d = t mod φ = {last_t} mod {_PHI} = {_D}")
         if last_t < 0:
             p.setFont(QFont("Georgia", 8))
@@ -1014,12 +1014,12 @@ class _EEAWidget(QWidget):
                        Qt.AlignmentFlag.AlignCenter,
                        "(negatif → +φ ekle)")
 
-        # Doğrulama — küçültülmüş font ki dar pencerede sığsın
-        verify_y = calc_y + 42
-        p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        # Doğrulama — biraz büyütüldü ama yine de pencere genişliğine sığacak boyutta
+        verify_y = calc_y + 44
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         check = (_E * _D) % _PHI
-        p.drawText(QRect(4, verify_y, W - 8, 22), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(4, verify_y, W - 8, 24), Qt.AlignmentFlag.AlignCenter,
                    f"Doğrulama: e×d mod φ = {_E}×{_D} mod {_PHI} = {check} ✓")
 
         p.end()
@@ -1626,10 +1626,24 @@ class _RSAEncryptDecryptWidget(QWidget):
         p.setPen(QPen(col, 2))
         p.drawRoundedRect(x, y, w, h, 6, 6)
 
-        p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+        # Font puntosu, en uzun satır kutuya sığacak şekilde dinamik seçilir.
+        # Random RSA değerlerinde (özellikle d 3-4 haneye çıkınca) sabit 10pt
+        # bazen taşıyordu; bu nedenle adaptif fallback eklendi.
+        lines = [line1, line2, line3]
+        avail_w = w - 16
+        font_pt = 10
+        for pt in (10, 9, 8):
+            p.setFont(QFont("Courier New", pt, QFont.Weight.Bold))
+            longest = max(lines, key=lambda s: p.fontMetrics().horizontalAdvance(s))
+            if p.fontMetrics().horizontalAdvance(longest) <= avail_w:
+                font_pt = pt
+                break
+        else:
+            font_pt = 8
+
+        p.setFont(QFont("Courier New", font_pt, QFont.Weight.Bold))
         text_col = QColor(ANIM_COLORS["text_primary"])
         p.setPen(text_col)
-        lines = [line1, line2, line3]
         for li in range(min(lines_revealed, 3)):
             p.drawText(QRect(x + 8, y + 6 + li * 20, w - 16, 18),
                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,

@@ -1027,13 +1027,31 @@ class _EEAWidget(QWidget):
                        Qt.AlignmentFlag.AlignCenter,
                        "(t negatif olduğu için ϕ eklenerek [0, ϕ) aralığına alındı)")
 
-        # Doğrulama — e·d (× yerine ·) mod ϕ = 1 olmalı
+        # Doğrulama — kongrüans (≡) formunda; "Amaç: e · d ≡ 1 (mod ϕ)" ile aynı tip.
+        # İki satıra bölündü: önce sembolik form, sonra sayısal sağlama.
         verify_y = calc_y + 66
-        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
-        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         check = (_E * _D) % _PHI
-        p.drawText(QRect(4, verify_y, W - 8, 24), Qt.AlignmentFlag.AlignCenter,
-                   f"Doğrulama:  e · d  mod ϕ  =  {_E} · {_D}  mod {_PHI}  =  {check}   ✓")
+        symbolic = "Doğrulama:  e · d  ≡  1  (mod ϕ)"
+        numeric = f"{_E} · {_D}  ≡  {check}  (mod {_PHI})   ✓"
+
+        # Adaptif font — uzun random değerlerde de sığar
+        avail_w = W - 16
+        font_pt = 10
+        for pt in (11, 10, 9, 8):
+            p.setFont(QFont("Courier New", pt, QFont.Weight.Bold))
+            longest = max(symbolic, numeric, key=lambda s: p.fontMetrics().horizontalAdvance(s))
+            if p.fontMetrics().horizontalAdvance(longest) <= avail_w:
+                font_pt = pt
+                break
+        else:
+            font_pt = 8
+
+        p.setFont(QFont("Courier New", font_pt, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(8, verify_y, W - 16, 22),
+                   Qt.AlignmentFlag.AlignCenter, symbolic)
+        p.drawText(QRect(8, verify_y + 22, W - 16, 22),
+                   Qt.AlignmentFlag.AlignCenter, numeric)
 
         p.end()
 

@@ -5,7 +5,7 @@ RSAAnimationWindow v2 — RSA-2048 anahtar üretimini görsel olarak animasyonla
 Sekiz adım:
   1) p ve q seçimi (asal eleği)
   2) n = p × q
-  3) φ(n) = (p−1)(q−1)
+  3) ϕ(n) = (p−1)(q−1)
   4) Açık üs e seçimi (gcd doğrulaması)
   5) Gizli üs d (Genişletilmiş Öklid Algoritması)
   6) DER ve Base64 kodlaması
@@ -118,14 +118,14 @@ _B64_DEMO: str  = base64.b64encode(_DER_SEQ).decode()
 def _reseed_demo() -> None:
     """Modül seviyesindeki RSA demo değerlerini rastgele bir küçük asal
     çiftiyle yeniden hesaplar. RSAAnimationWindow her açıldığında çağrılır,
-    böylece kullanıcı her seferinde farklı (p, q, n, φ, e, d) görür.
+    böylece kullanıcı her seferinde farklı (p, q, n, ϕ, e, d) görür.
 
     Seçim kuralları:
       - p, q ∈ _PRIME_POOL (11..97 asalları), p ≠ q
       - n = p × q ≥ 143 (m = 65 her zaman < n olsun)
-      - e: küçük ve gcd(e, φ) = 1 koşulunu sağlayan ilk yaygın değer
+      - e: küçük ve gcd(e, ϕ) = 1 koşulunu sağlayan ilk yaygın değer
         (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
-      - d = e⁻¹ mod φ, (e × d) mod φ == 1 invariantı sağlanmalı
+      - d = e⁻¹ mod ϕ, (e × d) mod ϕ == 1 invariantı sağlanmalı
     """
     global _P, _Q, _N, _PHI, _E, _D
     global _DER_N, _DER_E, _DER_SEQ, _B64_DEMO
@@ -180,7 +180,7 @@ class _RSAKeyBuilderWidget(QWidget):
             ("p",   0, "p",     str(_P),    "accent_blue"),
             ("q",   0, "q",     str(_Q),    "accent_mauve"),
             ("n",   1, "n",     str(_N),    "accent_yellow"),
-            ("phi", 2, "φ(n)",  str(_PHI),  "accent_yellow"),
+            ("phi", 2, "ϕ(n)",  str(_PHI),  "accent_yellow"),
             ("e",   3, "e",     str(_E),    "accent_peach"),
             ("d",   4, "d",     str(_D),    "accent_green"),
         ]
@@ -641,11 +641,11 @@ class _MultiplicationWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
-# 4) Adım 3 — Euler Totient  φ(n) = (p−1)(q−1)
+# 4) Adım 3 — Euler Totient  ϕ(n) = (p−1)(q−1)
 # ---------------------------------------------------------------------------
 
 class _TotientWidget(QWidget):
-    """φ(n) hesabı: (p−1) ve (q−1) elde edilir, sonra çarpılır."""
+    """ϕ(n) hesabı: (p−1) ve (q−1) elde edilir, sonra çarpılır."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -683,7 +683,7 @@ class _TotientWidget(QWidget):
         p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
-                   "φ(n) = (p − 1) × (q − 1)")
+                   "ϕ(n) = (p − 1) × (q − 1)")
 
         # Üst satır: p ve q kutularından (p−1) ve (q−1) türetimi
         row1_y = 44
@@ -731,7 +731,7 @@ class _TotientWidget(QWidget):
             result_y = row1_y + box_h + 56
             self._draw_box(
                 p, cx - 90, result_y, 180, 44,
-                f"φ(n) = {_PHI}", ANIM_COLORS["accent_yellow"],
+                f"ϕ(n) = {_PHI}", ANIM_COLORS["accent_yellow"],
                 font_size=13,
             )
         p.end()
@@ -770,7 +770,7 @@ class _TotientWidget(QWidget):
 # ---------------------------------------------------------------------------
 
 class _GCDWidget(QWidget):
-    """e=17 seçimi ve gcd(e, φ(n))=1 doğrulaması — Öklid adımları akar."""
+    """e=17 seçimi ve gcd(e, ϕ(n))=1 doğrulaması — Öklid adımları akar."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -817,7 +817,7 @@ class _GCDWidget(QWidget):
         p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
-                   f"Aday:  e = {_E}    Koşul:  gcd(e, φ(n)) = 1")
+                   f"Aday:  e = {_E}    Koşul:  gcd(e, ϕ(n)) = 1")
 
         # Öklid adımları
         rows_y = 42
@@ -866,7 +866,7 @@ class _GCDWidget(QWidget):
                 p.drawText(
                     QRect(x, result_y + 26, box_w, 18),
                     Qt.AlignmentFlag.AlignCenter,
-                    f"(gcd(e, φ(n)) = {self._gcd_value}, koşul sağlandı)",
+                    f"(gcd(e, ϕ(n)) = {self._gcd_value}, koşul sağlandı)",
                 )
             else:
                 p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
@@ -893,7 +893,7 @@ class _EEAWidget(QWidget):
       r₀ = q × r₁ + r        ⇒  s = s₀ − q·s₁,   t = t₀ − q·t₁
 
     Her satır bölüm denklemiyle birlikte güncellenmiş s ve t katsayılarını
-    da gösterir. GCD = 1 satırından t alınır, d = t mod φ olarak yazılır.
+    da gösterir. GCD = 1 satırından t alınır, d = t mod ϕ olarak yazılır.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -914,11 +914,11 @@ class _EEAWidget(QWidget):
         p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
                    "Genişletilmiş Öklid Algoritması")
 
-        # Alt başlık — amaç + φ, e
+        # Alt başlık — amaç + ϕ, e
         p.setFont(QFont("Georgia", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         p.drawText(QRect(0, 34, W, 18), Qt.AlignmentFlag.AlignCenter,
-                   f"Amaç: e·d ≡ 1 (mod φ)   ·   φ = {_PHI},  e = {_E}")
+                   f"Amaç: e·d ≡ 1 (mod ϕ)   ·   ϕ = {_PHI},  e = {_E}")
 
         # s, t katsayı kuralı
         p.setFont(QFont("Georgia", 8))
@@ -1006,13 +1006,13 @@ class _EEAWidget(QWidget):
         p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
         p.drawText(QRect(0, calc_y, W, 24), Qt.AlignmentFlag.AlignCenter,
-                   f"d = t mod φ = {last_t} mod {_PHI} = {_D}")
+                   f"d = t mod ϕ = {last_t} mod {_PHI} = {_D}")
         if last_t < 0:
             p.setFont(QFont("Georgia", 8))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
             p.drawText(QRect(0, calc_y + 22, W, 14),
                        Qt.AlignmentFlag.AlignCenter,
-                       "(negatif → +φ ekle)")
+                       "(negatif → +ϕ ekle)")
 
         # Doğrulama — biraz büyütüldü ama yine de pencere genişliğine sığacak boyutta
         verify_y = calc_y + 44
@@ -1020,7 +1020,7 @@ class _EEAWidget(QWidget):
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         check = (_E * _D) % _PHI
         p.drawText(QRect(4, verify_y, W - 8, 24), Qt.AlignmentFlag.AlignCenter,
-                   f"Doğrulama: e×d mod φ = {_E}×{_D} mod {_PHI} = {check} ✓")
+                   f"Doğrulama: e×d mod ϕ = {_E}×{_D} mod {_PHI} = {check} ✓")
 
         p.end()
 
@@ -1334,7 +1334,7 @@ class _KeyMatchWidget(QWidget):
             f"p = {_P}\n"
             f"q = {_Q}\n"
             f"n = {_N}\n"
-            f"φ(n) = {_PHI}\n"
+            f"ϕ(n) = {_PHI}\n"
             f"e = {_E}\n"
             f"d = {_D}\n"
             f"Modülüs: 12 bit",
@@ -1686,7 +1686,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     _TITLES = [
         "Adım 1 / 8 — p ve q Seçimi",
         "Adım 2 / 8 — n = p × q",
-        "Adım 3 / 8 — φ(n) = (p − 1)(q − 1)",
+        "Adım 3 / 8 — ϕ(n) = (p − 1)(q − 1)",
         "Adım 4 / 8 — Açık Üs e Seçimi",
         "Adım 5 / 8 — Gizli Üs d  (Genişletilmiş Öklid)",
         "Adım 6 / 8 — DER ve Base64 Kodlaması",
@@ -1695,11 +1695,11 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     ]
 
     _CAPTIONS = [
-        "p ve q rastgele iki büyük asaldır; n ve φ(n) hesabının temelini oluştururlar.",
+        "p ve q rastgele iki büyük asaldır; n ve ϕ(n) hesabının temelini oluştururlar.",
         "n = p × q  →  modülüs; hem açık hem gizli anahtarda yer alır.",
-        "φ(n) = (p − 1)(q − 1)  →  Euler totient fonksiyonu.",
-        "gcd(e, φ(n)) = 1  koşulu sağlanmalı; e açık anahtarın üs bileşenidir.",
-        "d, e'nin φ(n) modülünde tersidir:  e · d ≡ 1  (mod φ).",
+        "ϕ(n) = (p − 1)(q − 1)  →  Euler totient fonksiyonu.",
+        "gcd(e, ϕ(n)) = 1  koşulu sağlanmalı; e açık anahtarın üs bileşenidir.",
+        "d, e'nin ϕ(n) modülünde tersidir:  e · d ≡ 1  (mod ϕ).",
         "Anahtar dosyada DER yapısında, satır içinde Base64 olarak kodlanır.",
         "Aynı matematik · farklı boyut: demo 12-bit n, gerçek 2048-bit n.",
         "m → c → m'  döngüsü; her iki yön de aynı m değerine ulaşır (Eq:RSAExample).",

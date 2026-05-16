@@ -269,7 +269,7 @@ class _RSAKeyBuilderWidget(QWidget):
             self._public_card, icon_sign="+", title="Açık Anahtar",
             color=ANIM_COLORS["accent_blue"],
             filled=(step_idx >= 3),
-            value=f"(e, n) = ({e_val}, {n_val})" if step_idx >= 3 else "(?, ?)",
+            value=f"(n, e) = ({n_val}, {e_val})" if step_idx >= 3 else "(?, ?)",
         )
         if step_idx >= 3 and self._last_step < 3:
             self._pulse(self._public_card, "accent_blue")
@@ -279,7 +279,7 @@ class _RSAKeyBuilderWidget(QWidget):
             self._private_card, icon_sign="−", title="Gizli Anahtar",
             color=ANIM_COLORS["accent_green"],
             filled=(step_idx >= 4),
-            value=f"(d, n) = ({d_val}, {n_val})" if step_idx >= 4 else "(?, ?)",
+            value=f"(n, d) = ({n_val}, {d_val})" if step_idx >= 4 else "(?, ?)",
         )
         if step_idx >= 4 and self._last_step < 4:
             self._pulse(self._private_card, "accent_green")
@@ -533,11 +533,16 @@ class _MultiplicationWidget(QWidget):
             if i >= self._reveal:
                 break
             y = rows_y + i * line_h
+            if kind == 1:
+                # Yatay ayırıcı çizgi — toplama altı (yarım dash dizisi yerine
+                # gerçek bir tam genişlikte çizgi, satırın ortasından geçer).
+                line_y = y + line_h // 2
+                p.setPen(QPen(QColor(ANIM_COLORS["text_muted"]), 1))
+                p.drawLine(cx - 180, line_y, cx + 180, line_y)
+                continue
             if kind == 2:
                 p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
                 p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
-            elif kind == 1:
-                p.setPen(QColor(ANIM_COLORS["text_muted"]))
             else:
                 p.setPen(QColor(ANIM_COLORS["text_secondary"]))
                 p.setFont(QFont("Courier New", 11))
@@ -624,13 +629,13 @@ class _TotientWidget(QWidget):
 
         # Üst satır: p ve q kutularından (p−1) ve (q−1) türetimi
         row1_y = 44
-        box_w, box_h = 60, 38
+        box_w, box_h = 84, 38     # 60 → 84: "p−1 = 60" gibi etiketler için
         gap = 18
-        # Toplam satır genişliği: 2*box_w + gap (arrow) + box_w   (sol blok) + space + sağ blok
-        # Sol blok: box(p) + arrow + box(p-1) = 60 + 24 + 60 = 144
-        # Sağ blok: aynı = 144
-        # Aralık: 30
-        total_w = 144 * 2 + 30
+        arrow_gap = 24
+        # Sol blok: box(p) + arrow_gap + box(p-1)
+        block_w = box_w + arrow_gap + box_w
+        # Toplam satır genişliği: sol blok + ara boşluk + sağ blok
+        total_w = block_w * 2 + 30
         left_x = cx - total_w // 2
 
         # p kutusu → p−1 kutusu
@@ -643,7 +648,7 @@ class _TotientWidget(QWidget):
                            f"p−1 = {_P-1}", ANIM_COLORS["accent_green"])
 
         # q kutusu → q−1 kutusu
-        right_x = left_x + 144 + 30
+        right_x = left_x + block_w + 30
         self._draw_box(p, right_x, row1_y, box_w, box_h,
                        f"q = {_Q}", ANIM_COLORS["accent_mauve"])
         self._draw_arrow(p, right_x + box_w, row1_y + box_h // 2,
@@ -773,7 +778,8 @@ class _GCDWidget(QWidget):
             p.drawText(QRect(0, y, W, line_h),
                        Qt.AlignmentFlag.AlignCenter, text)
 
-        # Sonuç
+        # Sonuç — kullanıcı "e bulundu" mesajını net görmeli, sadece "GCD=1
+        # ✓ Geçerli" yetersizdi. Başarılıysa: "e = 17 SEÇİLDİ  (gcd=1 ✓)".
         if self._reveal >= len(self._steps) + 1:
             result_y = rows_y + (len(self._steps) + 1) * line_h + 8
             success = (self._gcd_value == 1)
@@ -781,20 +787,37 @@ class _GCDWidget(QWidget):
                      else ANIM_COLORS["accent_peach"])
             fill = QColor(color)
             fill.setAlpha(60)
-            box_w, box_h = 280, 44
+            box_w, box_h = 320, 48
             x = cx - box_w // 2
             p.setBrush(QBrush(fill))
             p.setPen(QPen(QColor(color), 2))
             p.drawRoundedRect(x, result_y, box_w, box_h, 6, 6)
 
-            p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
-            p.setPen(QColor(ANIM_COLORS["text_primary"]))
-            mark = "✓ Geçerli" if success else "✗ Reddedildi"
-            p.drawText(
-                QRect(x, result_y, box_w, box_h),
-                Qt.AlignmentFlag.AlignCenter,
-                f"GCD = {self._gcd_value}    {mark}",
-            )
+            if success:
+                # Sonuç başlığı — büyük ve net: "e = 17 SEÇİLDİ"
+                p.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
+                p.setPen(QColor(color))
+                p.drawText(
+                    QRect(x, result_y + 2, box_w, 24),
+                    Qt.AlignmentFlag.AlignCenter,
+                    f"e = {_E}   ✓  SEÇİLDİ",
+                )
+                # Alt açıklama — gerekçe
+                p.setFont(QFont("Georgia", 9))
+                p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+                p.drawText(
+                    QRect(x, result_y + 26, box_w, 18),
+                    Qt.AlignmentFlag.AlignCenter,
+                    f"(gcd(e, φ(n)) = {self._gcd_value}, koşul sağlandı)",
+                )
+            else:
+                p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["text_primary"]))
+                p.drawText(
+                    QRect(x, result_y, box_w, box_h),
+                    Qt.AlignmentFlag.AlignCenter,
+                    f"GCD = {self._gcd_value}   ✗  REDDEDİLDİ",
+                )
         p.end()
 
 
@@ -848,12 +871,13 @@ class _EEAWidget(QWidget):
         # Satırlar — rows[2..]: gerçek bölme adımları
         gcd_row_idx = len(self._rows) - 2
         row_y = 78
-        line_h = 24
-        eq_col_w = 200    # bölüm denklemi sütunu
-        arrow_w = 26
-        st_col_w = 180    # s, t katsayıları sütunu
-        annot_x = cx + arrow_w // 2 + st_col_w // 2 + 12  # GCD/durma etiketi konumu
-        annot_w = 130
+        line_h = 22
+        # Pencere genişliğine göre dinamik kolon — dar pencerede de sığar
+        eq_col_w = min(180, max(140, (W - 220) // 2))
+        arrow_w = 22
+        st_col_w = min(160, max(120, (W - 220) // 2))
+        annot_x = cx + arrow_w // 2 + st_col_w + 8
+        annot_w = 110
 
         for ri in range(2, len(self._rows)):
             i, q, r, s, t = self._rows[ri]
@@ -872,10 +896,10 @@ class _EEAWidget(QWidget):
 
             y = row_y + (ri - 2) * line_h
 
-            # Sol: bölüm denklemi
-            p.setFont(QFont("Courier New", 11))
+            # Sol: bölüm denklemi — daha küçük font, "3120 = 183 × 17 + 9" sığar
+            p.setFont(QFont("Courier New", 10))
             p.setPen(QColor(color))
-            text_left = f"{r0}  =  {q} × {r1}  +  {r}"
+            text_left = f"{r0} = {q} × {r1} + {r}"
             p.drawText(
                 QRect(cx - eq_col_w - arrow_w // 2, y, eq_col_w, line_h),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
@@ -890,40 +914,41 @@ class _EEAWidget(QWidget):
             )
 
             # Sağ: s, t katsayıları
-            text_right = f"s={s},  t={t}"
+            text_right = f"s={s}, t={t}"
             p.drawText(
                 QRect(cx + arrow_w // 2, y, st_col_w, line_h),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 text_right,
             )
 
-            # Etiket — GCD=1 veya durma
-            if is_gcd:
-                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-                p.setPen(QColor(ANIM_COLORS["accent_green"]))
-                p.drawText(
-                    QRect(annot_x, y, annot_w, line_h),
-                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                    "← GCD = 1, t'yi al",
-                )
-            elif is_term:
-                p.setFont(QFont("Georgia", 9))
-                p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                p.drawText(
-                    QRect(annot_x, y, annot_w, line_h),
-                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                    "(durma satırı)",
-                )
+            # Etiket — GCD=1 veya durma (sadece pencere genişse göster)
+            if W >= 700:
+                if is_gcd:
+                    p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+                    p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                    p.drawText(
+                        QRect(annot_x, y, annot_w, line_h),
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                        "← GCD=1, t'yi al",
+                    )
+                elif is_term:
+                    p.setFont(QFont("Georgia", 8))
+                    p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                    p.drawText(
+                        QRect(annot_x, y, annot_w, line_h),
+                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                        "(durma)",
+                    )
 
         # d hesaplama
         n_rows = len(self._rows) - 2
         last_t = self._rows[gcd_row_idx][4]
-        calc_y = row_y + n_rows * line_h + 12
+        calc_y = row_y + n_rows * line_h + 16
 
-        p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
-        p.drawText(QRect(0, calc_y, W, 24), Qt.AlignmentFlag.AlignCenter,
-                   f"d  =  t  mod  φ  =  {last_t}  mod  {_PHI}  =  {_D}")
+        p.drawText(QRect(0, calc_y, W, 22), Qt.AlignmentFlag.AlignCenter,
+                   f"d = t mod φ = {last_t} mod {_PHI} = {_D}")
         if last_t < 0:
             p.setFont(QFont("Georgia", 8))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
@@ -931,13 +956,13 @@ class _EEAWidget(QWidget):
                        Qt.AlignmentFlag.AlignCenter,
                        "(negatif → +φ ekle)")
 
-        # Doğrulama
-        verify_y = calc_y + 44
-        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        # Doğrulama — küçültülmüş font ki dar pencerede sığsın
+        verify_y = calc_y + 42
+        p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         check = (_E * _D) % _PHI
-        p.drawText(QRect(0, verify_y, W, 22), Qt.AlignmentFlag.AlignCenter,
-                   f"Doğrulama:  e × d  mod  φ  =  {_E} × {_D}  mod  {_PHI}  =  {check}   ✓")
+        p.drawText(QRect(4, verify_y, W - 8, 22), Qt.AlignmentFlag.AlignCenter,
+                   f"Doğrulama: e×d mod φ = {_E}×{_D} mod {_PHI} = {check} ✓")
 
         p.end()
 
@@ -1165,7 +1190,7 @@ class _DERByteFlowWidget(QWidget):
                 p, x=12, y=y, w=W - 24, h=24,
                 icon="K⁻", icon_color=ANIM_COLORS["accent_green"],
                 label="Alice Gizli Anahtarı:",
-                value="(d, n) — yalnızca Alice'te tutulur",
+                value="(n, d) — yalnızca Alice'te tutulur",
                 value_color=ANIM_COLORS["text_muted"],
                 italic_value=True,
             )

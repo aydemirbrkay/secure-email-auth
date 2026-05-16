@@ -911,29 +911,36 @@ class _EEAWidget(QWidget):
         # Başlık
         p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-        p.drawText(QRect(0, 8, W, 26), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, 6, W, 24), Qt.AlignmentFlag.AlignCenter,
                    "Genişletilmiş Öklid Algoritması")
 
         # Alt başlık — amaç + ϕ, e
         p.setFont(QFont("Georgia", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 34, W, 18), Qt.AlignmentFlag.AlignCenter,
-                   f"Amaç: e·d ≡ 1 (mod ϕ)   ·   ϕ = {_PHI},  e = {_E}")
+        p.drawText(QRect(0, 30, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   f"Amaç: e · d ≡ 1 (mod ϕ)   ·   ϕ = {_PHI},  e = {_E}")
+
+        # Bezout özdeşliği — d'nin neden t olduğunu net açıklar
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+        p.drawText(QRect(0, 48, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "Bezout:  ϕ·s + e·t = gcd(ϕ, e) = 1   ⇒   e·t ≡ 1 (mod ϕ)   ⇒   d = t mod ϕ")
 
         # s, t katsayı kuralı
         p.setFont(QFont("Georgia", 8))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 52, W, 14), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, 66, W, 14), Qt.AlignmentFlag.AlignCenter,
                    "(Her adımda  s = s₀ − q·s₁,   t = t₀ − q·t₁  güncellenir.)")
 
         # Satırlar — rows[2..]: gerçek bölme adımları
         gcd_row_idx = len(self._rows) - 2
-        row_y = 78
+        row_y = 92
         line_h = 22
-        # Pencere genişliğine göre dinamik kolon — dar pencerede de sığar
-        eq_col_w = min(180, max(140, (W - 220) // 2))
+        # Pencere genişliğine göre dinamik kolon — DAR pencerede bile
+        # "8448 = 2816 × 3 + 0" (4-haneli n × 4-haneli q) sığsın.
+        eq_col_w = max(190, (W - 200) // 2)
         arrow_w = 22
-        st_col_w = min(160, max(120, (W - 220) // 2))
+        st_col_w = max(140, (W - 200) // 2 - 30)
         annot_x = cx + arrow_w // 2 + st_col_w + 8
         annot_w = 110
 
@@ -1003,24 +1010,30 @@ class _EEAWidget(QWidget):
         last_t = self._rows[gcd_row_idx][4]
         calc_y = row_y + n_rows * line_h + 16
 
+        # d hesaplama — net ve adım adım:
+        #   GCD=1 satırından t alınıyor, mod ϕ ile pozitife normalize.
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(0, calc_y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "GCD=1 satırından  t  alınır, sonra  d = t mod ϕ:")
         p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
-        p.drawText(QRect(0, calc_y, W, 24), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, calc_y + 18, W, 24), Qt.AlignmentFlag.AlignCenter,
                    f"d = t mod ϕ = {last_t} mod {_PHI} = {_D}")
         if last_t < 0:
             p.setFont(QFont("Georgia", 8))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, calc_y + 22, W, 14),
+            p.drawText(QRect(0, calc_y + 44, W, 14),
                        Qt.AlignmentFlag.AlignCenter,
-                       "(negatif → +ϕ ekle)")
+                       "(t negatif olduğu için ϕ eklenerek [0, ϕ) aralığına alındı)")
 
-        # Doğrulama — biraz büyütüldü ama yine de pencere genişliğine sığacak boyutta
-        verify_y = calc_y + 44
+        # Doğrulama — e·d (× yerine ·) mod ϕ = 1 olmalı
+        verify_y = calc_y + 66
         p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         check = (_E * _D) % _PHI
         p.drawText(QRect(4, verify_y, W - 8, 24), Qt.AlignmentFlag.AlignCenter,
-                   f"Doğrulama: e×d mod ϕ = {_E}×{_D} mod {_PHI} = {check} ✓")
+                   f"Doğrulama:  e · d  mod ϕ  =  {_E} · {_D}  mod {_PHI}  =  {check}   ✓")
 
         p.end()
 

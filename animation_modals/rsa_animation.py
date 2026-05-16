@@ -17,7 +17,9 @@ Kalıcı sol panel "Anahtar İnşa Paneli" her adımda otomatik olarak dolar.
 from __future__ import annotations
 
 import base64
+import random
 from collections.abc import Callable
+from math import gcd
 
 from PyQt6.QtCore import (
     Qt, QTimer, QPropertyAnimation, QEasingCurve, QRect, QPoint,
@@ -83,14 +85,23 @@ def _eea_steps(a: int, b: int) -> list[tuple[int, int, int, int, int]]:
 # Tüm widget'lar bu sabitleri __init__'lerinde okur.
 # ---------------------------------------------------------------------------
 
+# Asal havuzu — RSAAnimationWindow her açıldığında bu havuzdan rastgele
+# iki asal seçer (kullanıcı her demo'da farklı sayılar görür, eğitsel
+# çeşitlilik). Tezdeki textbook örneği (p=61, q=53) bu havuzun bir alt
+# kümesidir; rastgele seçim onu da içerir.
+_PRIME_POOL: list[int] = [
+    n for n in range(11, 100)
+    if all(n % d for d in range(2, int(n ** 0.5) + 1))
+]
+
+# Modül seviyesi cari demo değerleri. Başlangıç değerleri tezdeki örnek;
+# RSAAnimationWindow oluşturulurken _reseed_demo() bunları değiştirir.
 _P:   int = 61
 _Q:   int = 53
-_N:   int = _P * _Q          # 3233
-_PHI: int = (_P - 1) * (_Q - 1)  # 3120
+_N:   int = _P * _Q
+_PHI: int = (_P - 1) * (_Q - 1)
 _E:   int = 17
-_D:   int = pow(_E, -1, _PHI)    # 2753
-
-assert (_E * _D) % _PHI == 1, "RSA invariant ihlal edildi: e · d ≢ 1 (mod φ)"
+_D:   int = pow(_E, -1, _PHI)
 
 # Tam sayıyı Unicode üst-simgeye çevir (RSA formüllerinde m^e yerine mᵉ için)
 _SUP_TRANS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
@@ -102,6 +113,53 @@ _DER_N:   bytes = _der_int(_N)
 _DER_E:   bytes = _der_int(_E)
 _DER_SEQ: bytes = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
 _B64_DEMO: str  = base64.b64encode(_DER_SEQ).decode()
+
+
+def _reseed_demo() -> None:
+    """Modül seviyesindeki RSA demo değerlerini rastgele bir küçük asal
+    çiftiyle yeniden hesaplar. RSAAnimationWindow her açıldığında çağrılır,
+    böylece kullanıcı her seferinde farklı (p, q, n, φ, e, d) görür.
+
+    Seçim kuralları:
+      - p, q ∈ _PRIME_POOL (11..97 asalları), p ≠ q
+      - n = p × q ≥ 143 (m = 65 her zaman < n olsun)
+      - e: küçük ve gcd(e, φ) = 1 koşulunu sağlayan ilk yaygın değer
+        (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
+      - d = e⁻¹ mod φ, (e × d) mod φ == 1 invariantı sağlanmalı
+    """
+    global _P, _Q, _N, _PHI, _E, _D
+    global _DER_N, _DER_E, _DER_SEQ, _B64_DEMO
+
+    while True:
+        p, q = random.sample(_PRIME_POOL, 2)
+        n = p * q
+        if n < 143:               # m=65 < n garantisi
+            continue
+        phi = (p - 1) * (q - 1)
+        e = next(
+            (cand for cand in (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
+             if cand < phi and gcd(cand, phi) == 1),
+            None,
+        )
+        if e is None:
+            continue
+        try:
+            d = pow(e, -1, phi)
+        except ValueError:
+            continue
+        if (e * d) % phi != 1:
+            continue
+        break
+
+    _P, _Q = p, q
+    _N = p * q
+    _PHI = phi
+    _E = e
+    _D = d
+    _DER_N = _der_int(_N)
+    _DER_E = _der_int(_E)
+    _DER_SEQ = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
+    _B64_DEMO = base64.b64encode(_DER_SEQ).decode()
 
 
 # ---------------------------------------------------------------------------
@@ -1386,10 +1444,6 @@ class _RSAEncryptDecryptWidget(QWidget):
       MATCH         (600 ms): m' = m ✓ yeşil pulse
     """
 
-    _M = 65
-    _C = pow(_M, _E, _N)             # 2790
-    _M_PRIME = pow(_C, _D, _N)       # 65
-
     _TICK_MS = 50
 
     # Faz tick eşikleri (kümülatif)
@@ -1405,6 +1459,13 @@ class _RSAEncryptDecryptWidget(QWidget):
         super().__init__(parent)
         self.setMinimumHeight(360)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Mesaj sabit (m = 65); şifreli ve çözülmüş değerler instance
+        # oluşturulduğunda CARİ modül _E, _N, _D değerlerine göre hesaplanır.
+        # _reseed_demo() her RSAAnimationWindow açılışında bu değerleri
+        # yenilediği için widget her zaman güncel (e, n, d) ile çalışır.
+        self._M = 65
+        self._C = pow(self._M, _E, _N)
+        self._M_PRIME = pow(self._C, _D, _N)
         self._tick = 0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
@@ -1637,6 +1698,11 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         parent: QWidget | None = None,
         on_close: Callable[[], None] | None = None,
     ) -> None:
+        # Her açılışta rastgele farklı bir (p, q, e, d) seç — kullanıcı
+        # her demo'da farklı sayılar görür. Widget'lar __init__ sırasında
+        # cari modül sabitlerini okuduğu için bu çağrı SUPER ÇAĞRISINDAN
+        # ÖNCE yapılmalıdır (super → _init_content → widget'lar).
+        _reseed_demo()
         self._alice_b64 = alice_pub_b64
         self._bob_b64 = bob_pub_b64
         super().__init__(

@@ -7,7 +7,7 @@ Sekiz adım:
   2) n = p × q
   3) ϕ(n) = (p−1)(q−1)
   4) Açık üs e seçimi (gcd doğrulaması)
-  5) Gizli üs d (Genişletilmiş Öklid Algoritması)
+  5) Gizli üs d (e · d = 1 + k·ϕ denkleminden doğrudan arama)
   6) DER ve Base64 kodlaması
   7) Demo ↔ gerçek 2048-bit anahtar eşleşmesi
   8) Şifreleme/Deşifreleme turu (m → c → m')
@@ -880,173 +880,168 @@ class _GCDWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
-# 6) Adım 5 — Genişletilmiş Öklid Algoritması (EEA)  →  d
+# 6) Adım 5 — Gizli üs d (doğrudan arama: e·d = 1 + k·ϕ)
 # ---------------------------------------------------------------------------
 
 class _EEAWidget(QWidget):
     """
-    Genişletilmiş Öklid Algoritması — STATİK matematik gösterimi.
+    d (gizli üs) hesaplama — DOĞRUDAN ARAMA yöntemi.
 
-    Adım 4 (Aday e seçimi, _GCDWidget) gibi animasyonsuz; satır satır
-    ham matematik akışı:
+    Klasik EEA yerine kullanıcının pedagojik tercih ettiği "k bul, böl"
+    yaklaşımı:
 
-      r₀ = q × r₁ + r        ⇒  s = s₀ − q·s₁,   t = t₀ − q·t₁
+        e · d ≡ 1 (mod ϕ)   ⇒   e · d = 1 + k · ϕ
+                            ⇒   d = (1 + k · ϕ) / e
 
-    Her satır bölüm denklemiyle birlikte güncellenmiş s ve t katsayılarını
-    da gösterir. GCD = 1 satırından t alınır, d = t mod ϕ olarak yazılır.
+    k = 1, 2, 3, ... için bölme tam sayı çıkana kadar denenir. İlk başarılı
+    k'da d bulunmuştur. Sınıf adı geriye dönük uyumluluk için "_EEAWidget"
+    olarak korunur.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumHeight(360)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._rows = _eea_steps(_PHI, _E)
+        self._iterations = self._compute_iterations()
+
+    @staticmethod
+    def _compute_iterations() -> list[tuple[int, int, float, int, bool]]:
+        """Her k için (k, num, q_float, q_int_or_0, success) listesi.
+
+        Başarılıda q_int gerçek bölüm; başarısızda q_float gösterilir.
+        """
+        out: list[tuple[int, int, float, int, bool]] = []
+        for k in range(1, _E + 1):
+            num = 1 + k * _PHI
+            q_float = num / _E
+            ok = (num % _E == 0)
+            q_int = num // _E if ok else 0
+            out.append((k, num, q_float, q_int, ok))
+            if ok:
+                break
+        return out
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         W, H = self.width(), self.height()
-        cx = W // 2
 
         # Başlık
-        p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        p.setFont(QFont("Georgia", 13, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-        p.drawText(QRect(0, 6, W, 24), Qt.AlignmentFlag.AlignCenter,
-                   "Genişletilmiş Öklid Algoritması")
+        p.drawText(QRect(0, 6, W, 26), Qt.AlignmentFlag.AlignCenter,
+                   "Gizli Üs d'nin Bulunması")
 
-        # Alt başlık — amaç + ϕ, e
-        p.setFont(QFont("Georgia", 9))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 30, W, 16), Qt.AlignmentFlag.AlignCenter,
-                   f"Amaç: e · d ≡ 1 (mod ϕ)   ·   ϕ = {_PHI},  e = {_E}")
-
-        # Bezout özdeşliği — d'nin neden t olduğunu net açıklar
-        p.setFont(QFont("Georgia", 9))
-        p.setPen(QColor(ANIM_COLORS["accent_blue"]))
-        p.drawText(QRect(0, 48, W, 16), Qt.AlignmentFlag.AlignCenter,
-                   "Bezout:  ϕ·s + e·t = gcd(ϕ, e) = 1   ⇒   e·t ≡ 1 (mod ϕ)   ⇒   d = t mod ϕ")
-
-        # s, t katsayı kuralı
-        p.setFont(QFont("Georgia", 8))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 66, W, 14), Qt.AlignmentFlag.AlignCenter,
-                   "(Her adımda  s = s₀ − q·s₁,   t = t₀ − q·t₁  güncellenir.)")
-
-        # Satırlar — rows[2..]: gerçek bölme adımları
-        gcd_row_idx = len(self._rows) - 2
-        row_y = 92
-        line_h = 22
-        # Pencere genişliğine göre dinamik kolon — DAR pencerede bile
-        # "8448 = 2816 × 3 + 0" (4-haneli n × 4-haneli q) sığsın.
-        eq_col_w = max(190, (W - 200) // 2)
-        arrow_w = 22
-        st_col_w = max(140, (W - 200) // 2 - 30)
-        annot_x = cx + arrow_w // 2 + st_col_w + 8
-        annot_w = 110
-
-        for ri in range(2, len(self._rows)):
-            i, q, r, s, t = self._rows[ri]
-            _, _, r1, _, _ = self._rows[ri - 1]
-            _, _, r0, _, _ = self._rows[ri - 2]
-
-            is_gcd = (ri == gcd_row_idx)
-            is_term = (r == 0)
-
-            if is_gcd:
-                color = ANIM_COLORS["accent_green"]
-            elif is_term:
-                color = ANIM_COLORS["text_muted"]
-            else:
-                color = ANIM_COLORS["text_secondary"]
-
-            y = row_y + (ri - 2) * line_h
-
-            # Sol: bölüm denklemi — daha küçük font, "3120 = 183 × 17 + 9" sığar
-            p.setFont(QFont("Courier New", 11))
-            p.setPen(QColor(color))
-            text_left = f"{r0} = {q} × {r1} + {r}"
-            p.drawText(
-                QRect(cx - eq_col_w - arrow_w // 2, y, eq_col_w, line_h),
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                text_left,
-            )
-
-            # Orta: ⇒
-            p.drawText(
-                QRect(cx - arrow_w // 2, y, arrow_w, line_h),
-                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
-                "⇒",
-            )
-
-            # Sağ: s, t katsayıları
-            text_right = f"s={s}, t={t}"
-            p.drawText(
-                QRect(cx + arrow_w // 2, y, st_col_w, line_h),
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                text_right,
-            )
-
-            # Etiket — GCD=1 veya durma (sadece pencere genişse göster)
-            if W >= 700:
-                if is_gcd:
-                    p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
-                    p.setPen(QColor(ANIM_COLORS["accent_green"]))
-                    p.drawText(
-                        QRect(annot_x, y, annot_w, line_h),
-                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                        "← GCD=1, t'yi al",
-                    )
-                elif is_term:
-                    p.setFont(QFont("Georgia", 8))
-                    p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                    p.drawText(
-                        QRect(annot_x, y, annot_w, line_h),
-                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                        "(durma)",
-                    )
-
-        # d hesaplama
-        n_rows = len(self._rows) - 2
-        last_t = self._rows[gcd_row_idx][4]
-        calc_y = row_y + n_rows * line_h + 16
-
-        # d hesaplama — net ve adım adım:
-        #   GCD=1 satırından t alınıyor, mod ϕ ile pozitife normalize.
-        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        # Amaç — neden böyle yapıyoruz
+        p.setFont(QFont("Georgia", 10))
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(0, calc_y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                   "GCD=1 satırından  t  alınır, sonra  d = t mod ϕ:")
-        p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
-        p.setPen(QColor(ANIM_COLORS["accent_green"]))
-        p.drawText(QRect(0, calc_y + 18, W, 24), Qt.AlignmentFlag.AlignCenter,
-                   f"d = t mod ϕ = {last_t} mod {_PHI} = {_D}")
-        if last_t < 0:
-            p.setFont(QFont("Georgia", 8))
-            p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, calc_y + 44, W, 14),
-                       Qt.AlignmentFlag.AlignCenter,
-                       "(t negatif olduğu için ϕ eklenerek [0, ϕ) aralığına alındı)")
+        p.drawText(QRect(0, 34, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "Amaç:  e · d ≡ 1 (mod ϕ)   ⇒   e · d = 1 + k · ϕ   ⇒   d = (1 + k · ϕ) / e")
 
-        # Doğrulama — kongrüans (≡) formunda; "Amaç: e · d ≡ 1 (mod ϕ)" ile aynı tip.
-        # İki satıra bölündü: önce sembolik form, sonra sayısal sağlama.
-        verify_y = calc_y + 66
+        # Strateji
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, 54, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "k = 1, 2, 3, … için böl;  ilk tam sayı çıkan k'da  d  bulunmuştur.")
+
+        # Bilinen değerler
+        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_peach"]))
+        p.drawText(QRect(0, 76, W, 20), Qt.AlignmentFlag.AlignCenter,
+                   f"ϕ = {_PHI},   e = {_E}")
+
+        # İterasyonlar (max 5 başarısız + 1 başarılı satır; arada ⋮)
+        iters = self._iterations
+        if len(iters) > 6:
+            visible: list[tuple[int, int, float, int, bool] | None] = (
+                list(iters[:4]) + [None] + [iters[-1]]
+            )
+        else:
+            visible = list(iters)
+
+        row_y = 104
+        line_h = 24
+
+        # Satırların en uzunu için adaptif font seç
+        sample_lines = []
+        for it in visible:
+            if it is None:
+                continue
+            k, num, qf, qi, ok = it
+            if ok:
+                sample_lines.append(
+                    f"k = {k}:  (1 + {k} · {_PHI}) / {_E}  =  {num} / {_E}  =  {qi}   ✓ bulundu"
+                )
+            else:
+                sample_lines.append(
+                    f"k = {k}:  (1 + {k} · {_PHI}) / {_E}  =  {num} / {_E}  =  {qf:.3f}…   ✗"
+                )
+        avail_w = W - 16
+        row_pt = 11
+        for pt in (11, 10, 9, 8):
+            p.setFont(QFont("Courier New", pt))
+            longest = max(sample_lines, key=lambda s: p.fontMetrics().horizontalAdvance(s)) if sample_lines else ""
+            if not longest or p.fontMetrics().horizontalAdvance(longest) <= avail_w:
+                row_pt = pt
+                break
+        else:
+            row_pt = 8
+
+        success_color = QColor(ANIM_COLORS["accent_green"])
+        fail_color = QColor(ANIM_COLORS["text_muted"])
+
+        for i, it in enumerate(visible):
+            y = row_y + i * line_h
+            if it is None:
+                p.setFont(QFont("Courier New", row_pt))
+                p.setPen(fail_color)
+                p.drawText(QRect(0, y, W, line_h),
+                           Qt.AlignmentFlag.AlignCenter, "⋮")
+                continue
+            k, num, qf, qi, ok = it
+            color = success_color if ok else fail_color
+            font = QFont("Courier New", row_pt,
+                         QFont.Weight.Bold if ok else QFont.Weight.Normal)
+            p.setFont(font)
+            p.setPen(color)
+            if ok:
+                line = (
+                    f"k = {k}:  (1 + {k} · {_PHI}) / {_E}  =  {num} / {_E}"
+                    f"  =  {qi}   ✓ bulundu"
+                )
+            else:
+                line = (
+                    f"k = {k}:  (1 + {k} · {_PHI}) / {_E}  =  {num} / {_E}"
+                    f"  =  {qf:.3f}…   ✗"
+                )
+            p.drawText(QRect(8, y, W - 16, line_h),
+                       Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
+                       line)
+
+        # Sonuç d
+        result_y = row_y + len(visible) * line_h + 16
+        p.setFont(QFont("Courier New", 14, QFont.Weight.Bold))
+        p.setPen(success_color)
+        p.drawText(QRect(0, result_y, W, 26),
+                   Qt.AlignmentFlag.AlignCenter, f"d = {_D}")
+
+        # Doğrulama — kongrüans formunda (e·d ≡ 1 mod ϕ)
+        verify_y = result_y + 36
         check = (_E * _D) % _PHI
         symbolic = "Doğrulama:  e · d  ≡  1  (mod ϕ)"
-        numeric = f"{_E} · {_D}  ≡  {check}  (mod {_PHI})   ✓"
+        numeric = f"{_E} · {_D}  =  {_E * _D}  ≡  {check}  (mod {_PHI})   ✓"
 
-        # Adaptif font — uzun random değerlerde de sığar
-        avail_w = W - 16
-        font_pt = 10
+        ver_pt = 11
         for pt in (11, 10, 9, 8):
             p.setFont(QFont("Courier New", pt, QFont.Weight.Bold))
             longest = max(symbolic, numeric, key=lambda s: p.fontMetrics().horizontalAdvance(s))
             if p.fontMetrics().horizontalAdvance(longest) <= avail_w:
-                font_pt = pt
+                ver_pt = pt
                 break
         else:
-            font_pt = 8
+            ver_pt = 8
 
-        p.setFont(QFont("Courier New", font_pt, QFont.Weight.Bold))
+        p.setFont(QFont("Courier New", ver_pt, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         p.drawText(QRect(8, verify_y, W - 16, 22),
                    Qt.AlignmentFlag.AlignCenter, symbolic)
@@ -1719,7 +1714,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         "Adım 2 / 8 — n = p × q",
         "Adım 3 / 8 — ϕ(n) = (p − 1)(q − 1)",
         "Adım 4 / 8 — Açık Üs e Seçimi",
-        "Adım 5 / 8 — Gizli Üs d  (Genişletilmiş Öklid)",
+        "Adım 5 / 8 — Gizli Üs d  (e·d = 1 + k·ϕ)",
         "Adım 6 / 8 — DER ve Base64 Kodlaması",
         "Adım 7 / 8 — Gerçek Anahtarlarla Eşleşme",
         "Adım 8 / 8 — Şifreleme / Deşifreleme Turu",

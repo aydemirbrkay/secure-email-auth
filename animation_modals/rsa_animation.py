@@ -1519,14 +1519,17 @@ class _RSAEncryptDecryptWidget(QWidget):
         W, H = self.width(), self.height()
         t = self._tick
 
-        box_w, box_h = 100, 44
-        margin = 20
+        # m/c kutuları biraz daraltıldı → formül kutusu için daha çok yer
+        # (random RSA'da n,d 4 hane olabilir, "1805³³⁴³ mod 4819" gibi
+        # uzun ifade sığsın).
+        box_w, box_h = 86, 44
+        margin = 14
         ox = margin
 
         # Formül kutusu — m ve c arasında kalan boşluğa uyarlanır
-        formula_x = margin + box_w + 16
-        formula_right_lim = W - margin - box_w - 16
-        formula_w = max(180, formula_right_lim - formula_x)
+        formula_x = margin + box_w + 12
+        formula_right_lim = W - margin - box_w - 12
+        formula_w = max(220, formula_right_lim - formula_x)
         formula_h = 64
 
         # Anahtar kartı (formül altında ortalı)
@@ -1653,25 +1656,25 @@ class _RSAEncryptDecryptWidget(QWidget):
         p.drawRoundedRect(x, y, w, h, 6, 6)
 
         # Font puntosu, en uzun satır kutuya sığacak şekilde dinamik seçilir.
-        # Random RSA değerlerinde (özellikle d 3-4 haneye çıkınca) sabit 10pt
-        # bazen taşıyordu; bu nedenle adaptif fallback eklendi.
+        # Random RSA değerlerinde n,d 4 haneye çıkabildiği için 7pt'ye kadar
+        # fallback ekledim; daha sıkı padding ile asla taşma olmasın.
         lines = [line1, line2, line3]
-        avail_w = w - 16
-        font_pt = 10
-        for pt in (10, 9, 8):
+        avail_w = w - 12
+        font_pt = 9
+        for pt in (10, 9, 8, 7):
             p.setFont(QFont("Courier New", pt, QFont.Weight.Bold))
             longest = max(lines, key=lambda s: p.fontMetrics().horizontalAdvance(s))
             if p.fontMetrics().horizontalAdvance(longest) <= avail_w:
                 font_pt = pt
                 break
         else:
-            font_pt = 8
+            font_pt = 7
 
         p.setFont(QFont("Courier New", font_pt, QFont.Weight.Bold))
         text_col = QColor(ANIM_COLORS["text_primary"])
         p.setPen(text_col)
         for li in range(min(lines_revealed, 3)):
-            p.drawText(QRect(x + 8, y + 6 + li * 20, w - 16, 18),
+            p.drawText(QRect(x + 6, y + 6 + li * 20, w - 12, 18),
                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                        lines[li])
 

@@ -216,17 +216,20 @@ class _AESIntroWidget(QWidget):
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
         # Sol panel daha dar tutuluyor → sağ akış için yer açar
-        left_frame.setMinimumWidth(180)
-        left_frame.setMaximumWidth(260)
+        left_frame.setMinimumWidth(170)
+        left_frame.setMaximumWidth(210)
         h_row.addWidget(left_frame, stretch=0)
 
-        # Sağ: akış şeması
+        # Sağ: akış şeması — maksimum genişlik sınırı + sağa stretch ile
+        # boş alan → kutular makul daralır, içlerinde aşırı boşluk olmaz.
         right_w = QWidget()
         right_lay = QVBoxLayout(right_w)
         right_lay.setContentsMargins(0, 0, 0, 0)
         right_lay.setSpacing(0)
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
-        h_row.addWidget(right_w, stretch=1)
+        right_w.setMaximumWidth(420)
+        h_row.addWidget(right_w, stretch=0)
+        h_row.addStretch(1)  # sağ kenardaki boşluğu emer
 
         # ── Sağ taraf: akış şeması widget'ları ──
 
@@ -317,7 +320,7 @@ class _AESIntroWidget(QWidget):
             f"border: 2px solid {color}; border-radius: 6px; }}"
         )
         lay = QVBoxLayout(f)
-        lay.setContentsMargins(8, 6, 8, 6)
+        lay.setContentsMargins(6, 3, 6, 3)  # daha kompakt
         lbl = QLabel(text)
         lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         lbl.setStyleSheet(f"color: {color}; border: none;")
@@ -334,8 +337,8 @@ class _AESIntroWidget(QWidget):
             f"border: 2px solid {color}; border-radius: 6px; }}"
         )
         lay = QVBoxLayout(f)
-        lay.setContentsMargins(10, 8, 10, 8)
-        lay.setSpacing(3)
+        lay.setContentsMargins(8, 4, 8, 4)  # daha kompakt — boş alan azaldı
+        lay.setSpacing(1)
         t = QLabel(title)
         t.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         t.setStyleSheet(f"color: {color}; border: none;")

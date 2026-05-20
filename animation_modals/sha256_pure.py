@@ -148,4 +148,8 @@ def sha256_steps(message: bytes) -> dict:
         "pre_final_h":      [f"{v:08x}" for v in h_before],
         "final_working":    [f"{v:08x}" for v in last_working],
         "final_h_parts":    [f"{v:08x}" for v in h],
+        # Mesaj Hazırlığı sayfası için (yeni alanlar)
+        "message_bytes":    bytes(message),
+        "message_text":     message.decode("utf-8", errors="replace"),
+        "padded_bytes":     bytes(padded),
     }

@@ -1231,6 +1231,434 @@ class _SHA256IntroWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# SHA Mesaj Hazırlığı (metin → UTF-8 byte) — Task 7 widget'ı
+# ---------------------------------------------------------------------------
+
+class _SHAMessagePrepWidget(QWidget):
+    """
+    SHA Mesaj Hazırlığı sayfası — kullanıcının metnini UTF-8 byte'lara dönüştürme
+    sürecini görselleştirir.
+
+    Fazlar (QTimer _TICK_MS=60):
+      0: Mesaj label'ı fade-in
+      1: İlk 16 byte char->ASCII->hex satırları kademeli
+      2: Binary satırı
+      3: Alt byte strip görünür
+      4: Özet kartı — animasyon durur, on_finished callback çağrılır
+
+    Boş mesaj: faz 1-2-3 atlanır, doğrudan faz 4'e geçilir.
+    """
+
+    _TICK_MS = 60
+
+    def __init__(
+        self,
+        message_text: str,
+        message_bytes: bytes,
+        on_finished=None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        from animation_modals.byte_widgets import (
+            _ColoredByteGridWidget,
+            _ByteStripWidget,
+        )
+
+        self._message_text = message_text
+        self._message_bytes = message_bytes
+        self._on_finished = on_finished
+        self._is_empty = len(message_bytes) == 0
+        self._tick = 0
+        self._phase = 0
+        self._finished = False
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(8)
+
+        # Üst başlık
+        title = QLabel("Mesaj Hazırlığı — Metin → UTF-8 Byte Dizisi")
+        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+
+        # Mesaj label
+        if self._is_empty:
+            label_text = "<i>(boş mesaj)</i>"
+            label_color = ANIM_COLORS["text_muted"]
+        else:
+            preview = message_text[:60] + ("…" if len(message_text) > 60 else "")
+            label_text = f"Mesaj: \"{preview}\""
+            label_color = ANIM_COLORS["text_secondary"]
+        self._msg_lbl = QLabel(label_text)
+        self._msg_lbl.setFont(QFont("IBM Plex Sans", 11))
+        self._msg_lbl.setStyleSheet(f"color: {label_color};")
+        self._msg_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._msg_lbl.setTextFormat(Qt.TextFormat.RichText)
+        lay.addWidget(self._msg_lbl)
+
+        # Detail grid (ilk 16 byte)
+        detail_lbl = QLabel("İlk 16 byte detayı:")
+        detail_lbl.setFont(QFont("IBM Plex Sans", 9))
+        detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(detail_lbl)
+        self._grid = _ColoredByteGridWidget(message_bytes, max_cells=16)
+        lay.addWidget(self._grid)
+
+        # Byte strip (tüm byte'lar) — scroll içinde
+        strip_lbl = QLabel("Tüm byte'lar:")
+        strip_lbl.setFont(QFont("IBM Plex Sans", 9))
+        strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(strip_lbl)
+        self._strip = _ByteStripWidget(message_bytes)
+        strip_scroll = QScrollArea()
+        strip_scroll.setWidget(self._strip)
+        strip_scroll.setWidgetResizable(True)
+        strip_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        strip_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        strip_scroll.setStyleSheet("background: transparent; border: none;")
+        strip_scroll.setFixedHeight(48)
+        self._strip.setVisible(False)
+        lay.addWidget(strip_scroll)
+
+        # Özet kartı
+        if self._is_empty:
+            summary_text = "Mesaj boş — yalnızca padding işlemi yapılacak"
+        else:
+            summary_text = (
+                f"{len(message_text)} karakter → {len(message_bytes)} byte"
+            )
+        self._summary = QLabel(summary_text)
+        self._summary.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        self._summary.setStyleSheet(
+            f"color: {ANIM_COLORS['accent_green']}; "
+            f"padding: 8px; background: {ANIM_COLORS['bg_card']}; "
+            f"border-radius: 6px;"
+        )
+        self._summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._summary.setVisible(False)
+        lay.addWidget(self._summary)
+
+        # NOT: addStretch() çıkarıldı — pencere büyük olsa bile widget kompakt
+        # kalsın, alt taraf scrollu/boş alanlı görünmesin. Üst hizalama parent
+        # tarafından (_make_msgprep_page) AlignTop ile sağlanır.
+
+        # Timer
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_tick)
+
+    def start(self) -> None:
+        self._timer.start(self._TICK_MS)
+
+    def _on_tick(self) -> None:
+        self._tick += 1
+        if self._is_empty:
+            # Boş mesaj: faz 0 (~1.2s) sonra doğrudan faz 4'e
+            if self._tick >= 25:
+                self._jump_to_final()
+            return
+
+        # Normal akış — fazlar
+        if self._tick == 21:
+            self._phase = 1
+        elif self._tick == 61:
+            self._phase = 2
+        elif self._tick == 96:
+            self._phase = 3
+            self._strip.setVisible(True)
+        elif self._tick >= 116:
+            self._jump_to_final()
+
+    def _jump_to_final(self) -> None:
+        if self._finished:
+            return
+        self._finished = True
+        self._timer.stop()
+        self._strip.setVisible(not self._is_empty)
+        self._summary.setVisible(True)
+        if self._on_finished:
+            self._on_finished()
+
+    def closeEvent(self, e) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().closeEvent(e)
+
+
+class _SHA256PaddingWidget(QWidget):
+    """
+    SHA-256 Padding sayfası — görsel byte stripi üzerinde padding sürecini gösterir.
+
+    Strip her zaman TÜM 64 byte'ı (tam padded blok) gösterir. Kullanıcının
+    mesaj byte'ları normal renkli kareler, padding byte'ları (0x80 + 0x00
+    dolgu + 8 byte length) beyaz 1px border + alpha 0.7 ile ayrışır.
+    Fazlar yalnızca açıklayıcı etiketi günceller; veri başından sonuna
+    aynı görünür ki kullanıcı "yazdığım yazı şurada, padding şurada başlıyor"
+    ilişkisini anında görsün.
+
+    Fazlar (etiket güncellemeleri):
+      0: "Kullanıcının metni soldaki renkli kareler; geri kalan padding"
+      1: "0x80 ayracı — padding başlangıç byte'ı"
+      2: "0x00 dolgusu — 56 byte'a tamamlanır"
+      3: "Son 8 byte — mesaj uzunluğu (big-endian)"
+      4: "Padding tamamlandı — N byte / K blok"
+    """
+
+    _TICK_MS = 60
+
+    def __init__(
+        self,
+        message_bytes: bytes,
+        padded_bytes: bytes,
+        blocks_count: int,
+        on_finished=None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        from animation_modals.byte_widgets import _ByteStripWidget
+
+        self._message_bytes = message_bytes
+        self._padded_bytes = padded_bytes
+        self._blocks_count = blocks_count
+        self._on_finished = on_finished
+        self._current_block = 0
+        self._tick = 0
+        self._phase = 0
+        self._finished = False
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(6)
+
+        # Başlık
+        title = QLabel("Adım 2 / 5 — Padding ve Blok Yapısı")
+        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+
+        # Info etiketi — boş mesaj durumunda özel mesaj
+        if len(message_bytes) == 0:
+            info_text = "Boş mesaj — padding tek 64 byte blok oluşturur"
+        else:
+            info_text = (
+                f"Padding: {len(message_bytes)} byte mesaj + 0x80 + "
+                f"0x00 dolgu + 64-bit uzunluk = "
+                f"{len(padded_bytes)} byte ({blocks_count} blok)"
+            )
+        self._info_lbl = QLabel(info_text)
+        self._info_lbl.setFont(QFont("IBM Plex Sans", 10))
+        self._info_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
+        self._info_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._info_lbl.setWordWrap(True)
+        lay.addWidget(self._info_lbl)
+
+        # Block navigation (>1 blok varsa)
+        self._block_lbl = None
+        self._btn_prev_block = None
+        self._btn_next_block = None
+        if blocks_count > 1:
+            nav_row = QHBoxLayout()
+            self._btn_prev_block = QPushButton("◀ Önceki Blok")
+            self._btn_prev_block.setFont(QFont("IBM Plex Sans", 9))
+            self._btn_prev_block.clicked.connect(self._prev_block)
+            self._btn_prev_block.setEnabled(False)
+            nav_row.addWidget(self._btn_prev_block)
+
+            self._block_lbl = QLabel(f"Blok 1 / {blocks_count}")
+            self._block_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            self._block_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+            self._block_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            nav_row.addWidget(self._block_lbl)
+
+            self._btn_next_block = QPushButton("Sonraki Blok ▶")
+            self._btn_next_block.setFont(QFont("IBM Plex Sans", 9))
+            self._btn_next_block.clicked.connect(self._next_block)
+            self._btn_next_block.setEnabled(blocks_count > 1)
+            nav_row.addWidget(self._btn_next_block)
+            lay.addLayout(nav_row)
+
+        # Faz etiketi — kullanıcıya hangi padding bileşeninin vurgulandığını söyler
+        self._phase_lbl = QLabel(self._phase_label_text(0))
+        self._phase_lbl.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        self._phase_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        self._phase_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._phase_lbl.setWordWrap(True)
+        lay.addWidget(self._phase_lbl)
+
+        # 64 byte detay grid'i — TÜM padded blok karakter/ASCII/hex/binary
+        # satırları halinde gösterilir. Mesaj byte'ları normal renkli; padding
+        # byte'ları (0x80 + 0x00 dolgu + 8 byte length) beyaz 2px border +
+        # alpha 0.7 + [80]/[00]/[len] etiketleriyle ayrışır. Yatay scroll
+        # ile tüm 64 byte erişilebilir (sığmadığında).
+        from animation_modals.byte_widgets import _ColoredByteGridWidget
+        initial_mask = self._full_padding_mask()
+        initial_labels = self._full_padding_labels()
+        self._grid = _ColoredByteGridWidget(
+            self._current_block_bytes(),
+            max_cells=64,
+            cell_w=36,
+            cell_h=22,
+            padding_mask=initial_mask,
+            padding_labels=initial_labels,
+        )
+        # 64 hücre × (36+2) + label (80) + sol kenar (6) ≈ 2518 px sabit
+        grid_width = 80 + 6 + 64 * (36 + 2)
+        grid_height = 4 * (22 + 4) + 30 + 16  # 4 satır + padding etiket alanı
+        self._grid.setFixedSize(grid_width, grid_height)
+
+        grid_scroll = QScrollArea()
+        grid_scroll.setWidget(self._grid)
+        grid_scroll.setWidgetResizable(False)  # sabit boyut + yatay scroll
+        grid_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        grid_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        grid_scroll.setStyleSheet("background: transparent; border: none;")
+        grid_scroll.setFixedHeight(grid_height + 24)
+        lay.addWidget(grid_scroll)
+        self._grid_scroll = grid_scroll
+
+        # Bit length etiketi
+        bit_len = len(message_bytes) * 8
+        self._bitlen_lbl = QLabel(f"Mesaj uzunluğu: {bit_len} bit (son 8 byte)")
+        self._bitlen_lbl.setFont(QFont("Courier New", 9))
+        self._bitlen_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._bitlen_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._bitlen_lbl.setVisible(False)
+        lay.addWidget(self._bitlen_lbl)
+
+        # NOT: addStretch() çıkarıldı — sayfada gereksiz dikey boşluk yaratıyordu.
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_tick)
+
+    def _full_padding_mask(self) -> list[bool]:
+        """Tam padding mask — mesaj byte'ları False, geri kalan tüm
+        padding bileşenleri (0x80, 0x00 dolgu, length) True. İlk blok için
+        mesaj uzunluğuna göre hesaplanır; sonraki bloklar tamamen padding."""
+        n_msg = len(self._message_bytes)
+        if self._current_block == 0:
+            # İlk 64 byte içinde mesaj byte'larından sonraki her şey padding
+            cutoff = min(n_msg, 64)
+            return [False] * cutoff + [True] * (64 - cutoff)
+        # Sonraki bloklar: tamamen padding (mesaj zaten önceki bloklarda)
+        return [True] * 64
+
+    def _full_padding_labels(self) -> list[str]:
+        """Her byte için padding türü etiketi: mesaj byte'larında '' (etiket
+        yok), 0x80 → '80', 0x00 → '00', son 8 byte → 'len'. Kullanıcı her
+        kutucuğun hangi padding bileşenine ait olduğunu okuyarak görür."""
+        block_data = self._current_block_bytes()
+        block_start = self._current_block * 64
+        total_padded = len(self._padded_bytes)
+        n_msg_total = len(self._message_bytes)
+        last8_start = total_padded - 8  # mesaj uzunluğu byte'larının başlangıcı
+        labels: list[str] = []
+        for i, byte_val in enumerate(block_data):
+            absolute = block_start + i
+            if absolute < n_msg_total:
+                labels.append("")  # mesaj byte'ı — etiket yok
+            elif absolute >= last8_start:
+                labels.append("len")  # son 8 byte: mesaj uzunluğu
+            elif byte_val == 0x80:
+                labels.append("80")  # padding ayracı
+            else:
+                labels.append("00")  # sıfır dolgu
+        # 64'e tamamla (eksikse boş etiket)
+        while len(labels) < 64:
+            labels.append("")
+        return labels[:64]
+
+    def _phase_label_text(self, phase: int) -> str:
+        """Aktif faza göre kullanıcıya ne vurgulandığını anlatan etiket."""
+        n_msg = len(self._message_bytes)
+        if phase == 0:
+            if n_msg == 0:
+                return "Boş mesaj — tüm 64 byte padding (0x80 + 0x00 dolgu + uzunluk)"
+            return (
+                f"Soldaki {n_msg} renkli kare = kullanıcının metni; "
+                f"geri kalan {64 - min(n_msg, 64)} kare = padding"
+            )
+        if phase == 1:
+            return "0x80 ayracı — padding'in ilk byte'ı (mesajdan hemen sonra)"
+        if phase == 2:
+            return "0x00 dolgusu — blok 56 byte'a tamamlanır"
+        if phase == 3:
+            return "Son 8 byte — mesaj uzunluğu (big-endian, bit cinsinden)"
+        return (
+            f"Padding tamamlandı — {len(self._padded_bytes)} byte / "
+            f"{self._blocks_count} blok"
+        )
+
+    def _current_block_bytes(self) -> bytes:
+        start = self._current_block * 64
+        return self._padded_bytes[start:start + 64]
+
+    def start(self) -> None:
+        self._timer.start(self._TICK_MS)
+
+    def _on_tick(self) -> None:
+        # Veri görseli baştan tam — fazlar sadece açıklama etiketini günceller.
+        # Bu sayede kullanıcı "yazdığım yazı / padding" ayrımını anında görür,
+        # fazlar her bir padding bileşenini sırayla vurgular.
+        self._tick += 1
+        if self._tick == 26:
+            self._phase = 1
+            self._phase_lbl.setText(self._phase_label_text(1))
+        elif self._tick == 46:
+            self._phase = 2
+            self._phase_lbl.setText(self._phase_label_text(2))
+        elif self._tick == 96:
+            self._phase = 3
+            self._phase_lbl.setText(self._phase_label_text(3))
+            self._bitlen_lbl.setVisible(True)
+        elif self._tick >= 126:
+            self._phase = 4
+            self._phase_lbl.setText(self._phase_label_text(4))
+            self._jump_to_final()
+
+    def _jump_to_final(self) -> None:
+        if self._finished:
+            return
+        self._finished = True
+        self._timer.stop()
+        if self._on_finished:
+            self._on_finished()
+
+    def _prev_block(self) -> None:
+        if self._current_block > 0:
+            self._current_block -= 1
+            self._update_block_view()
+
+    def _next_block(self) -> None:
+        if self._current_block < self._blocks_count - 1:
+            self._current_block += 1
+            self._update_block_view()
+
+    def _update_block_view(self) -> None:
+        if self._block_lbl is not None:
+            self._block_lbl.setText(f"Blok {self._current_block + 1} / {self._blocks_count}")
+        if self._btn_prev_block is not None:
+            self._btn_prev_block.setEnabled(self._current_block > 0)
+        if self._btn_next_block is not None:
+            self._btn_next_block.setEnabled(self._current_block < self._blocks_count - 1)
+        # Blok değişiminde tam mask + etiket uygulanır — mesaj/padding ayrımı
+        # her blokta baştan görünür (sonraki bloklar tamamen padding).
+        self._grid.set_data(
+            self._current_block_bytes(),
+            padding_mask=self._full_padding_mask(),
+            padding_labels=self._full_padding_labels(),
+        )
+
+    def closeEvent(self, e) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().closeEvent(e)
+
+
+# ---------------------------------------------------------------------------
 # SHA-256 Animasyon Penceresi
 # ---------------------------------------------------------------------------
 
@@ -1238,16 +1666,39 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
     """
     SHA-256 animasyon penceresi.
 
-    Adımlar:
-      0        : Padding görselleştirmesi
-      1        : Mesaj genişletme (W_i) sayfası
-      2..9*N+1 : Her 512-bit blok için kompresyon diyagramı (9 snapshot: round 1,9,17,25,33,41,49,57,64)
-      son adım : Hash eşleşmesi (_show_match_result)
+    Mantıksal adımlar (kullanıcı görünümü):
+      Adım 1 / 5 : Mesaj Hazırlığı (UTF-8 byte dönüşümü)
+      Adım 2 / 5 : Padding ve Blok Yapısı
+      Adım 3 / 5 : Mesaj Genişletme (W_i)
+      Adım 4 / 5 : Sıkıştırma Round Diyagramı (her snapshot bir alt adım)
+      Adım 5 / 5 : Hash Eşleşmesi
+
+    Underlying step_idx (progress bar):
+      0         : Mesaj Hazırlığı
+      1         : Padding
+      2         : W expansion
+      3..N+2    : Round snapshot'ları
+      N+3       : Match (otomatik _show_match_result tetiklenir)
 
     Parametreler:
       message      : kullanıcının orijinal mesaj metni
       expected_hash: crypto_core'un ürettiği hex hash
     """
+
+    _TITLES = [
+        "Adım 1 / 5 — Mesaj Hazırlığı",
+        "Adım 2 / 5 — Padding ve Blok Yapısı",
+        "Adım 3 / 5 — Mesaj Genişletme (W_i)",
+        "Adım 4 / 5 — Sıkıştırma Round Diyagramı",
+        "Adım 5 / 5 — Hash Eşleşmesi",
+    ]
+    _CAPTIONS = [
+        "Metnin UTF-8 byte dizisine dönüşümü",
+        "0x80 ayracı, 0x00 dolgu, 64-bit uzunluk eki",
+        "İlk 16 word'den W[16..63] türetilir",
+        "64 round, A..H register güncellemesi",
+        "Final H[0..7] birleştirme + beklenen hash karşılaştırması",
+    ]
 
     def __init__(
         self,
@@ -1260,12 +1711,13 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._expected_hash = expected_hash
         self._data = sha256_steps(message.encode("utf-8"))
 
-        # Adım 0: padding
-        # Adım 1: W_i mesaj genişletme
-        # Adım 2..9*N+1: her blok için 9 snapshot (round 1,9,17,25,33,41,49,57,64)
+        # Adım 0: mesaj hazırlığı (UTF-8 byte dönüşümü)
+        # Adım 1: padding
+        # Adım 2: W_i mesaj genişletme
+        # Adım 3..len(snaps)+2: her blok için 9 snapshot (round 1,9,17,25,33,41,49,57,64)
         # Son adım: eşleşme (_show_match_result)
         snaps = self._data["round_snapshots"]
-        total = 2 + len(snaps)   # padding + W_i genişletme + all snapshots
+        total = 3 + len(snaps)   # message_prep + padding + W_i genişletme + all snapshots
         super().__init__(
             "SHA-256 Hash Animasyonu",
             total,
@@ -1284,77 +1736,66 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._stack = QStackedWidget()
         self.content_layout.addWidget(self._stack, stretch=1)
 
-        # Sayfa 0 — Ön tanıtma
+        # Sayfa 0 — Ön tanıtma (intro)
         self._page_intro = _SHA256IntroWidget(on_start=self._switch_to_content)
         self._stack.addWidget(self._page_intro)
 
-        # Sayfa 1 — Padding
+        # Sayfa 1 — Mesaj Hazırlığı (yeni, Adım 1/5)
+        self._page_msgprep = self._make_msgprep_page()
+        self._stack.addWidget(self._page_msgprep)
+
+        # Sayfa 2 — Padding (Adım 2/5)
         self._page_padding = self._make_padding_page()
         self._stack.addWidget(self._page_padding)
 
-        # Sayfa 1b — Mesaj Genişletme (W_i)
+        # Sayfa 3 — Mesaj Genişletme (W_i) (Adım 3/5)
         self._page_wexpand = self._make_wexpand_page()
         self._stack.addWidget(self._page_wexpand)
 
-        # Sayfa 2 — Kompresyon diyagramı (tüm snapshot'lar için tek sayfa, veri güncellenir)
+        # Sayfa 4 — Kompresyon diyagramı (Adım 4/5, tüm snapshot'lar için tek sayfa, veri güncellenir)
         self._page_diagram = self._make_diagram_page()
         self._stack.addWidget(self._page_diagram)
 
-        # Sayfa 3 — Eşleşme
+        # Sayfa 5 — Eşleşme (Adım 5/5)
         self._page_match = self._make_match_page()
         self._stack.addWidget(self._page_match)
 
         # Intro animasyonunu başlat
         self._page_intro.start()
 
+    def _make_msgprep_page(self) -> QWidget:
+        """Yeni Mesaj Hazırlığı sayfası — _SHAMessagePrepWidget içerir.
+        Widget üste hizalanır ki büyük pencerelerde alt boşluk olmasın."""
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 8, 12, 8)
+        self._msgprep_widget = _SHAMessagePrepWidget(
+            message_text=self._data["message_text"],
+            message_bytes=self._data["message_bytes"],
+            on_finished=self._on_msgprep_finished,
+        )
+        lay.addWidget(self._msgprep_widget, alignment=Qt.AlignmentFlag.AlignTop)
+        return w
+
+    def _on_msgprep_finished(self) -> None:
+        """Mesaj Hazırlığı animasyonu bittiğinde — İleri butonu zaten manuel."""
+        # Manuel modda buton zaten enabled, ek aksiyon gerekmez.
+        # Bu callback, gelecekte buton durum yönetimi gerekirse genişler.
+        pass
+
     def _make_padding_page(self) -> QWidget:
+        """Yeni padding sayfası — _SHA256PaddingWidget içerir.
+        Outer QScrollArea kaldırıldı: widget zaten kompakt, scroll gerekmez."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
 
-        title = QLabel("Adım 1 — Padding ve Blok Yapısı")
-        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(title)
-
-        d = self._data
-        bc = d["blocks_count"]
-        preview = d["binary_preview"]
-        padded_len = d["padded_len"]
-
-        info = QLabel(
-            f"Mesaj: \"{self._message[:50]}\"\n\n"
-            f"İlk 8 byte (binary):\n  {preview}\n\n"
-            f"Padding işlemleri:\n"
-            f"  1. '1' biti eklendi\n"
-            f"  2. '0' bitleri ile 512'nin katına tamamlandı\n"
-            f"  3. Sonuna 64-bit mesaj uzunluğu eklendi\n\n"
-            f"Sonuç: {padded_len} byte → {bc} adet 512-bit blok\n\n"
-            + "\n".join(
-                f"  ▪ Blok {i+1}:  byte {i*64} – {(i+1)*64-1}"
-                for i in range(bc)
-            )
+        self._padding_widget = _SHA256PaddingWidget(
+            message_bytes=self._data["message_bytes"],
+            padded_bytes=self._data["padded_bytes"],
+            blocks_count=self._data["blocks_count"],
         )
-        info.setFont(QFont("Courier New", 10))
-        info.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
-        info.setWordWrap(True)
-        info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-
-        card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
-        )
-        cl = QVBoxLayout(card)
-        cl.setContentsMargins(10, 8, 10, 8)
-        cl.addWidget(info)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(card)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        lay.addWidget(scroll)
+        lay.addWidget(self._padding_widget, alignment=Qt.AlignmentFlag.AlignTop)
         return w
 
     def _make_wexpand_page(self) -> QWidget:
@@ -1425,14 +1866,19 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
 
     def _render_step(self, step_idx: int) -> None:
         if step_idx == 0:
-            self._stack.setCurrentWidget(self._page_padding)
+            self._stack.setCurrentWidget(self._page_msgprep)
+            self._msgprep_widget.start()
             return
         if step_idx == 1:
+            self._stack.setCurrentWidget(self._page_padding)
+            self._padding_widget.start()
+            return
+        if step_idx == 2:
             self._stack.setCurrentWidget(self._page_wexpand)
             return
 
-        # step_idx 2..len(snaps)+1 → snapshot[step_idx - 2]
-        snap_idx = step_idx - 2
+        # step_idx 3..len(snaps)+2 → snapshot[step_idx - 3]
+        snap_idx = step_idx - 3
         if snap_idx >= len(self._snaps):
             return
 
@@ -1491,8 +1937,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _switch_to_content(self) -> None:
-        """Intro'dan padding sayfasına geç ve step 0'ı render et."""
-        self._stack.setCurrentWidget(self._page_padding)
+        """Intro'dan Mesaj Hazırlığı sayfasına geç ve step 0'ı render et."""
         self._render_step(0)
         self._progress.setValue(1)
 

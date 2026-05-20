@@ -14,8 +14,8 @@ import unittest
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 
-from crypto_core import StepResult
-from utils import (
+from cekirdek.crypto_core import StepResult
+from cekirdek.utils import (
     FRIENDLY_NAMES,
     _build_step_content,
     _truncate_hex,
@@ -210,7 +210,7 @@ class TestFriendlyNamesCoverage(unittest.TestCase):
     def test_all_step_data_keys_have_friendly_names(self) -> None:
         """Tam iş akışı sonucunda üretilen anahtarların hepsi sözlükte
         tanımlı olmalı; aksi hâlde UI'da çiğ anahtar adı görünür."""
-        from crypto_core import CryptoCore
+        from cekirdek.crypto_core import CryptoCore
         crypto = CryptoCore()
         crypto.setup_keys()
         _, alice_steps = crypto.alice_send("merhaba")

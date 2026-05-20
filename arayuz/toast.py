@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from theme import COLORS
+from arayuz.theme import COLORS
 
 
 class VerificationToast(QWidget):

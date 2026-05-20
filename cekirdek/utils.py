@@ -12,13 +12,15 @@ from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtWidgets import QGroupBox, QLabel, QVBoxLayout
 
-from crypto_core import StepResult
-from theme import COLORS
+from cekirdek.crypto_core import StepResult
+from arayuz.theme import COLORS
 
 # Görseller (SVG ikonlar + PNG akış diyagramları) — tek klasörde toplu erişim.
 # Eski 'icons/' klasörü 'görseller/' olarak yeniden adlandırıldı; alice/bob
-# akış PNG'leri de buraya taşındı.
-_GORSELLER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "görseller")
+# akış PNG'leri de buraya taşındı. Bu dosya 'cekirdek/' alt-paketinde
+# olduğu için path bir üst dizine (proje köküne) çıkar.
+_PROJE_KOKU = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_GORSELLER_DIR = os.path.join(_PROJE_KOKU, "görseller")
 
 
 def _svg_pixmap(filename: str, color: str, size: int = 20) -> QPixmap:

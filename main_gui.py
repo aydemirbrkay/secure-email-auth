@@ -31,14 +31,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from crypto_core import CryptoCore, EncryptedPacket
-from crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
+from cekirdek.crypto_core import CryptoCore, EncryptedPacket
+from cekirdek.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
+from cekirdek.utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
-from theme import COLORS, GLOBAL_STYLESHEET
-from alice_panel import AlicePanel
-from bob_panel import BobPanel
-from toast import VerificationToast
-from utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
+from arayuz.theme import COLORS, GLOBAL_STYLESHEET
+from arayuz.alice_panel import AlicePanel
+from arayuz.bob_panel import BobPanel
+from arayuz.toast import VerificationToast
 
 
 # ---------------------------------------------------------------------------

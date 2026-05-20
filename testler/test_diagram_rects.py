@@ -33,8 +33,7 @@ def test_rects_within_image_bounds():
 
 def test_image_file_exists():
     import os
-    path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "görseller", "alice and bob.png",
-    )
+    # Test dosyası 'testler/' alt-paketinde olduğu için proje köküne çık.
+    proje_koku = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(proje_koku, "görseller", "alice and bob.png")
     assert os.path.isfile(path), f"Görsel dosyası bulunamadı: {path}"

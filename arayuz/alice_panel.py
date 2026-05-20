@@ -18,10 +18,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from crypto_core import StepResult
-from theme import COLORS, STEP_COLORS_ALICE
-from utils import _build_step_content, _make_step_box
-from bob_panel import BobDecryptDiagramWidget
+from cekirdek.crypto_core import StepResult
+from cekirdek.utils import _build_step_content, _make_step_box
+from arayuz.theme import COLORS, STEP_COLORS_ALICE
+from arayuz.bob_panel import BobDecryptDiagramWidget
 
 
 class AlicePanel(QWidget):

@@ -15,8 +15,8 @@ ve hata durumunda failed sinyalinin kullanılması.
 """
 import unittest
 
-from crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair
-from crypto_workers import (
+from cekirdek.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair
+from cekirdek.crypto_workers import (
     AliceSendWorker,
     BobReceiveWorker,
     KeygenWorker,

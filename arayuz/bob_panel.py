@@ -26,10 +26,8 @@ from PyQt6.QtWidgets import (
 # Gerçek görsel: 2752×1536 — ölçek: x/4.418, y/5.430
 # ---------------------------------------------------------------------------
 
-_IMAGE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "görseller", "alice and bob.png",
-)
+_PROJE_KOKU = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_IMAGE_PATH = os.path.join(_PROJE_KOKU, "görseller", "alice and bob.png")
 _DIAGRAM_W = 623
 _DIAGRAM_H = 283
 _BLINK_MS = 1000
@@ -178,10 +176,7 @@ class DiagramWidget(QWidget):
 # Gerçek görsel: 2730×1536 — ölçek: x/5, y/5
 # ---------------------------------------------------------------------------
 
-_BOB_IMAGE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "görseller", "bob-tarafi-sifre-cozme.png",
-)
+_BOB_IMAGE_PATH = os.path.join(_PROJE_KOKU, "görseller", "bob-tarafi-sifre-cozme.png")
 _BOB_DIAGRAM_W = 546
 _BOB_DIAGRAM_H = 307
 
@@ -312,9 +307,9 @@ class BobDecryptDiagramWidget(QWidget):
             painter.end()
 
 
-from crypto_core import EncryptedPacket, StepResult
-from theme import COLORS, STEP_COLORS_BOB
-from utils import _build_step_content, _make_step_box
+from cekirdek.crypto_core import EncryptedPacket, StepResult
+from cekirdek.utils import _build_step_content, _make_step_box
+from arayuz.theme import COLORS, STEP_COLORS_BOB
 
 
 class BobPanel(QWidget):

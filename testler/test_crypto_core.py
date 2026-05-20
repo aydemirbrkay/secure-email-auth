@@ -13,7 +13,7 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-from crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
+from cekirdek.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
 
 
 class TestSHA256(unittest.TestCase):

@@ -57,10 +57,17 @@ class TestAnimColors(unittest.TestCase):
     }
 
     def test_palette_is_dict(self) -> None:
+        """Alt tür: SMOKE (tip kontrolü).
+        ANIM_COLORS bir dict olmalı (list veya tuple değil); widget'lar
+        ANIM_COLORS['key'] erişimi yapar."""
         from animation_modals.base import ANIM_COLORS
         self.assertIsInstance(ANIM_COLORS, dict)
 
     def test_all_required_keys_present(self) -> None:
+        """Alt tür: SMOKE (sözleşme kümesi).
+        ANIM_COLORS REQUIRED_KEYS'in tüm anahtarlarını içermeli
+        (bg_main, accent_blue, text_primary, vb.). Eksik anahtar →
+        widget paint sırasında KeyError → animasyon crash."""
         from animation_modals.base import ANIM_COLORS
         missing = self.REQUIRED_KEYS - set(ANIM_COLORS.keys())
         self.assertEqual(
@@ -69,7 +76,10 @@ class TestAnimColors(unittest.TestCase):
         )
 
     def test_all_values_are_valid_hex(self) -> None:
-        """Tüm değerler 6 haneli geçerli hex (#RRGGBB) olmalı."""
+        """Alt tür: SMOKE (değer format kontrolü).
+        Tüm değerler 6 haneli #RRGGBB hex formatında. QColor regex'i
+        geçmez ama görsel olarak siyah çıkar — bu test sessiz hatayı
+        yakalar (subTest ile her anahtarı ayrı ayrı raporlar)."""
         from animation_modals.base import ANIM_COLORS
         hex_re = re.compile(r"^#[0-9A-Fa-f]{6}$")
         for key, val in ANIM_COLORS.items():
@@ -88,30 +98,45 @@ class TestAnimationModulesImport(unittest.TestCase):
     """Animation modülleri yüklenirken hata vermemeli."""
 
     def test_base_module_imports(self) -> None:
+        """Alt tür: SMOKE (modül + temel sınıf varlığı).
+        base.py yüklenir + CryptoAnimationWindow taban sınıfı tanımlı."""
         from animation_modals import base
         self.assertTrue(hasattr(base, "CryptoAnimationWindow"))
 
     def test_aes_animation_module_imports(self) -> None:
+        """Alt tür: SMOKE (AES penceresi sınıfı).
+        AESAnimationWindow sınıfı aes_animation modülünde tanımlı."""
         from animation_modals import aes_animation
         self.assertTrue(hasattr(aes_animation, "AESAnimationWindow"))
 
     def test_rsa_animation_module_imports(self) -> None:
+        """Alt tür: SMOKE (RSA penceresi sınıfı).
+        RSAAnimationWindow sınıfı rsa_animation modülünde tanımlı."""
         from animation_modals import rsa_animation
         self.assertTrue(hasattr(rsa_animation, "RSAAnimationWindow"))
 
     def test_sha256_animation_module_imports(self) -> None:
+        """Alt tür: SMOKE (SHA penceresi sınıfı).
+        SHA256AnimationWindow sınıfı sha256_animation modülünde tanımlı."""
         from animation_modals import sha256_animation
         self.assertTrue(hasattr(sha256_animation, "SHA256AnimationWindow"))
 
     def test_matrix_widget_module_imports(self) -> None:
+        """Alt tür: SMOKE (yardımcı modül).
+        matrix_widget.MatrixWidget — animasyon dışında kullanılan
+        genel matris görselleştirici (eski/legacy widget'ı)."""
         from animation_modals import matrix_widget
         self.assertTrue(hasattr(matrix_widget, "MatrixWidget"))
 
     def test_aes_pure_module_imports(self) -> None:
+        """Alt tür: SMOKE (pure modül fonksiyon varlığı).
+        aes_pure.aes256_encrypt_with_rounds fonksiyonu modülde tanımlı."""
         from animation_modals import aes_pure
         self.assertTrue(hasattr(aes_pure, "aes256_encrypt_with_rounds"))
 
     def test_sha256_pure_module_imports(self) -> None:
+        """Alt tür: SMOKE (pure modül fonksiyon varlığı).
+        sha256_pure.sha256_steps fonksiyonu modülde tanımlı."""
         from animation_modals import sha256_pure
         self.assertTrue(hasattr(sha256_pure, "sha256_steps"))
 
@@ -120,6 +145,9 @@ class TestAnimationWindowsSubclassBase(unittest.TestCase):
     """Üç ana animasyon penceresi CryptoAnimationWindow'dan türemeli."""
 
     def test_aes_window_subclasses_base(self) -> None:
+        """Alt tür: SMOKE (sınıf hiyerarşi).
+        AESAnimationWindow → CryptoAnimationWindow alt sınıfı. Taban
+        sınıfın navigasyon/progress bar/timer altyapısını miras alır."""
         from animation_modals.aes_animation import AESAnimationWindow
         from animation_modals.base import CryptoAnimationWindow
         self.assertTrue(
@@ -128,6 +156,8 @@ class TestAnimationWindowsSubclassBase(unittest.TestCase):
         )
 
     def test_rsa_window_subclasses_base(self) -> None:
+        """Alt tür: SMOKE (sınıf hiyerarşi).
+        RSAAnimationWindow → CryptoAnimationWindow alt sınıfı."""
         from animation_modals.rsa_animation import RSAAnimationWindow
         from animation_modals.base import CryptoAnimationWindow
         self.assertTrue(
@@ -135,6 +165,8 @@ class TestAnimationWindowsSubclassBase(unittest.TestCase):
         )
 
     def test_sha256_window_subclasses_base(self) -> None:
+        """Alt tür: SMOKE (sınıf hiyerarşi).
+        SHA256AnimationWindow → CryptoAnimationWindow alt sınıfı."""
         from animation_modals.sha256_animation import SHA256AnimationWindow
         from animation_modals.base import CryptoAnimationWindow
         self.assertTrue(
@@ -167,6 +199,11 @@ class TestSHA256PureContract(unittest.TestCase):
     }
 
     def test_all_required_keys_present(self) -> None:
+        """Alt tür: SMOKE (veri sözleşmesi — 12 anahtar).
+        sha256_steps() çıktısı REQUIRED_KEYS'in tüm anahtarlarını
+        içermeli (initial_h, round_snapshots, w_expansion, vb. + yeni
+        Mesaj Hazırlığı alanları). Eksik bir anahtar → animasyon
+        sayfasında KeyError → çökme."""
         from animation_modals.sha256_pure import sha256_steps
         result = sha256_steps(b"abc")
         missing = self.REQUIRED_KEYS - set(result.keys())
@@ -176,15 +213,20 @@ class TestSHA256PureContract(unittest.TestCase):
         )
 
     def test_final_h_parts_concatenates_to_final_hash(self) -> None:
-        """final_h_parts birleştirilince final_hash'e eşit olmalı —
-        _MatchAssemblyWidget'in faz 3 birleşim animasyonunun temeli."""
+        """Alt tür: INVARIANT (yapısal tutarlılık).
+        final_h_parts (8 × 8-karakter hex) birleştirilince tam final_hash'e
+        (64 karakter hex) eşit olmalı. _MatchAssemblyWidget faz 3'te bu
+        birleştirmeyi animasyonla gösterir — eşitlik bozulursa görsel
+        hash, gerçek hash'ten farklı çıkar."""
         from animation_modals.sha256_pure import sha256_steps
         result = sha256_steps(b"test")
         joined = "".join(result["final_h_parts"])
         self.assertEqual(joined, result["final_hash"])
 
     def test_initial_h_is_eight_8char_hex(self) -> None:
-        """initial_h 8 adet 32-bit hex string olmalı (H0..H7)."""
+        """Alt tür: INVARIANT (FIPS 180-4 sabitleri yapısı).
+        initial_h tam 8 girdi içerir (H0..H7), her biri 8 karakterlik
+        geçerli hex (32-bit register'lar). int(h,16) parse hatası vermez."""
         from animation_modals.sha256_pure import sha256_steps
         result = sha256_steps(b"x")
         self.assertEqual(len(result["initial_h"]), 8)
@@ -193,15 +235,20 @@ class TestSHA256PureContract(unittest.TestCase):
             int(h, 16)  # geçerli hex
 
     def test_pre_final_h_and_final_working_are_eight_entries(self) -> None:
-        """Final eşleşme animasyonu 8 satırda H_old + working = H_new
-        gösterir; iki listenin uzunluğu 8 olmak zorunda."""
+        """Alt tür: INVARIANT (final eşleşme animasyonu veri sözleşmesi).
+        Eşleşme sayfası 8 satırda 'H_eski + working = H_yeni' formülünü
+        gösterir; iki listenin de uzunluğu 8 OLMAK ZORUNDA. Uzunluk
+        eşitsizliği → animasyonda eksik satır → görsel eksik."""
         from animation_modals.sha256_pure import sha256_steps
         result = sha256_steps(b"y")
         self.assertEqual(len(result["pre_final_h"]), 8)
         self.assertEqual(len(result["final_working"]), 8)
 
     def test_w_expansion_has_16_entries(self) -> None:
-        """W[16..31] = 16 satır; _WExpansionWidget ◀/▶ navigasyonu için."""
+        """Alt tür: INVARIANT (W expansion sayısı).
+        W[16..31] arası tam 16 satır — _WExpansionWidget'in ◀/▶
+        navigasyonu için fixed-size. SHA-256 mesaj genişletme
+        algoritmasının pedagojik kesidi."""
         from animation_modals.sha256_pure import sha256_steps
         result = sha256_steps(b"z")
         self.assertEqual(len(result["w_expansion"]), 16)
@@ -218,20 +265,29 @@ class TestAESPureContract(unittest.TestCase):
     PLAINTEXT = bytes.fromhex("00112233445566778899aabbccddeeff")
 
     def test_returns_rounds_data_and_final_block(self) -> None:
+        """Alt tür: SMOKE (temel API alanları).
+        aes256_encrypt_with_rounds çıktısında en az rounds_data ve
+        final_block_hex bulunmalı."""
         from animation_modals.aes_pure import aes256_encrypt_with_rounds
         result = aes256_encrypt_with_rounds(self.KEY, self.PLAINTEXT)
         self.assertIn("rounds_data", result)
         self.assertIn("final_block_hex", result)
 
     def test_final_block_is_32_hex_chars(self) -> None:
-        """final_block_hex 16 byte AES blok = 32 hex karakter."""
+        """Alt tür: INVARIANT (blok format).
+        AES bloğu = 16 byte = 32 hex karakter. int(..., 16) parse
+        hatası yoksa geçerli hex string. Animasyon eşleşme sayfası
+        bu uzunluğu varsayar."""
         from animation_modals.aes_pure import aes256_encrypt_with_rounds
         result = aes256_encrypt_with_rounds(self.KEY, self.PLAINTEXT)
         self.assertEqual(len(result["final_block_hex"]), 32)
         int(result["final_block_hex"], 16)
 
     def test_round_keys_present(self) -> None:
-        """Animasyondaki AddRoundKey adımları için round_keys gerekli."""
+        """Alt tür: INVARIANT (anahtar genişletme yapısı).
+        AES-256 key expansion 15 round_key üretir (round 0..14). round_keys_hex
+        opsiyonel olduğu için 'if in' ile koşullu kontrol — alan varsa
+        boyut tam 15 olmalı, yoksa testi geçer."""
         from animation_modals.aes_pure import aes256_encrypt_with_rounds
         result = aes256_encrypt_with_rounds(self.KEY, self.PLAINTEXT)
         # Anahtar genişletme sonucu 15 round_key üretir (round 0..14)
@@ -239,7 +295,10 @@ class TestAESPureContract(unittest.TestCase):
             self.assertEqual(len(result["round_keys_hex"]), 15)
 
     def test_plaintext_prep_fields_present(self):
-        """Plaintext Hazırlığı için yeni alanlar mevcut olmalı."""
+        """Alt tür: SMOKE (yeni alanlar).
+        Mesaj Hazırlığı çalışmasıyla eklenen 5 alan (plaintext_bytes,
+        padded_plaintext, first_block, blocks_total, state_matrix)
+        mevcut olmalı. _AESPlaintextPrepWidget bu alanları doğrudan okur."""
         from animation_modals.aes_pure import aes256_encrypt_with_rounds
         result = aes256_encrypt_with_rounds(self.KEY, self.PLAINTEXT)
         for key in ("plaintext_bytes", "padded_plaintext",
@@ -257,12 +316,17 @@ class TestRSAConstantsInvariants(unittest.TestCase):
     sınanır (cross-modül smoke)."""
 
     def test_consistency(self) -> None:
-        """n = p·q ve φ = (p-1)(q-1) tutarlı olmalı."""
+        """Alt tür: INVARIANT (RSA modülüs ve totient).
+        n = p · q  VE  ϕ(n) = (p-1)(q-1). Random demo değerleriyle
+        her açılışta bu temel RSA bağıtları sağlanmalı."""
         from animation_modals.rsa_animation import _P, _Q, _N, _PHI
         self.assertEqual(_N, _P * _Q)
         self.assertEqual(_PHI, (_P - 1) * (_Q - 1))
 
     def test_invariant(self) -> None:
+        """Alt tür: INVARIANT (RSA anahtar üretim ilkesi).
+        e · d ≡ 1 (mod ϕ) — RSA özel üs (d) tanımının matematiksel
+        temeli. Bu bozulursa şifreleme/deşifreleme tutarsız olur."""
         from animation_modals.rsa_animation import _E, _D, _PHI
         self.assertEqual((_E * _D) % _PHI, 1)
 
@@ -271,12 +335,19 @@ class TestAESMatrixViewIntegration(unittest.TestCase):
     """AES penceresi yeni matris widget'ını kullanıyor mu?"""
 
     def test_module_imports(self):
+        """Alt tür: SMOKE (matris widget modülü).
+        aes_matrix_view modülünde _AESMatrixView (tek matris) ve
+        _AESStateCompareWidget (önce/sonra ikili) sınıfları tanımlı."""
         from animation_modals import aes_matrix_view
         self.assertTrue(hasattr(aes_matrix_view, "_AESMatrixView"))
         self.assertTrue(hasattr(aes_matrix_view, "_AESStateCompareWidget"))
 
     def test_aes_window_imports_compare_widget(self):
-        """AES animasyon modülü _AESStateCompareWidget'ı import etmeli."""
+        """Alt tür: SMOKE (modüller arası bağlantı — kaynak grep).
+        aes_animation.py kaynak kodunda '_AESStateCompareWidget'
+        referansı geçmeli. AST analizi yerine basit string arama
+        (regex değil) — refactor'da unutulan import veya yanlış
+        widget kullanımını yakalar."""
         from animation_modals import aes_animation
         # _AESStateCompareWidget veya aes_matrix_view referansı olmalı
         import inspect
@@ -284,6 +355,10 @@ class TestAESMatrixViewIntegration(unittest.TestCase):
         self.assertIn("_AESStateCompareWidget", source)
 
     def test_aes_matrix_view_total_ticks_are_positive(self):
+        """Alt tür: INVARIANT (animasyon zamanlama tablosu).
+        _TICKS_BY_OP dictionary'sindeki her operasyon için tick sayısı
+        0 < ticks < 200. 0 → animasyon hiç oynamaz, 200+ → makul olmayan
+        derecede yavaş. subTest ile her operasyon ayrı raporlanır."""
         from animation_modals.aes_matrix_view import _AESMatrixView
         for op, ticks in _AESMatrixView._TICKS_BY_OP.items():
             with self.subTest(op=op):
@@ -291,6 +366,10 @@ class TestAESMatrixViewIntegration(unittest.TestCase):
                 self.assertLess(ticks, 200, f"{op}: tick sayısı makul olmalı (<200)")
 
     def test_aes_matrix_view_supports_all_four_ops(self):
+        """Alt tür: INVARIANT (operasyon kapsam kontrolü).
+        4 AES operasyonunun (AddRoundKey, SubBytes, ShiftRows,
+        MixColumns) tümü _TICKS_BY_OP içinde tanımlı olmalı. Birinin
+        eksik olması → animasyon o operasyona geldiğinde KeyError."""
         from animation_modals.aes_matrix_view import _AESMatrixView
         for op in ("AddRoundKey", "SubBytes", "ShiftRows", "MixColumns"):
             with self.subTest(op=op):

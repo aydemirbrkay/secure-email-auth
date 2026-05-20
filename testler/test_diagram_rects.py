@@ -45,15 +45,28 @@ DIAGRAM_RECTS_RAW = [
 
 
 def test_rect_count():
+    """Alt tür: STATİK VERİ (sayım kontrolü).
+    Alice'in 6 gönderim adımına karşılık tam 6 dikdörtgen olmalı.
+    Yeni adım eklendi/silindi ise bu test ilk yakalar."""
     assert len(DIAGRAM_RECTS_RAW) == 6, "Alice'in 6 adımına karşılık 6 rect olmalı"
 
 
 def test_rects_positive_dimensions():
+    """Alt tür: STATİK VERİ (boyut sağlık kontrolü).
+    Her dikdörtgenin genişlik ve yüksekliği > 0 olmalı. 0 veya
+    negatif boyut → adım vurgulaması görünmez."""
     for i, (x, y, w, h) in enumerate(DIAGRAM_RECTS_RAW):
         assert w > 0 and h > 0, f"Rect {i}: genişlik ve yükseklik pozitif olmalı"
 
 
 def test_rects_within_image_bounds():
+    """Alt tür: STATİK VERİ (sınır taşma kontrolü).
+    Tüm dikdörtgenler 623×283 sanal koordinat uzayı içinde kalmalı:
+      - x, y ≥ 0
+      - x + w ≤ DIAGRAM_W (sağ taşma yok)
+      - y + h ≤ DIAGRAM_H (alt taşma yok)
+    Taşan rect paint event'inde çizilir ama görsel dışına denk gelir →
+    kullanıcı 'yanlış yer' vurgusu görür."""
     for i, (x, y, w, h) in enumerate(DIAGRAM_RECTS_RAW):
         assert x >= 0 and y >= 0, f"Rect {i}: koordinatlar negatif olamaz"
         assert x + w <= DIAGRAM_W, f"Rect {i}: sağ kenar ({x+w}) görsel genişliğini ({DIAGRAM_W}) aşıyor"
@@ -61,6 +74,11 @@ def test_rects_within_image_bounds():
 
 
 def test_image_file_exists():
+    """Alt tür: STATİK VERİ (dosya varlık + path doğruluğu).
+    görseller/alice and bob.png diskte mevcut olmalı. Refactor sırasında
+    klasör yeniden adlandırılırsa veya dosya silinirse bu test yakalar.
+    Path proje kökü → görseller/ olarak hesaplanır (test dosyası
+    testler/ alt-paketinde olduğu için bir üst dizine çıkılır)."""
     import os
     # Test dosyası 'testler/' alt-paketinde olduğu için proje köküne çık.
     proje_koku = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

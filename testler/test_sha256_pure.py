@@ -30,35 +30,64 @@ from animation_modals.sha256_pure import sha256_steps
 class TestSHA256Pure(unittest.TestCase):
 
     def test_final_hash_matches_hashlib(self):
+        """Alt tür: BİRİM (kriptografik doğruluk — altın test).
+        Pure-Python SHA-256 çıktısı, standart kütüphane hashlib.sha256()
+        ile birebir aynı olmalı. Bu, implementasyonun matematiksel
+        doğruluğunun en güçlü kanıtı."""
         msg = b"Hello World"
         result = sha256_steps(msg)
         expected = hashlib.sha256(msg).hexdigest()
         self.assertEqual(result["final_hash"], expected)
 
     def test_empty_message(self):
+        """Alt tür: BİRİM (sınır koşulu — boş girdi).
+        SHA-256(b'') = 'e3b0c4...' standardı. Boş mesajın özel bir
+        çözüm yolu (özel padding) gerektirdiği için ayrı test edilir;
+        bu test boş girdide crash veya yanlış sonuç olmadığını garantiler."""
         result = sha256_steps(b"")
         expected = hashlib.sha256(b"").hexdigest()
         self.assertEqual(result["final_hash"], expected)
 
     def test_initial_h_count(self):
+        """Alt tür: BİRİM (sabitler — FIPS 180-4 H0..H7).
+        Başlangıç hash değerleri (initial_h) tam 8 adet olmalı
+        (H0, H1, ..., H7). Animasyondaki 8 satırlı register tablosu
+        bu sözleşmeye dayanır."""
         result = sha256_steps(b"test")
         self.assertEqual(len(result["initial_h"]), 8)
 
     def test_round_snapshots_present(self):
+        """Alt tür: BİRİM (animasyon veri varlığı).
+        round_snapshots alanı dönüşte bulunmalı ve boş olmamalı.
+        Animasyonun 'Sıkıştırma Round Diyagramı' sayfası bu listenin
+        her elemanını ayrı bir alt-adım olarak gösterir."""
         result = sha256_steps(b"test")
         self.assertIn("round_snapshots", result)
         self.assertGreater(len(result["round_snapshots"]), 0)
 
     def test_blocks_count(self):
+        """Alt tür: BİRİM (blok bölme).
+        'Hello World' 11 byte → padding sonrası 64 byte → 1 blok.
+        blocks_count alanı doğru hesaplanmalı; bu sayı padding
+        sayfasındaki blok navigasyonunu (◀/▶) tetikler."""
         result = sha256_steps(b"Hello World")
         self.assertEqual(result["blocks_count"], 1)
 
     def test_binary_preview_present(self):
+        """Alt tür: BİRİM (eski API alan varlığı).
+        binary_preview alanı mevcut, boş değil. SHA Padding sayfasının
+        eski metin tabanlı önizlemesi bu alanı kullanıyordu; backward
+        compatibility için korunur."""
         result = sha256_steps(b"Hi")
         self.assertIn("binary_preview", result)
         self.assertGreater(len(result["binary_preview"]), 0)
 
     def test_round_snapshots_have_rich_data(self):
+        """Alt tür: BİRİM (snapshot iç yapı sözleşmesi).
+        Her round_snapshot şu alanları içermeli: w (mesaj genişlet
+        ifadesi), k (round sabiti), t1+t2 (geçici hesaplar). Hepsi
+        8-karakterlik 32-bit hex string. Round diyagramı sayfası bu
+        4 alanı ayrı kutularda gösterir."""
         result = sha256_steps(b"Hello World")
         snap = result["round_snapshots"][0]
         self.assertIn("w", snap)
@@ -70,17 +99,24 @@ class TestSHA256Pure(unittest.TestCase):
         self.assertEqual(len(snap["k"]), 8)
 
     def test_round_snapshots_are_at_expected_rounds(self):
-        """Snapshot round numaraları kod ile docstring tutarlı olmalı."""
+        """Alt tür: BİRİM (snapshot örnekleme stratejisi).
+        SHA-256 64 round; tümünü göstermek aşırı. Pedagojik olarak
+        9 strategik round (1, 9, 17, 25, 33, 41, 49, 57, 64) seçilir
+        — başlangıç + her 8 round + son round. Bu sıra docstring'le
+        eşleşmeli, aksi halde animasyon mantığı bozulur."""
         result = sha256_steps(b"Hello World")
         rounds = [s["round"] for s in result["round_snapshots"]]
         self.assertEqual(rounds, [1, 9, 17, 25, 33, 41, 49, 57, 64])
 
     def test_w_expansion_exposes_operand_and_result(self):
-        """
-        W[16..31] gösteriminde σ0/σ1 için hem operand (W[i-15], W[i-2])
-        hem de sonuç (s0, s1) ayrı alanlar olarak dönmeli — aksi hâlde
-        animasyon 'σ0(sonuç)' gibi yanıltıcı görünüm üretir.
-        """
+        """Alt tür: BİRİM (mesaj genişlet veri sözleşmesi).
+        W[16..31] genişletmesinde σ0/σ1 fonksiyonları için animasyon
+        HEM operandı (W[i-15], W[i-2]) HEM de sonucu (s0, s1) ayrı
+        alanlarda göstermeli. Aynı alanı paylaşırlarsa 'σ0(sonuç)'
+        gibi yanıltıcı bir görüntü çıkar — operand→fonksiyon→sonuç
+        akışı görsel olarak çözülmez.
+        Ek olarak: en az 1 satırda σ0 sonucu operandtan farklı olmalı
+        (her ikisi de aynıysa σ fonksiyonu hiç uygulanmamış demektir)."""
         result = sha256_steps(b"Hello World")
         exp = result["w_expansion"]
         self.assertIsNotNone(exp)
@@ -97,13 +133,21 @@ class TestSHA256Pure(unittest.TestCase):
         self.assertTrue(any(row["w_i15"] != row["s0"] for row in exp))
 
 class TestSHA256AnimationStructure(unittest.TestCase):
-    """sha256_animation modülünün yeni widget yapısını doğrular."""
+    """sha256_animation modülünün yeni widget yapısını doğrular
+    (Alt kategori: SMOKE — animasyon sınıf varlığı)."""
 
     def test_w_expansion_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _WExpansionWidget (Adım 3 — Mesaj Genişletme sayfası ana widget'ı)
+        modülde tanımlı olmalı. Yeniden adlandırma/silme bozulmasını yakalar."""
         from animation_modals import sha256_animation as sha
         self.assertTrue(hasattr(sha, "_WExpansionWidget"))
 
     def test_match_assembly_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _MatchAssemblyWidget (Adım 5 — Hash Eşleşmesi sayfası widget'ı)
+        modülde tanımlı olmalı. Final H[0..7] birleştirme animasyonu
+        bu sınıfa bağlı."""
         from animation_modals import sha256_animation as sha
         self.assertTrue(hasattr(sha, "_MatchAssemblyWidget"))
 

@@ -36,13 +36,20 @@ import unittest
 
 
 class TestNewWidgetsImport(unittest.TestCase):
-    """Yeni widget'lar import edilebilmeli."""
+    """Yeni widget'lar import edilebilmeli (Alt kategori: SMOKE — modül varlığı)."""
 
     def test_palette_has_6_colors(self):
+        """Alt tür: SMOKE (sabit liste).
+        Döngüsel renk paletindeki renk sayısı tam 6 olmalı; widget'lar
+        i % 6 indeksleme ile renk seçer. Eksik renk → IndexError'a yol açar."""
         from animation_modals.byte_widgets import _PALETTE_6
         self.assertEqual(len(_PALETTE_6), 6)
 
     def test_palette_all_valid_hex(self):
+        """Alt tür: SMOKE (veri format kontrolü).
+        Paletin her elemanı 6-haneli #RRGGBB hex formatında olmalı.
+        QColor regex'e uymayan değerleri sessizce kabul eder ama
+        görsel olarak siyah çıkar — bu test sessiz hatayı yakalar."""
         import re
         from animation_modals.byte_widgets import _PALETTE_6
         hex_re = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -50,44 +57,68 @@ class TestNewWidgetsImport(unittest.TestCase):
             self.assertRegex(color, hex_re)
 
     def test_colored_byte_grid_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _ColoredByteGridWidget byte_widgets modülünde tanımlı VE çağrılabilir
+        (sınıf veya fonksiyon) olmalı."""
         from animation_modals.byte_widgets import _ColoredByteGridWidget
         self.assertTrue(callable(_ColoredByteGridWidget))
 
     def test_byte_strip_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _ByteStripWidget byte_widgets modülünde tanımlı VE çağrılabilir."""
         from animation_modals.byte_widgets import _ByteStripWidget
         self.assertTrue(callable(_ByteStripWidget))
 
     def test_sha_message_prep_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _SHAMessagePrepWidget sha256_animation modülünde tanımlı —
+        SHA penceresinin Adım 1/5 sayfasının ana widget'ı."""
         from animation_modals.sha256_animation import _SHAMessagePrepWidget
         self.assertTrue(callable(_SHAMessagePrepWidget))
 
     def test_sha_padding_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _SHA256PaddingWidget sha256_animation modülünde tanımlı —
+        SHA penceresinin Adım 2/5 padding sayfasının ana widget'ı."""
         from animation_modals.sha256_animation import _SHA256PaddingWidget
         self.assertTrue(callable(_SHA256PaddingWidget))
 
     def test_aes_plaintext_prep_widget_exists(self):
+        """Alt tür: SMOKE (import sözleşmesi).
+        _AESPlaintextPrepWidget aes_animation modülünde tanımlı —
+        AES intro ile Round 0 arasındaki Plaintext Hazırlığı sayfası."""
         from animation_modals.aes_animation import _AESPlaintextPrepWidget
         self.assertTrue(callable(_AESPlaintextPrepWidget))
 
 
 class TestPaddingMaskSupport(unittest.TestCase):
-    """Padding renk ayrımı API kontratı."""
+    """Padding renk ayrımı API kontratı (Alt kategori: API SIGNATURE — runtime'sız)."""
 
     def test_colored_byte_grid_accepts_padding_mask_param(self):
-        """_ColoredByteGridWidget padding_mask kabul etmeli (instance yapmadan signature kontrolü)."""
+        """Alt tür: SMOKE (parametre kontratı).
+        Widget'ı instance ETMEDEN inspect.signature ile __init__
+        imzasını okur; 'padding_mask' parametresinin tanımlı olduğunu
+        doğrular. Headless ortamlarda çalışır (QApplication gerekmez)."""
         import inspect
         from animation_modals.byte_widgets import _ColoredByteGridWidget
         sig = inspect.signature(_ColoredByteGridWidget.__init__)
         self.assertIn("padding_mask", sig.parameters)
 
     def test_colored_byte_grid_accepts_padding_labels_param(self):
+        """Alt tür: SMOKE (parametre kontratı).
+        'padding_labels' parametresi de __init__ imzasında olmalı —
+        her padding byte'ının altında gösterilen küçük etiket ('80',
+        '00', 'len', 'pad') bu parametre ile geçer."""
         import inspect
         from animation_modals.byte_widgets import _ColoredByteGridWidget
         sig = inspect.signature(_ColoredByteGridWidget.__init__)
         self.assertIn("padding_labels", sig.parameters)
 
     def test_padding_label_values(self):
-        """Geçerli padding etiketleri: 80, 00, len, pad."""
+        """Alt tür: BİRİM (sabit değer kümesi).
+        Geçerli padding etiketleri '80' (SHA ayracı), '00' (sıfır dolgu),
+        'len' (bit uzunluğu), 'pad' (PKCS#7). Tümü str ve ≤ 4 karakter
+        (paint widget hücre altına sığması için)."""
         from animation_modals.byte_widgets import _ColoredByteGridWidget
         # Sadece API kontrolü — değer setinin sabit listesinin varlığını doğrula
         # Test sadece tipik etiket değerlerinin kabul edildiğini garanti eder
@@ -97,6 +128,9 @@ class TestPaddingMaskSupport(unittest.TestCase):
             self.assertLessEqual(len(label), 4)
 
     def test_byte_strip_accepts_padding_mask_param(self):
+        """Alt tür: SMOKE (parametre kontratı).
+        Kompakt strip widget'ı da padding_mask parametresini destekler
+        (etiket yok, sadece kenarlık + alpha ile ayrım)."""
         import inspect
         from animation_modals.byte_widgets import _ByteStripWidget
         sig = inspect.signature(_ByteStripWidget.__init__)
@@ -104,17 +138,29 @@ class TestPaddingMaskSupport(unittest.TestCase):
 
 
 class TestSHAStepCount(unittest.TestCase):
-    """SHA penceresi 5 mantıksal adımlı olmalı (Mesaj Hazırlığı dahil)."""
+    """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
+    (Alt kategori: SMOKE — class attribute kontratı)."""
 
     def test_titles_have_five_entries(self):
+        """Alt tür: SMOKE (yapısal değişiklik kontrolü).
+        _TITLES sınıf niteliği TAM 5 girdi içermeli. Mesaj Hazırlığı eklenmesi
+        önceki 4-adım yapısını 5'e çıkardı; girdi sayısı değişirse
+        progress bar veya _render_step kayar."""
         from animation_modals.sha256_animation import SHA256AnimationWindow
         self.assertEqual(len(SHA256AnimationWindow._TITLES), 5)
 
     def test_first_step_is_message_prep(self):
+        """Alt tür: SMOKE (sıralama doğrulaması).
+        İlk adım "Mesaj Hazırlığı" olmalı (UTF-8 byte dönüşümü).
+        Sıralama bozulursa kullanıcı önce Padding görür → kafa karışıklığı."""
         from animation_modals.sha256_animation import SHA256AnimationWindow
         self.assertIn("Mesaj", SHA256AnimationWindow._TITLES[0])
 
     def test_titles_use_five_format(self):
+        """Alt tür: SMOKE (format tutarlılığı).
+        Her başlık "Adım N / 5" formatında olmalı (N: 1..5). Eski
+        "Adım N / 4" formatı kalmış olursa kullanıcı yanlış toplam
+        görür."""
         from animation_modals.sha256_animation import SHA256AnimationWindow
         for i, title in enumerate(SHA256AnimationWindow._TITLES):
             self.assertIn(f"Adım {i+1} / 5", title)

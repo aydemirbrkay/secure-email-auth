@@ -47,6 +47,7 @@ class TestFormatCryptoException(unittest.TestCase):
     """format_crypto_exception() — beş dal için (title, body) çifti üretir."""
 
     def test_returns_tuple_of_two_strings(self) -> None:
+        """Alt tür: BİRİM — tip kontratı — (title, body) string tuple."""
         result = format_crypto_exception(InvalidTag())
         self.assertIsInstance(result, tuple)
         self.assertEqual(len(result), 2)
@@ -55,40 +56,58 @@ class TestFormatCryptoException(unittest.TestCase):
         self.assertIsInstance(body, str)
 
     def test_invalid_tag_returns_decryption_title(self) -> None:
-        """InvalidTag → AES-GCM kimlik doğrulama başarısız mesajı."""
+        """Alt tür: BİRİM — InvalidTag → AES-GCM deşifreleme dalı.
+
+        InvalidTag → AES-GCM kimlik doğrulama başarısız mesajı.
+        """
         title, body = format_crypto_exception(InvalidTag())
         self.assertIn("Deşifreleme Başarısız", title)
         self.assertIn("AES-256-GCM", body)
         self.assertIn("InvalidTag", body)
 
     def test_invalid_signature_returns_signature_title(self) -> None:
-        """InvalidSignature → imza doğrulanamadı mesajı."""
+        """Alt tür: BİRİM — InvalidSignature → imza doğrulama dalı.
+
+        InvalidSignature → imza doğrulanamadı mesajı.
+        """
         title, body = format_crypto_exception(InvalidSignature())
         self.assertIn("İmza Doğrulanamadı", title)
         self.assertIn("InvalidSignature", body)
 
     def test_value_error_returns_format_title(self) -> None:
-        """ValueError → paket format hatası, exc mesajı body'de yer almalı."""
+        """Alt tür: BİRİM — ValueError → paket format dalı + exc mesajı.
+
+        ValueError → paket format hatası, exc mesajı body'de yer almalı.
+        """
         title, body = format_crypto_exception(ValueError("ayrıştırma çöktü"))
         self.assertIn("Paket Formatı", title)
         self.assertIn("ayrıştırma çöktü", body)
         self.assertIn("ValueError", body)
 
     def test_runtime_error_returns_flow_title(self) -> None:
-        """RuntimeError → akış hatası, exc mesajı body'de yer almalı."""
+        """Alt tür: BİRİM — RuntimeError → akış hatası dalı + exc mesajı.
+
+        RuntimeError → akış hatası, exc mesajı body'de yer almalı.
+        """
         title, body = format_crypto_exception(RuntimeError("önkoşul kayıp"))
         self.assertIn("Akış Hatası", title)
         self.assertIn("önkoşul kayıp", body)
         self.assertIn("RuntimeError", body)
 
     def test_generic_exception_returns_unexpected_title(self) -> None:
-        """Tanınmayan istisna → beklenmeyen hata dalı; teknik adı body'de."""
+        """Alt tür: BİRİM — tanınmayan exc → beklenmeyen dal.
+
+        Tanınmayan istisna → beklenmeyen hata dalı; teknik adı body'de.
+        """
         title, body = format_crypto_exception(KeyError("foo"))
         self.assertIn("Beklenmeyen", title)
         self.assertIn("KeyError", body)
 
     def test_each_branch_includes_technical_class_name(self) -> None:
-        """Her dalın body'sinde teknik istisna sınıf adı parantez içinde olmalı."""
+        """Alt tür: BİRİM — her dalda '(Teknik: ClassName)' satırı.
+
+        Her dalın body'sinde teknik istisna sınıf adı parantez içinde olmalı.
+        """
         for exc, expected_name in [
             (InvalidTag(), "InvalidTag"),
             (InvalidSignature(), "InvalidSignature"),
@@ -105,16 +124,23 @@ class TestTruncateHex(unittest.TestCase):
     """_truncate_hex() — uzun hex değerlerini max_len + … şeklinde keser."""
 
     def test_short_string_unchanged(self) -> None:
-        """Varsayılan eşik 48 karakter; 48 ve altında değişiklik yok."""
+        """Alt tür: BİRİM — ≤ 48 karakter değişmez.
+
+        Varsayılan eşik 48 karakter; 48 ve altında değişiklik yok.
+        """
         s = "ab" * 24  # 48 karakter
         self.assertEqual(_truncate_hex(s), s)
 
     def test_short_string_no_ellipsis(self) -> None:
+        """Alt tür: BİRİM — kısa string'de '…' yok."""
         s = "deadbeef"
         self.assertNotIn("…", _truncate_hex(s))
 
     def test_long_string_truncated_with_ellipsis(self) -> None:
-        """100 karakter → ilk 48 + tek karakter ellipsis (49 toplam)."""
+        """Alt tür: BİRİM — 100 karakter → 48 + '…' = 49.
+
+        100 karakter → ilk 48 + tek karakter ellipsis (49 toplam).
+        """
         s = "a" * 100
         result = _truncate_hex(s)
         self.assertEqual(len(result), 49)
@@ -122,19 +148,28 @@ class TestTruncateHex(unittest.TestCase):
         self.assertTrue(result.startswith("a" * 48))
 
     def test_custom_max_len(self) -> None:
-        """Özel max_len ile kesim noktası değişmeli."""
+        """Alt tür: BİRİM — özel max_len parametresi.
+
+        Özel max_len ile kesim noktası değişmeli.
+        """
         s = "x" * 100
         result = _truncate_hex(s, max_len=10)
         self.assertEqual(len(result), 11)
         self.assertEqual(result, "x" * 10 + "…")
 
     def test_exact_boundary_length_unchanged(self) -> None:
-        """Tam max_len kadar uzunlukta değişiklik olmamalı (kesin sınır)."""
+        """Alt tür: SINIR KOŞULU — tam 48 karakter — kesin sınır.
+
+        Tam max_len kadar uzunlukta değişiklik olmamalı (kesin sınır).
+        """
         s = "a" * 48
         self.assertEqual(_truncate_hex(s), s)
 
     def test_one_over_boundary_is_truncated(self) -> None:
-        """max_len+1 karakter → kesilir."""
+        """Alt tür: SINIR KOŞULU — 49 karakter — sınırın 1 üstü kesilir.
+
+        max_len+1 karakter → kesilir.
+        """
         s = "a" * 49
         result = _truncate_hex(s)
         self.assertTrue(result.endswith("…"))
@@ -153,26 +188,36 @@ class TestBuildStepContent(unittest.TestCase):
         )
 
     def test_description_appears_first(self) -> None:
+        """Alt tür: BİRİM — description çıktının başında."""
         step = self._make_step({}, description="Bu adım çalıştı")
         content = _build_step_content(step)
         self.assertTrue(content.startswith("Bu adım çalıştı"))
 
     def test_friendly_name_used_when_available(self) -> None:
-        """FRIENDLY_NAMES'de tanımlı anahtar Türkçe etiketle yazılmalı."""
+        """Alt tür: BİRİM — FRIENDLY_NAMES'de varsa Türkçe etiket.
+
+        FRIENDLY_NAMES'de tanımlı anahtar Türkçe etiketle yazılmalı.
+        """
         step = self._make_step({"hash_hex": "abc123"})
         content = _build_step_content(step)
         self.assertIn(FRIENDLY_NAMES["hash_hex"], content)
         self.assertIn("abc123", content)
 
     def test_raw_key_used_when_no_friendly_name(self) -> None:
-        """FRIENDLY_NAMES'de olmayan bir anahtar ham haliyle gösterilmeli."""
+        """Alt tür: BİRİM — FRIENDLY_NAMES'de yoksa ham anahtar.
+
+        FRIENDLY_NAMES'de olmayan bir anahtar ham haliyle gösterilmeli.
+        """
         step = self._make_step({"custom_field": "deger"})
         content = _build_step_content(step)
         self.assertIn("custom_field", content)
         self.assertIn("deger", content)
 
     def test_bytes_suffix_keys_are_skipped(self) -> None:
-        """_bytes ile biten anahtarlar (binary veri) UI'a sızmamalı."""
+        """Alt tür: BİRİM — binary alanlar (_bytes) UI'a sızmaz.
+
+        _bytes ile biten anahtarlar (binary veri) UI'a sızmamalı.
+        """
         step = self._make_step({
             "hash_bytes": b"\x01\x02\x03",
             "hash_hex": "010203",
@@ -182,19 +227,24 @@ class TestBuildStepContent(unittest.TestCase):
         self.assertIn("010203", content)
 
     def test_verification_result_true_renders_checkmark(self) -> None:
+        """Alt tür: BİRİM — True → ✅ DOĞRULANDI."""
         step = self._make_step({"verification_result": True})
         content = _build_step_content(step)
         self.assertIn("✅", content)
         self.assertIn("DOĞRULANDI", content)
 
     def test_verification_result_false_renders_cross(self) -> None:
+        """Alt tür: BİRİM — False → ❌ DOĞRULANAMADI."""
         step = self._make_step({"verification_result": False})
         content = _build_step_content(step)
         self.assertIn("❌", content)
         self.assertIn("DOĞRULANAMADI", content)
 
     def test_long_string_values_are_truncated(self) -> None:
-        """64 karakterden uzun string değerler kısaltılmalı."""
+        """Alt tür: BİRİM — uzun string değerler '…' ile kesilir.
+
+        64 karakterden uzun string değerler kısaltılmalı.
+        """
         long_hex = "a" * 200
         step = self._make_step({"signature_hex": long_hex})
         content = _build_step_content(step)
@@ -203,7 +253,10 @@ class TestBuildStepContent(unittest.TestCase):
         self.assertNotIn("a" * 100, content)
 
     def test_short_string_values_not_truncated(self) -> None:
-        """64 karakter ve altında değer değişmemeli."""
+        """Alt tür: BİRİM — kısa string değerler değişmez.
+
+        64 karakter ve altında değer değişmemeli.
+        """
         short_val = "abc"
         step = self._make_step({"key_info": short_val})
         content = _build_step_content(step)
@@ -211,12 +264,16 @@ class TestBuildStepContent(unittest.TestCase):
         self.assertNotIn("…", content)
 
     def test_non_string_values_rendered_as_is(self) -> None:
-        """int veya bool gibi non-string değerler doğrudan str() ile yazılmalı."""
+        """Alt tür: BİRİM — int/bool → str() ile yazılır.
+
+        int veya bool gibi non-string değerler doğrudan str() ile yazılmalı.
+        """
         step = self._make_step({"message_size": 1024})
         content = _build_step_content(step)
         self.assertIn("1024", content)
 
     def test_empty_data_renders_only_description(self) -> None:
+        """Alt tür: SINIR KOŞULU — boş data → sadece description."""
         step = self._make_step({}, description="Boş adım")
         content = _build_step_content(step)
         # Açıklama + boş satır (description sonrası "")
@@ -228,8 +285,11 @@ class TestFriendlyNamesCoverage(unittest.TestCase):
     anahtar için bir Türkçe karşılık olmalı."""
 
     def test_all_step_data_keys_have_friendly_names(self) -> None:
-        """Tam iş akışı sonucunda üretilen anahtarların hepsi sözlükte
-        tanımlı olmalı; aksi hâlde UI'da çiğ anahtar adı görünür."""
+        """Alt tür: ENTEGRASYON — tam akış sonucu tüm anahtarlar FRIENDLY_NAMES'de.
+
+        Tam iş akışı sonucunda üretilen anahtarların hepsi sözlükte
+        tanımlı olmalı; aksi hâlde UI'da çiğ anahtar adı görünür.
+        """
         from kriptografi.crypto_core import CryptoCore
         crypto = CryptoCore()
         crypto.setup_keys()

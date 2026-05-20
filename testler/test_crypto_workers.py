@@ -63,6 +63,10 @@ class TestKeygenWorker(unittest.TestCase):
     """KeygenWorker — Alice ve Bob için RSA-2048 anahtar çiftleri üretir."""
 
     def test_constructs_without_error(self) -> None:
+        """Alt tür: SMOKE (sınıf instance + sinyal varlığı).
+        KeygenWorker instance edilir VE iki PyQt sinyali (finished_ok,
+        failed) attribute olarak erişilebilir. Eksik sinyal → main_gui'de
+        slot bağlanamaz → button hep disabled kalır."""
         crypto = CryptoCore()
         worker = KeygenWorker(crypto)
         self.assertIsNotNone(worker)
@@ -70,7 +74,10 @@ class TestKeygenWorker(unittest.TestCase):
         self.assertTrue(hasattr(worker, "failed"))
 
     def test_run_emits_finished_ok_with_two_keypairs(self) -> None:
-        """run() başarıyla iki RSAKeyPair üretip finished_ok emit etmeli."""
+        """Alt tür: SMOKE (mutlu yol sinyal payload'ı).
+        run() doğrudan çağrılır (thread yok); başarılı bitince
+        finished_ok sinyali TAM 1 KEZ emit eder; payload (alice_kp, bob_kp)
+        ikilisi — ikisi de RSAKeyPair tipinde. failed listesi boş kalır."""
         crypto = CryptoCore()
         worker = KeygenWorker(crypto)
         recorder = _SignalRecorder(worker)
@@ -84,7 +91,11 @@ class TestKeygenWorker(unittest.TestCase):
         self.assertIsInstance(bob_kp, RSAKeyPair)
 
     def test_run_populates_crypto_keys(self) -> None:
-        """run() sonrasında CryptoCore üzerinde alice_keys ve bob_keys dolmalı."""
+        """Alt tür: SMOKE (yan etki kontratı).
+        run() başarısı sadece sinyal emit etmekle kalmaz, CryptoCore
+        instance'ı üzerinde alice_keys ve bob_keys attribute'larını DA
+        doldurur. Bu yan etki sayesinde main_gui akışın geri kalanında
+        crypto.alice_send() çağrısı çalışır."""
         crypto = CryptoCore()
         worker = KeygenWorker(crypto)
         self.assertIsNone(crypto.alice_keys)
@@ -108,11 +119,18 @@ class TestAliceSendWorker(unittest.TestCase):
         self.crypto.setup_keys()
 
     def test_constructs_with_message(self) -> None:
+        """Alt tür: SMOKE (instance creation).
+        AliceSendWorker instance edilirken mesaj parametresi alır;
+        exception fırlatmamalı."""
         worker = AliceSendWorker(self.crypto, "merhaba")
         self.assertIsNotNone(worker)
 
     def test_run_emits_packet_and_steps(self) -> None:
-        """run() (EncryptedPacket, list[StepResult]) emit etmeli."""
+        """Alt tür: SMOKE (mutlu yol sinyal payload'ı).
+        run() başarılı bitince finished_ok payload'ı (EncryptedPacket,
+        list[StepResult]) ikilisi olmalı. Alice akışı tam 6 adım
+        içerir (SHA, RSA imza, birleştirme, oturum anahtarı, AES,
+        RSA-OAEP); step sayısı bu kontratla sabittir."""
         worker = AliceSendWorker(self.crypto, "test mesajı")
         recorder = _SignalRecorder(worker)
 
@@ -125,7 +143,11 @@ class TestAliceSendWorker(unittest.TestCase):
         self.assertEqual(len(steps), 6)  # Alice akışı 6 adım
 
     def test_run_emits_failed_when_keys_missing(self) -> None:
-        """setup_keys çağrılmadan run() → RuntimeError failed sinyali."""
+        """Alt tür: HATA YOLU (ön koşul ihlali).
+        setup_keys() çağrılmadan run() → CryptoCore RuntimeError
+        fırlatır → worker yakalar ve failed sinyali emit eder.
+        Bu fırsatla finished_ok ASLA emit edilmemeli (sessiz başarı
+        olmaz). main_gui kullanıcıya hata mesajı gösterir."""
         fresh_crypto = CryptoCore()  # anahtar yok
         worker = AliceSendWorker(fresh_crypto, "test")
         recorder = _SignalRecorder(worker)
@@ -151,11 +173,18 @@ class TestBobReceiveWorker(unittest.TestCase):
         self.packet, _ = self.crypto.alice_send(self.message)
 
     def test_constructs_with_packet(self) -> None:
+        """Alt tür: SMOKE (instance creation).
+        BobReceiveWorker instance edilirken EncryptedPacket alır."""
         worker = BobReceiveWorker(self.crypto, self.packet)
         self.assertIsNotNone(worker)
 
     def test_run_emits_message_valid_steps(self) -> None:
-        """run() (message, is_valid=True, list[StepResult]) emit etmeli."""
+        """Alt tür: SMOKE (mutlu yol — uçtan uca round-trip).
+        Alice'in gönderdiği paket Bob tarafından çözülünce finished_ok
+        sinyali (message, is_valid=True, steps) payload'ı emit eder.
+        Mesaj round-trip eşitliği (msg == sent_message) + imza
+        doğrulama (is_valid=True) + 5 adım (RSA-OAEP, AES-GCM, ayrıştır,
+        SHA hesap, RSA-PSS doğrula). End-to-end fonksiyonelliğin testi."""
         worker = BobReceiveWorker(self.crypto, self.packet)
         recorder = _SignalRecorder(worker)
 
@@ -169,7 +198,11 @@ class TestBobReceiveWorker(unittest.TestCase):
         self.assertEqual(len(steps), 5)  # Bob akışı 5 adım
 
     def test_run_emits_failed_on_corrupt_packet(self) -> None:
-        """Tamamen boş paket çözülemez → failed sinyali."""
+        """Alt tür: HATA YOLU (tamamen geçersiz girdi).
+        Tüm alanları boş bytes olan paket çözülürken kripto kütüphanesi
+        hata fırlatır → worker failed sinyali emit eder; finished_ok
+        ASLA emit edilmemeli. Defensive test — kötü niyetli/bozuk
+        veriyi tespit etme."""
         bad_packet = EncryptedPacket(
             encrypted_message=b"",
             encrypted_session_key=b"",
@@ -185,7 +218,11 @@ class TestBobReceiveWorker(unittest.TestCase):
         self.assertEqual(len(recorder.errors), 1)
 
     def test_run_emits_failed_on_tampered_packet(self) -> None:
-        """Bit-flip'lenmiş ciphertext → InvalidTag failed sinyali."""
+        """Alt tür: HATA YOLU (ortadaki adam saldırı simülasyonu).
+        Ciphertext'in ilk byte'ı XOR 0xFF ile bit-flip'lenir →
+        AES-GCM authentication tag eşleşmez → InvalidTag istisnası
+        → failed sinyali. Bu testin başarısı, paketin bütünlük
+        korumasının çalıştığının kanıtıdır."""
         from cryptography.exceptions import InvalidTag
 
         tampered_ct = bytearray(self.packet.encrypted_message)

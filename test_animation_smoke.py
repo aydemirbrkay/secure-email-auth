@@ -135,6 +135,10 @@ class TestSHA256PureContract(unittest.TestCase):
         "final_h_parts",
         "blocks_count",
         "binary_preview",
+        # Mesaj Hazırlığı için yeni alanlar
+        "message_bytes",
+        "message_text",
+        "padded_bytes",
     }
 
     def test_all_required_keys_present(self) -> None:
@@ -208,6 +212,14 @@ class TestAESPureContract(unittest.TestCase):
         # Anahtar genişletme sonucu 15 round_key üretir (round 0..14)
         if "round_keys_hex" in result:
             self.assertEqual(len(result["round_keys_hex"]), 15)
+
+    def test_plaintext_prep_fields_present(self):
+        """Plaintext Hazırlığı için yeni alanlar mevcut olmalı."""
+        from animation_modals.aes_pure import aes256_encrypt_with_rounds
+        result = aes256_encrypt_with_rounds(self.KEY, self.PLAINTEXT)
+        for key in ("plaintext_bytes", "padded_plaintext",
+                    "first_block", "blocks_total", "state_matrix"):
+            self.assertIn(key, result)
 
 
 # ---------------------------------------------------------------------------

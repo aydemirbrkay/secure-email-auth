@@ -118,6 +118,13 @@ def _key_expansion(key: bytes) -> list[list[list[int]]]:
     return round_keys
 
 
+def _pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
+    """PKCS#7 padding: padding miktarı = block_size - (len(data) % block_size).
+    Tam blok durumunda bir tam blok padding (16 × 0x10) eklenir."""
+    pad_len = block_size - (len(data) % block_size)
+    return data + bytes([pad_len] * pad_len)
+
+
 def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
     """
     AES-256 ECB ile 16-byte bloğu şifreler.
@@ -170,9 +177,25 @@ def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
     round_keys_hex = [_state_to_hex(rk) for rk in round_keys]
     initial_state_hex = _state_to_hex(_bytes_to_state(block))
 
+    # Plaintext Hazırlığı sayfası için yeni alanlar
+    padded = _pkcs7_pad(plaintext, 16)
+    first_block = padded[:16]
+    blocks_total = len(padded) // 16
+    state_matrix = [
+        [f"{first_block[c * 4 + r]:02x}" for c in range(4)]
+        for r in range(4)
+    ]
+
     return {
         "rounds_data": rounds_data,
         "final_block_hex": final_bytes.hex(),
         "round_keys_hex": round_keys_hex,
         "initial_state_hex": initial_state_hex,
+        # Plaintext Hazırlığı (yeni)
+        "plaintext_bytes": bytes(plaintext),
+        "plaintext_text": plaintext.decode("utf-8", errors="replace"),
+        "padded_plaintext": padded,
+        "first_block": first_block,
+        "blocks_total": blocks_total,
+        "state_matrix": state_matrix,
     }

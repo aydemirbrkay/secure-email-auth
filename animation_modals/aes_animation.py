@@ -374,6 +374,246 @@ class _AESIntroWidget(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Plaintext Hazırlığı widget'ı — intro ile Round 0 arasına eklenen sayfa
+# ---------------------------------------------------------------------------
+
+class _AESPlaintextPrepWidget(QWidget):
+    """
+    AES Plaintext Hazırlığı sayfası — intro ile Round 0 arasına eklenen tek-seferlik sayfa.
+
+    Fazlar (QTimer _TICK_MS=60):
+      0: Plaintext label fade-in
+      1: İlk 16 byte UTF-8 grid kademeli
+      2: PKCS#7 padding byte'ları beyaz border ile eklenir
+      3: Toplam/blok bilgi şeridi
+      4: 4×4 state matrix sütun sütun dolar
+      5: "Devam ▶" buton enabled
+
+    Boş mesaj: faz 1 atlanır.
+    """
+
+    _TICK_MS = 60
+
+    def __init__(
+        self,
+        plaintext_text: str,
+        plaintext_bytes: bytes,
+        padded_plaintext: bytes,
+        first_block: bytes,
+        blocks_total: int,
+        state_matrix: list[list[str]],
+        on_continue=None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        from PyQt6.QtWidgets import QScrollArea
+        from animation_modals.byte_widgets import (
+            _ColoredByteGridWidget,
+            _ByteStripWidget,
+        )
+
+        self._plaintext_text = plaintext_text
+        self._plaintext_bytes = plaintext_bytes
+        self._padded_plaintext = padded_plaintext
+        self._first_block = first_block
+        self._blocks_total = blocks_total
+        self._state_matrix = state_matrix
+        self._on_continue = on_continue
+        self._is_empty = len(plaintext_bytes) == 0
+        self._tick = 0
+        self._phase = 0
+        self._finished = False
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(6)
+
+        title = QLabel("Plaintext Hazırlığı — Metin → 4×4 State Matrix")
+        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+
+        # Plaintext label
+        if self._is_empty:
+            label_text = "<i>(boş mesaj)</i>"
+            label_color = ANIM_COLORS["text_muted"]
+        else:
+            preview = plaintext_text[:60] + ("…" if len(plaintext_text) > 60 else "")
+            label_text = f"Plaintext: \"{preview}\""
+            label_color = ANIM_COLORS["text_secondary"]
+        self._txt_lbl = QLabel(label_text)
+        self._txt_lbl.setFont(QFont("IBM Plex Sans", 10))
+        self._txt_lbl.setStyleSheet(f"color: {label_color};")
+        self._txt_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._txt_lbl.setTextFormat(Qt.TextFormat.RichText)
+        lay.addWidget(self._txt_lbl)
+
+        # Detail grid (ilk 16 byte = first_block)
+        detail_lbl = QLabel("İlk blok (16 byte) — PKCS#7 padding dahil:")
+        detail_lbl.setFont(QFont("IBM Plex Sans", 9))
+        detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(detail_lbl)
+        # Padding mask: orijinal plaintext byte'larından sonrası PKCS#7
+        n_orig = min(len(plaintext_bytes), 16)
+        padding_mask = [False] * n_orig + [True] * (16 - n_orig)
+        padding_labels = [""] * n_orig + ["pad"] * (16 - n_orig)
+        self._grid = _ColoredByteGridWidget(
+            first_block,
+            max_cells=16,
+            padding_mask=padding_mask,
+            padding_labels=padding_labels,
+        )
+        lay.addWidget(self._grid)
+
+        # Byte strip (tüm padded plaintext) — scroll
+        strip_lbl = QLabel(
+            f"Tüm byte'lar (toplam {len(padded_plaintext)} byte, "
+            f"blok sayısı: {blocks_total}):"
+        )
+        strip_lbl.setFont(QFont("IBM Plex Sans", 9))
+        strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(strip_lbl)
+        # Padding mask tüm strip için
+        n_orig_all = len(plaintext_bytes)
+        full_mask = [False] * n_orig_all + [True] * (len(padded_plaintext) - n_orig_all)
+        self._strip = _ByteStripWidget(padded_plaintext, padding_mask=full_mask)
+        strip_scroll = QScrollArea()
+        strip_scroll.setWidget(self._strip)
+        strip_scroll.setWidgetResizable(True)
+        strip_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        strip_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        strip_scroll.setStyleSheet("background: transparent; border: none;")
+        strip_scroll.setMinimumHeight(60)
+        lay.addWidget(strip_scroll)
+
+        # 4×4 state matrix gösterimi
+        matrix_lbl = QLabel("4×4 State Matrix (column-major):")
+        matrix_lbl.setFont(QFont("IBM Plex Sans", 9))
+        matrix_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(matrix_lbl)
+        self._matrix_widget = self._build_state_matrix_widget()
+        lay.addWidget(self._matrix_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Devam butonu
+        self._btn_continue = QPushButton("Devam ▶")
+        self._btn_continue.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
+        self._btn_continue.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; border-radius: 6px; "
+            f"padding: 6px 18px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+            f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
+            f"color: {ANIM_COLORS['text_muted']}; }}"
+        )
+        self._btn_continue.setEnabled(False)
+        self._btn_continue.clicked.connect(self._on_continue_clicked)
+        lay.addWidget(self._btn_continue, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        lay.addStretch()
+
+        # Matrix cell etiketleri (Fazlı dolum için)
+        self._matrix_filled = [[False] * 4 for _ in range(4)]
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._on_tick)
+
+    def _build_state_matrix_widget(self) -> QWidget:
+        """4 sütun × 4 satır mini tablo döndürür."""
+        from PyQt6.QtWidgets import QGridLayout
+        w = QFrame()
+        w.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 6px; padding: 4px; }}"
+        )
+        grid = QGridLayout(w)
+        grid.setHorizontalSpacing(4)
+        grid.setVerticalSpacing(4)
+        self._cell_lbls: list[list[QLabel]] = []
+        for r in range(4):
+            row_lbls = []
+            for c in range(4):
+                cell = QLabel("--")
+                cell.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                cell.setStyleSheet(
+                    f"background: {ANIM_COLORS['bg_input']}; "
+                    f"color: {ANIM_COLORS['text_muted']}; "
+                    f"border: 1px solid {ANIM_COLORS['border']}; "
+                    f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
+                )
+                cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                grid.addWidget(cell, r, c)
+                row_lbls.append(cell)
+            self._cell_lbls.append(row_lbls)
+        return w
+
+    def start(self) -> None:
+        self._timer.start(self._TICK_MS)
+
+    def _on_tick(self) -> None:
+        self._tick += 1
+        if self._is_empty:
+            # Boş mesaj: faz 1 atlanır
+            if self._tick == 21:
+                self._phase = 2
+            elif self._tick == 50:
+                self._phase = 3
+            elif self._tick >= 60:
+                self._fill_matrix_immediate()
+                self._jump_to_final()
+            return
+
+        if self._tick == 21:
+            self._phase = 1
+        elif self._tick == 56:
+            self._phase = 2
+        elif self._tick == 81:
+            self._phase = 3
+        elif self._tick >= 96 and self._tick < 150:
+            # Faz 4: sütun sütun dolum
+            local = self._tick - 96
+            col = local // 14
+            if col < 4:
+                for r in range(4):
+                    if not self._matrix_filled[r][col]:
+                        self._cell_lbls[r][col].setText(self._state_matrix[r][col])
+                        self._cell_lbls[r][col].setStyleSheet(
+                            f"background: {ANIM_COLORS['accent_blue']}; "
+                            f"color: #FFFFFF; border: 1px solid {ANIM_COLORS['accent_blue']}; "
+                            f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
+                        )
+                        self._matrix_filled[r][col] = True
+        elif self._tick >= 151:
+            self._fill_matrix_immediate()
+            self._jump_to_final()
+
+    def _fill_matrix_immediate(self) -> None:
+        for r in range(4):
+            for c in range(4):
+                if not self._matrix_filled[r][c]:
+                    self._cell_lbls[r][c].setText(self._state_matrix[r][c])
+                    self._matrix_filled[r][c] = True
+
+    def _jump_to_final(self) -> None:
+        if self._finished:
+            return
+        self._finished = True
+        self._timer.stop()
+        self._btn_continue.setEnabled(True)
+
+    def _on_continue_clicked(self) -> None:
+        if self._on_continue:
+            self._on_continue()
+
+    def closeEvent(self, e) -> None:  # type: ignore[override]
+        self._timer.stop()
+        super().closeEvent(e)
+
+
+# ---------------------------------------------------------------------------
 # ShiftRows animasyonlu ok widget'ı
 # ---------------------------------------------------------------------------
 
@@ -1369,6 +1609,16 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._round_keys_hex = aes_result["round_keys_hex"]
         self._initial_state_hex = aes_result["initial_state_hex"]
 
+        # Plaintext Hazırlığı sayfası için yeni alanlar (aes_pure'dan gelir)
+        self._plaintext_text_str = aes_result.get("plaintext_text", "")
+        self._plaintext_bytes_data = aes_result.get("plaintext_bytes", b"")
+        self._padded_plaintext_data = aes_result.get("padded_plaintext", b"")
+        self._first_block_data = aes_result.get("first_block", b"")
+        self._blocks_total_data = aes_result.get("blocks_total", 1)
+        self._state_matrix_data = aes_result.get(
+            "state_matrix", [["--"] * 4 for _ in range(4)]
+        )
+
         # round → ilk step indeksini hesapla
         self._round_start: dict[int, int] = {}
         for i, s in enumerate(self._steps_data):
@@ -1385,7 +1635,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
 
         # Intro ekranı kompakt — sadece akış şeması + Başlat butonu sığar.
-        # _switch_to_rounds ile round görünümüne geçince ekran büyür.
+        # Intro complete → _switch_to_plaintext_prep ekranı büyütür ve plaintext sayfasını gösterir.
         if on_close is None:
             self.resize(820, 620)
 
@@ -1398,23 +1648,49 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self.content_layout.addWidget(self._stack, stretch=1)
 
         # Sayfa 0 — Giriş animasyonu
-        self._intro = _AESIntroWidget(on_complete=self._switch_to_rounds)
+        self._intro = _AESIntroWidget(on_complete=self._switch_to_plaintext_prep)
         self._stack.addWidget(self._intro)
 
-        # Sayfa 1 — Round görünümü (tek round detayı)
+        # Sayfa 1 — Plaintext Hazırlığı (yeni, tek seferlik pre-step)
+        self._plaintext_page = self._make_plaintext_prep_page()
+        self._stack.addWidget(self._plaintext_page)
+
+        # Sayfa 2 — Round görünümü (tek round detayı)
         self._round_page = self._make_round_page()
         self._stack.addWidget(self._round_page)
 
-        # Sayfa 2 — Tüm Roundlar Akışı (FIPS 197 tarzı)
+        # Sayfa 3 — Tüm Roundlar Akışı (FIPS 197 tarzı)
         self._flow_page = self._make_flow_page()
         self._stack.addWidget(self._flow_page)
 
-        # Sayfa 3 — Eşleşme sonucu
+        # Sayfa 4 — Eşleşme sonucu
         self._match_page = self._make_match_page()
         self._stack.addWidget(self._match_page)
 
         # Intro başlat (otomatik)
         self._intro.start()
+
+    def _make_plaintext_prep_page(self) -> QWidget:
+        """Yeni Plaintext Hazırlığı sayfası — _AESPlaintextPrepWidget içerir."""
+        from PyQt6.QtWidgets import QScrollArea
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(8, 4, 8, 4)
+        self._plaintext_widget = _AESPlaintextPrepWidget(
+            plaintext_text=self._plaintext_text_str,
+            plaintext_bytes=self._plaintext_bytes_data,
+            padded_plaintext=self._padded_plaintext_data,
+            first_block=self._first_block_data,
+            blocks_total=self._blocks_total_data,
+            state_matrix=self._state_matrix_data,
+            on_continue=self._switch_to_rounds_only,
+        )
+        scroll = QScrollArea()
+        scroll.setWidget(self._plaintext_widget)
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        lay.addWidget(scroll)
+        return w
 
     def _make_round_page(self) -> QWidget:
         w = QWidget()
@@ -1634,10 +1910,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
     # Navigasyon yardımcıları
     # ------------------------------------------------------------------
 
-    def _switch_to_rounds(self) -> None:
-        """Intro'dan round görünümüne geç — pencereyi tam boyuta büyüt."""
-        # Pencere büyütülür çünkü round görünümünde yan yana iki matris +
-        # sağ panel + round bar sığması gerekir.
+    def _switch_to_plaintext_prep(self) -> None:
+        """Intro complete: pencereyi büyüt + plaintext prep sayfasına geç + animasyon başlat."""
+        # Pencere büyütülür çünkü plaintext prep page'in 16-cell grid'i
+        # intro 820×620 boyutuna sığmaz.
         if self._on_close is None:
             from PyQt6.QtWidgets import QApplication
             screen = QApplication.primaryScreen()
@@ -1649,9 +1925,19 @@ class AESAnimationWindow(CryptoAnimationWindow):
                     (g.width() - self.width()) // 2,
                     (g.height() - self.height()) // 2,
                 )
+        self._stack.setCurrentWidget(self._plaintext_page)
+        self._plaintext_widget.start()
+
+    def _switch_to_rounds_only(self) -> None:
+        """Plaintext prep tamamlanınca: rounds sayfasına geç (pencere büyütme YOK, zaten büyük)."""
         self._stack.setCurrentWidget(self._round_page)
         self._render_step(0)
         self._progress.setValue(1)
+
+    # Geriye dönük uyumluluk için: eski isim _switch_to_rounds_only çağırır.
+    def _switch_to_rounds(self) -> None:
+        """Eski isim — _switch_to_rounds_only çağırır."""
+        self._switch_to_rounds_only()
 
     def _jump_to_round(self, r: int) -> None:
         """Round bar'daki butona tıklanınca o round'un ilk adımına atla."""

@@ -26,7 +26,10 @@ from PyQt6.QtWidgets import (
 # Gerçek görsel: 2752×1536 — ölçek: x/4.418, y/5.430
 # ---------------------------------------------------------------------------
 
-_IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "alice and bob.png")
+_IMAGE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "görseller", "alice and bob.png",
+)
 _DIAGRAM_W = 623
 _DIAGRAM_H = 283
 _BLINK_MS = 1000
@@ -175,7 +178,10 @@ class DiagramWidget(QWidget):
 # Gerçek görsel: 2730×1536 — ölçek: x/5, y/5
 # ---------------------------------------------------------------------------
 
-_BOB_IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bob-tarafi-sifre-cozme.png")
+_BOB_IMAGE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "görseller", "bob-tarafi-sifre-cozme.png",
+)
 _BOB_DIAGRAM_W = 546
 _BOB_DIAGRAM_H = 307
 

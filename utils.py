@@ -15,14 +15,17 @@ from PyQt6.QtWidgets import QGroupBox, QLabel, QVBoxLayout
 from crypto_core import StepResult
 from theme import COLORS
 
-_ICONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+# Görseller (SVG ikonlar + PNG akış diyagramları) — tek klasörde toplu erişim.
+# Eski 'icons/' klasörü 'görseller/' olarak yeniden adlandırıldı; alice/bob
+# akış PNG'leri de buraya taşındı.
+_GORSELLER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "görseller")
 
 
 def _svg_pixmap(filename: str, color: str, size: int = 20) -> QPixmap:
     """SVG simge dosyasını verilen renk ve boyutta QPixmap'e dönüştürür.
     SVG içindeki 'currentColor' değeri çalışma zamanında verilen renge çevrilir.
     """
-    path = os.path.join(_ICONS_DIR, filename)
+    path = os.path.join(_GORSELLER_DIR, filename)
     pix = QPixmap(size, size)
     pix.fill(Qt.GlobalColor.transparent)
     try:
@@ -135,7 +138,7 @@ def _png_icon_pixmap(filename: str, color: str, size: int, thickness: float = 1.
     verilen renge dönüştürerek QPixmap döndürür.
     thickness > 1.0 → çizgiler daha kalın görünür (kenar pikselleri daha opak).
     """
-    path = os.path.join(_ICONS_DIR, filename)
+    path = os.path.join(_GORSELLER_DIR, filename)
     img = QImage(path)
     if img.isNull():
         print(f"[icon] Yüklenemedi: {filename}")

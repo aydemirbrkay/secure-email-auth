@@ -90,9 +90,11 @@ secure-email-auth/
 │   ├── rsa_animation.py            # RSA-2048 animasyon penceresi (7 eğitim adımı)
 │   ├── sha256_animation.py         # SHA-256 animasyon penceresi (padding, W_i, sıkıştırma)
 │   └── sha256_pure.py              # Saf Python SHA-256 (adım ve W_i verisi)
-├── icons/                          # SVG ve PNG ikon dosyaları
-├── alice and bob.png               # Alice tarafı şifreleme akış diyagramı
-├── bob-tarafi-sifre-cozme.png      # Bob tarafı deşifre akış diyagramı
+├── görseller/                      # Tüm görsel kaynaklar (SVG ikonlar + PNG akış diyagramları)
+│   ├── alice and bob.png           # Alice tarafı şifreleme akış diyagramı
+│   ├── bob-tarafi-sifre-cozme.png  # Bob tarafı deşifre akış diyagramı
+│   ├── secure-email-simge.png      # Uygulama ana ikonu
+│   └── *.svg                       # Tema simgeleri (gear, network, shield, vb.)
 ├── test_crypto_core.py             # Birim testleri (26 test senaryosu)
 ├── test_aes_pure.py                # Saf AES implementasyonu testleri
 ├── test_sha256_pure.py             # Saf SHA-256 implementasyonu testleri

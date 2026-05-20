@@ -46,3 +46,6 @@ desktop.ini
 .env
 .env.*
 !.env.example
+
+# Local-only çalışma dokümanları (planlar, spec'ler, notlar)
+docs/

@@ -1,21 +1,41 @@
 """
-test_utils.py — utils.py modülü birim testleri
-==============================================
-- format_crypto_exception: beş istisna dalı için doğru başlık/gövde
-- _truncate_hex: kısaltma kuralı (varsayılan 48 char + …)
-- _build_step_content: StepResult biçimlendirmesi ve özel anahtar kuralları
+test_utils.py — kriptografi/utils modülü birim testleri
+====================================================
 
-PyQt6 utils üst düzey import'unda yüklenir (theme'den COLORS). Bu yüzden
-test dosyası bütün olarak PyQt6'ya bağlıdır; PyQt6 yoksa modül import
-edilemez ve testler bu noktada hata verir — mevcut test suite'iyle
-tutarlı davranış (test_crypto_core.py gibi).
+Test türü: BİRİM TESTİ (Unit Test)
+
+Amaç:
+    kriptografi/utils.py yardımcı fonksiyonlarının izole davranışını sınar.
+    Bu fonksiyonlar üretici (Alice/Bob) panellerinde adım sonuçlarını
+    okunaklı kullanıcı metinlerine çevirir; hata olursa kullanıcı
+    yanıltıcı bilgi görür.
+
+Kapsam:
+    - format_crypto_exception: 5 istisna dalı (InvalidSignature, InvalidTag,
+      ValueError, RuntimeError, jenerik Exception) için doğru başlık + gövde.
+    - _truncate_hex: uzun hex string'i okunabilir biçimde kırpma kuralı
+      (varsayılan 48 karakter + '…').
+    - _build_step_content: StepResult tipini panellerde gösterilen
+      anahtar–değer satırlarına dönüştürme; FRIENDLY_NAMES sözlüğü
+      üzerinden her veri alanının kullanıcıya gösterilen Türkçe karşılığı.
+    - TestFriendlyNamesCoverage: gerçek bir uçtan-uca akış çalıştırıp
+      üretilen TÜM anahtarların FRIENDLY_NAMES'te tanımlı olduğunu
+      kontrol eder — yeni alan eklenirse dictionary güncellemesi unutulmasın.
+
+Strateji:
+    - PyQt6 bağımlılığı vardır (utils üst düzeyinde theme.COLORS yüklenir).
+      PyQt6 yoksa testler import aşamasında hata verir; bu mevcut test
+      suite'iyle (test_crypto_core.py vb.) tutarlı davranıştır.
+
+Hata durumunda anlamı: Kullanıcı arayüzünde çiğ anahtar adı (örn.
+'session_key_b64') görünür ya da hata kartında yanlış başlık çıkar.
 """
 import unittest
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 
-from cekirdek.crypto_core import StepResult
-from cekirdek.utils import (
+from kriptografi.crypto_core import StepResult
+from kriptografi.utils import (
     FRIENDLY_NAMES,
     _build_step_content,
     _truncate_hex,
@@ -210,7 +230,7 @@ class TestFriendlyNamesCoverage(unittest.TestCase):
     def test_all_step_data_keys_have_friendly_names(self) -> None:
         """Tam iş akışı sonucunda üretilen anahtarların hepsi sözlükte
         tanımlı olmalı; aksi hâlde UI'da çiğ anahtar adı görünür."""
-        from cekirdek.crypto_core import CryptoCore
+        from kriptografi.crypto_core import CryptoCore
         crypto = CryptoCore()
         crypto.setup_keys()
         _, alice_steps = crypto.alice_send("merhaba")

@@ -1,8 +1,29 @@
 """
-test_crypto_core.py – Kriptografi Modülü Test Dosyası
-=====================================================
-SHA-256, RSA-2048 ve AES-256-GCM tabanlı hibrit kriptografik
-iş akışının birim testleri.
+test_crypto_core.py — kriptografi/crypto_core modülü birim testleri
+================================================================
+
+Test türü: BİRİM TESTİ (Unit Test) — projenin en kapsamlı test dosyası (46 test)
+
+Amaç:
+    SHA-256 + RSA-2048 + AES-256-GCM tabanlı hibrit kriptografi akışının
+    üretim kütüphanesi (cryptography lib) üzerinden ucu uca doğruluğunu
+    sınar. CryptoCore sınıfının her yöntemi (anahtar üretimi, imzalama,
+    şifreleme, çözme, doğrulama) hem mutlu yolda hem 5 farklı hata
+    dalında test edilir.
+
+Strateji:
+    - Anahtar üretimi: RSAKeyPair tipinin yapısı, public_pem/private_pem
+      formatı, PEM ↔ key dönüşüm tutarlılığı.
+    - Mutlu yol: alice_send() → bob_receive() round-trip, mesaj eşitliği,
+      imza doğrulamasının True dönmesi, step listesinin formatı.
+    - Hata yolları: bozulmuş ciphertext (InvalidTag), bozulmuş imza
+      (InvalidSignature), kısa veri (ValueError), eksik anahtar
+      (RuntimeError), yanlış Bob anahtarıyla çözme.
+    - Tamper tespiti: AES nonce/tag/AAD bütünlüğü, RSA-OAEP oturum
+      anahtarı sarması, RSA-PSS imza.
+
+Hata durumunda anlamı: Üretim crypto modülünde kriptografik veya akış
+hatası — uygulama gönderici/alıcı arasında veri bozulmasını yakalamayabilir.
 """
 
 import copy
@@ -13,7 +34,7 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-from cekirdek.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
+from kriptografi.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
 
 
 class TestSHA256(unittest.TestCase):

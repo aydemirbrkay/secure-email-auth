@@ -1,4 +1,28 @@
 # test_sha256_pure.py
+"""
+test_sha256_pure.py — animation_modals/sha256_pure modülü birim testleri
+========================================================================
+
+Test türü: BİRİM TESTİ (Unit Test)
+
+Amaç:
+    Saf-Python SHA-256 implementasyonunun standart kütüphane (hashlib.sha256)
+    ile birebir aynı çıktıyı verdiğini doğrular. sha256_steps() animasyon
+    için ara veri (round snapshot'ları, W expansion, padding adımları) da
+    döndürür — bu testler bu verilerin yapısal bütünlüğünü de garanti eder.
+
+Strateji:
+    - Bilinen mesajlarla (örn. b"Hello World", boş mesaj) hash hesapla.
+    - hashlib.sha256(msg).hexdigest() ile karşılaştır.
+    - round_snapshots, w_expansion, initial_h, blocks_count gibi animasyon
+      veri alanlarının varlığı ve doğru boyutlarda olduğunu kontrol et.
+    - Animasyon yapı testleri (TestSHA256AnimationStructure): _MatchAssemblyWidget,
+      _WExpansionWidget gibi sınıfların modülde tanımlı olduğu — refactor
+      sonrası bozulma kontrolü için.
+
+Hata durumunda anlamı: Saf SHA-256 implementasyonunda matematiksel bozukluk
+veya animasyon arayüz kontratı kırılması.
+"""
 import hashlib
 import unittest
 from animation_modals.sha256_pure import sha256_steps

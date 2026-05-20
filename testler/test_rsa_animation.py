@@ -1,12 +1,34 @@
 # test_rsa_animation.py
 """
-RSA animasyon modülünün matematiksel invariantlarını doğrular.
-Demo değerleri her RSAAnimationWindow açılışında _reseed_demo() ile
-rastgele yenilenir, bu yüzden testler SPESİFİK SAYI değil INVARIANT
-tabanlı yazılmıştır.
+test_rsa_animation.py — RSA animasyon matematiksel invariant testleri
+======================================================================
 
-PyQt UI bileşenleri çalışma zamanında test edilemez (QApplication gerekir);
-bu yüzden burada modül seviyesindeki invariantları kontrol ederiz.
+Test türü: INVARIANT TESTİ (Matematiksel Sözleşme)
+
+Amaç:
+    RSA animasyon penceresinde gösterilen küçük demo değerleri
+    (p, q, n, ϕ, e, d) her pencere açılışında _reseed_demo() çağrısıyla
+    rastgele seçilir. Spesifik bir sayı sabit olmadığı için testler
+    "şu sayı şu olmalı" değil "**her zaman şu matematiksel bağıt**
+    sağlanmalı" diye yazılmıştır.
+
+Kapsam:
+    - n = p · q  (modülüs tanımı)
+    - ϕ = (p-1)(q-1)  (Euler totient fonksiyonu)
+    - e · d ≡ 1 (mod ϕ)  (RSA anahtar üretimi temel bağıtı)
+    - p, q ∈ _PRIME_POOL ve p ≠ q
+    - _reseed_demo() idempotency: 5 ardışık çağrı sonrası invariant'lar
+      hâlâ tutuyor + m = 65 (animasyon mesajı) < n garantisi
+    - _eea_steps doğru çalışıyor: GCD=1 satırından alınan t değeri,
+      mod ϕ alınınca _D'ye eşit
+    - RSAAnimationWindow 8 adımlı: _TITLES + _CAPTIONS 8'li listeler,
+      her başlık "Adım N / 8" formatında, 8. adım "Şifreleme" içerir
+
+Strateji: Modül seviyesi invariantlar — PyQt UI bileşenlerini instance
+etmeden, _reseed_demo()'yu doğrudan çağırarak. QApplication gerekmez.
+
+Hata durumunda anlamı: Reseed sonrası RSA matematiği bozuk; demo
+gösteriminde m → c → m' tur'u doğru sonuç vermiyor.
 """
 import unittest
 

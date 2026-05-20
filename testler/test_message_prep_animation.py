@@ -1,7 +1,48 @@
 # test_message_prep_animation.py
 """
-sha256_pure ve aes_pure modüllerinin yeni alanlarını ve animasyon widget'larının
-ihtiyaç duyduğu veri kontratını doğrular. Boş mesaj davranışı da test edilir.
+test_message_prep_animation.py — Mesaj/Plaintext Hazırlığı veri kontrat testleri
+================================================================================
+
+Test türü: INVARIANT TESTİ (Veri Sözleşmesi + Boş Mesaj Davranışı)
+
+Amaç:
+    SHA Mesaj Hazırlığı + AES Plaintext Hazırlığı sayfaları için
+    sha256_pure ve aes_pure modüllerine eklenen yeni alanların doğru
+    veriyi döndürdüğünü; PKCS#7 padding, UTF-8 kodlama ve column-major
+    matris dönüşümünün matematiksel kurallara uyduğunu sınar. Bunlar
+    dinamik kullanıcı girdisine bağlı (her mesajda farklı sayılar
+    çıkar), bu yüzden testler değer değil **kural** doğrular.
+
+Kapsam:
+    TestSHAMessagePrepContract (7 test):
+        - sha256_steps() yeni alanları döndürür: message_bytes,
+          message_text, padded_bytes
+        - padded_bytes uzunluğu 64 katı (512-bit blok)
+        - padded_bytes mesaj byte'larıyla başlar + 0x80 ayracı içerir
+        - Son 8 byte big-endian bit-length (örn. b"abc" → 24 bit)
+        - UTF-8 multi-byte (Türkçe "şğü") doğru kodlanır
+
+    TestAESPlaintextPrepContract (9 test):
+        - aes256_encrypt_with_rounds() yeni alanları:
+          plaintext_bytes/text, padded_plaintext, first_block,
+          blocks_total, state_matrix
+        - PKCS#7 kuralı: 13 byte → 3 byte 0x03 padding; 16 byte → 16
+          byte 0x10 tam blok padding
+        - state_matrix 4×4 column-major: state_matrix[r][c] =
+          first_block[c*4 + r] (FIPS 197 byte sıralaması)
+        - blocks_total = len(padded_plaintext) // 16
+
+    TestEmptyMessageHandling (6 test — boş mesaj graceful davranışı):
+        - sha256_steps(b"") → standart empty hash "e3b0c44298fc..."
+        - padded_bytes = 64 byte (0x80 + 55 × 0x00 + 8 byte length 0)
+        - aes_encrypt(KEY, b"") → 16 byte 0x10 PKCS#7 padding,
+          state_matrix tamamı "10", blocks_total = 1
+
+Strateji: Spesifik değer yerine matematiksel/yapısal bağıt; pure modül
+düzeyi (UI gerekmez).
+
+Hata durumunda anlamı: Mesaj Hazırlığı / Plaintext Hazırlığı
+sayfasında byte/padding gösterimi yanlış veya boş mesajda crash.
 """
 import unittest
 

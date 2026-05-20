@@ -1,7 +1,36 @@
 # test_animation_widgets_smoke.py
 """
-Yeni byte widget'larının modül seviyesi smoke testleri.
-QApplication başlatmadan, sadece import ve sınıf tanımları doğrulanır.
+test_animation_widgets_smoke.py — Mesaj/Plaintext Hazırlığı widget'ları smoke testleri
+=======================================================================================
+
+Test türü: SMOKE TESTİ (Import & API Sözleşmesi)
+
+Amaç:
+    SHA Mesaj Hazırlığı + AES Plaintext Hazırlığı çalışmasıyla eklenen yeni
+    widget'ların ve byte_widgets modülünün import edilebilirliğini, API
+    parametre signature'larını ve SHA penceresinin yeni 5-adımlı yapısını
+    QApplication başlatmadan doğrular.
+
+Kapsam (PyQt6 widget instance YOK — sadece import + inspect.signature):
+    - TestNewWidgetsImport: 6 yeni öğe import edilebilmeli:
+        * _PALETTE_6 (6 renkli liste, hepsi geçerli #RRGGBB)
+        * _ColoredByteGridWidget (detay grid)
+        * _ByteStripWidget (kompakt strip)
+        * _SHAMessagePrepWidget (Adım 1/5)
+        * _SHA256PaddingWidget (Adım 2/5)
+        * _AESPlaintextPrepWidget (AES intro→prep→rounds)
+    - TestPaddingMaskSupport: widget'ların padding_mask + padding_labels
+      parametrelerini kabul ettiği signature kontrolü (inspect.signature).
+      Geçerli etiket değerleri: '80', '00', 'len', 'pad'.
+    - TestSHAStepCount: SHA penceresi _TITLES sınıf niteliği 5 girdili,
+      birincisi "Mesaj Hazırlığı" içerir, her başlık "Adım N / 5"
+      formatında — 4→5 adım kaymasının doğru yapıldığının kanıtı.
+
+Strateji: Mikro-saniyelerde çalışır, CI/headless dostu. Bir API kontratı
+test'idir; widget'ların gerçek render'ı manuel doğrulanır.
+
+Hata durumunda anlamı: byte_widgets modülü, padding API'si veya SHA
+window adım yapısı bozulmuş; uygulama açıldığında AttributeError verir.
 """
 import unittest
 

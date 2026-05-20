@@ -26,7 +26,7 @@ from typing import List
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from cekirdek.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
+from kriptografi.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
 
 
 class KeygenWorker(QThread):

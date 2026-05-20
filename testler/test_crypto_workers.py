@@ -1,22 +1,38 @@
 """
-test_crypto_workers.py — QThread worker smoke testleri
-======================================================
-KeygenWorker, AliceSendWorker, BobReceiveWorker'lar QThread alt sınıflarıdır.
+test_crypto_workers.py — kriptografi/crypto_workers QThread smoke testleri
+========================================================================
 
-Test stratejisi: `worker.run()` doğrudan çağrılır — yeni bir thread spawn
-edilmez. Aynı thread'de sinyal emit'leri DirectConnection ile slot'u
-senkron olarak çağırır, bu yüzden Qt event loop'u (QCoreApplication.exec)
-gerekmez.
+Test türü: SMOKE TESTİ (Sinyal Sözleşmesi)
 
-Worker'lar sadece CryptoCore metodlarını çağırdığı için akış doğruluğu
-zaten test_crypto_core.py'da kapsanmış; bu dosya yalnızca worker
-sözleşmesini sınar: doğru sinyalin doğru argümanlarla emit edilmesi
-ve hata durumunda failed sinyalinin kullanılması.
+Amaç:
+    UI'da uzun süren işlemleri (RSA-2048 anahtar üretimi ~1-2 sn,
+    Alice gönderim, Bob alım) thread'e taşıyan QThread worker'larının
+    sinyal–slot sözleşmesini doğrular. Worker'ların gerçek kripto akışını
+    test etmek bu dosyanın işi DEĞİL — onu test_crypto_core.py kapsar.
+
+Kapsam:
+    - KeygenWorker: anahtar üretimi tamamlanınca finished sinyali iki
+      RSAKeyPair argümanıyla emit edilir.
+    - AliceSendWorker: send tamamlanınca finished sinyali (EncryptedPacket,
+      StepResult listesi) emit eder.
+    - BobReceiveWorker: receive tamamlanınca finished sinyali (mesaj,
+      bool geçerli, StepResult listesi) emit eder.
+    - Hata yolu: CryptoCore istisna fırlatırsa failed sinyali emit edilir
+      (exception nesnesiyle birlikte).
+
+Strateji:
+    worker.run() doğrudan ana thread'de çağrılır — yeni thread spawn
+    edilmez. DirectConnection ile sinyal emit'leri slot'u senkron çağırır,
+    Qt event loop'u (QCoreApplication.exec) gerekmez. Bu sayede testler
+    deterministik ve hızlıdır.
+
+Hata durumunda anlamı: GUI'de "Anahtar Üret" butonu sonsuza dek dönen
+spinner gösterir veya yanlış sinyal slot'larına bağlanır.
 """
 import unittest
 
-from cekirdek.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair
-from cekirdek.crypto_workers import (
+from kriptografi.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair
+from kriptografi.crypto_workers import (
     AliceSendWorker,
     BobReceiveWorker,
     KeygenWorker,

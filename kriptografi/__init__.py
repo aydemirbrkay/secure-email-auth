@@ -1,4 +1,4 @@
-# cekirdek/__init__.py
+# kriptografi/__init__.py
 """
 Kriptografi çekirdeği — UI'dan bağımsız kripto ve iş katmanı.
 
@@ -8,6 +8,6 @@ Kriptografi çekirdeği — UI'dan bağımsız kripto ve iş katmanı.
     utils          : Yardımcılar (icon/svg yükleme, exception formatlama, step content)
 
 Kullanım:
-    from cekirdek.crypto_core import CryptoCore, EncryptedPacket
-    from cekirdek.crypto_workers import KeygenWorker
+    from kriptografi.crypto_core import CryptoCore, EncryptedPacket
+    from kriptografi.crypto_workers import KeygenWorker
 """

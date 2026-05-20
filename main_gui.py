@@ -31,9 +31,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from cekirdek.crypto_core import CryptoCore, EncryptedPacket
-from cekirdek.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
-from cekirdek.utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
+from kriptografi.crypto_core import CryptoCore, EncryptedPacket
+from kriptografi.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
+from kriptografi.utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
 from arayuz.theme import COLORS, GLOBAL_STYLESHEET
 from arayuz.alice_panel import AlicePanel

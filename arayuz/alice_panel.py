@@ -18,8 +18,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from cekirdek.crypto_core import StepResult
-from cekirdek.utils import _build_step_content, _make_step_box
+from kriptografi.crypto_core import StepResult
+from kriptografi.utils import _build_step_content, _make_step_box
 from arayuz.theme import COLORS, STEP_COLORS_ALICE
 from arayuz.bob_panel import BobDecryptDiagramWidget
 

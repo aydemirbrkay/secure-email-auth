@@ -307,8 +307,8 @@ class BobDecryptDiagramWidget(QWidget):
             painter.end()
 
 
-from cekirdek.crypto_core import EncryptedPacket, StepResult
-from cekirdek.utils import _build_step_content, _make_step_box
+from kriptografi.crypto_core import EncryptedPacket, StepResult
+from kriptografi.utils import _build_step_content, _make_step_box
 from arayuz.theme import COLORS, STEP_COLORS_BOB
 
 

@@ -1,9 +1,38 @@
 """
-test_aes_matrix_view.py — _AESMatrixView ve _AESStateCompareWidget birim testleri
-=================================================================================
-QPainter çizimini test edemeyiz (pixel doğrulaması yok); state yönetimi,
-animasyon timer kurulumu, callback çağrılması gibi invariant'ları test ederiz.
-Görsel doğrulama manuel.
+test_aes_matrix_view.py — AES matris widget'ları runtime testleri
+=================================================================
+
+Test türü: UI WIDGET BİRİM TESTİ (QApplication ile state/timer)
+
+Amaç:
+    AES round görselleştirmesinde kullanılan iki widget'ın runtime
+    davranışını sınar:
+        _AESMatrixView         — tek 4×4 state matrisi (renkli, animasyonlu)
+        _AESStateCompareWidget — yan yana iki matris (önce/sonra karşılaştırma)
+    State machine, QTimer ömrü, op-tick eşikleri, set_state/set_pair
+    çağrıları, ok ve operasyon başlığı yönetimi test edilir.
+
+Kapsam:
+    - _TICKS_BY_OP dictionary: 4 AES operasyonu (AddRoundKey, SubBytes,
+      ShiftRows, MixColumns) için tick sayıları pozitif ve < 200.
+    - Initial state: 16 hücre var sayılan değerlerle doludur.
+    - set_state(): yeni matris atanınca cells/colors güncellenir.
+    - Timer kurulumu: QTimer başlangıçta aktif, hideEvent'te durur,
+      showEvent'te yeniden başlar (kaynak sızıntısı yok).
+    - Operasyon değişimi: _op_idx sıralı ilerler (0→1→2→3→0).
+    - _AESStateCompareWidget: set_pair() iki matrise veri dağıtır,
+      ortadaki ok ve operasyon başlığı doğru güncellenir.
+
+Strateji:
+    Modül seviyesinde TEK bir QApplication instance yaratılır (tüm
+    test'ler paylaşır). Widget'lar instance edilir ama .show()
+    edilmez — paintEvent tetiklenmez, ama QTimer ve internal state
+    test edilebilir.
+    QPainter çıktısının pixel doğrulaması yapılmaz; görsel doğrulama
+    elle yapılır (python main_gui.py).
+
+Hata durumunda anlamı: AES animasyonunda state takılır, hatalı sıra,
+veya kapatma sonrası timer çalışmaya devam eder (memory leak).
 """
 import sys
 import unittest

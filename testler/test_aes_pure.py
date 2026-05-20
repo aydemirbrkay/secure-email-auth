@@ -1,4 +1,26 @@
 # test_aes_pure.py
+"""
+test_aes_pure.py — animation_modals/aes_pure modülü birim testleri
+==================================================================
+
+Test türü: BİRİM TESTİ (Unit Test)
+
+Amaç:
+    Saf-Python AES-256 ECB implementasyonunun kriptografik doğruluğunu
+    NIST FIPS-197 Appendix B referans test vektörü ile birebir karşılaştırır.
+    Pure-Python kod, üretimdeki 'cryptography' kütüphanesinden bağımsız
+    olarak round state matrislerini animasyon için açar; bu testler o
+    çıktının doğru olduğunu garanti eder.
+
+Strateji:
+    - Standart NIST test vektörünü (key + plaintext + beklenen ciphertext)
+      sabit olarak tut.
+    - aes256_encrypt_with_rounds() çağrısıyla son blok hex'ini al.
+    - Beklenen ciphertext ile assertEqual.
+
+Hata durumunda anlamı: Pure AES implementasyonunda matematiksel bozukluk
+var; animasyondaki tüm round state görselleri yanlış olur.
+"""
 import unittest
 from animation_modals.aes_pure import aes256_encrypt_with_rounds
 

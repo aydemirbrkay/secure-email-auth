@@ -1,16 +1,41 @@
 """
 test_animation_smoke.py — Animasyon modülü smoke testleri
 ==========================================================
-QApplication başlatmadan, modül seviyesinde:
-  - Tüm animasyon modülleri import edilebilmeli
-  - ANIM_COLORS paleti gerekli anahtarları içermeli ve geçerli hex olmalı
-  - Saf-Python referans modülleri (aes_pure, sha256_pure) animasyon
-    widget'larının ihtiyaç duyduğu alanları döndürmeli
-  - Pencere sınıfları beklenen taban sınıftan türemeli
 
-Bu testler PyQt6 widget'larını instance etmez — sadece sınıf nesnesinin
-import edildiğini ve hasattr ile arayüz sözleşmesinin sağlandığını
-doğrular. Görsel doğrulama elle yapılır.
+Test türü: SMOKE TESTİ (Import & Sözleşme Kontratı)
+
+Amaç:
+    animation_modals/ paketinin tümünü PyQt6 widget'ı instance etmeden
+    doğrular. CI/headless ortamda da çalışabilir; modül seviyesi temel
+    sağlık kontrolüdür. Regression'da ilk yakalanan hata sınıfıdır.
+
+Kapsam (QApplication BAŞLATMADAN):
+    - TestAnimColors: ANIM_COLORS paleti gerekli 12 anahtarı içerir +
+      tüm değerler 6-haneli geçerli hex (#RRGGBB) formatında.
+    - TestAnimationModulesImport: rsa_animation, sha256_animation,
+      aes_animation, matrix_widget, aes_pure, sha256_pure modülleri
+      ImportError vermeden yüklenir; her birinin ana sınıf/fonksiyonu tanımlı.
+    - TestAnimationWindowsSubclassBase: AESAnimationWindow,
+      RSAAnimationWindow, SHA256AnimationWindow → CryptoAnimationWindow
+      taban sınıfının alt sınıfıdır.
+    - TestSHA256PureContract: sha256_steps() dönüşü animasyon widget'larının
+      okuduğu TÜM alanları içerir (REQUIRED_KEYS set'i 12 anahtar).
+      Yapısal invariantlar: final_h_parts birleşimi = final_hash, initial_h
+      = 8 × 8-karakter hex, w_expansion = 16 satır.
+    - TestAESPureContract: aes256_encrypt_with_rounds() rounds_data ve
+      final_block_hex döndürür; 32 hex karakter (16 byte); 15 round_key
+      (round 0..14).
+    - TestRSAConstantsInvariants: cross-modül smoke — _N = _P × _Q,
+      _PHI = (P-1)(Q-1), (E·D) mod PHI == 1.
+    - TestAESMatrixViewIntegration: _AESMatrixView 4 AES operasyonunu
+      (AddRoundKey, SubBytes, ShiftRows, MixColumns) destekler;
+      tick sayıları makul aralıkta (0 < ticks < 200).
+
+Strateji: Sınıf nesnesi import + hasattr ile arayüz sözleşmesini doğrular.
+Pixel/visual doğrulama elle yapılır.
+
+Hata durumunda anlamı: Animasyon paketinde bir refactor sözleşmeyi
+bozdu (yeniden adlandırma, alan silme, vb.); UI muhtemelen çalışmaz.
 """
 import re
 import unittest

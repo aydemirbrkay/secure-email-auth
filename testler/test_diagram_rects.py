@@ -1,5 +1,34 @@
 # test_diagram_rects.py
-"""DIAGRAM_RECTS listesinin geçerliliğini test eder — display gerektirmez."""
+"""
+test_diagram_rects.py — Bob panel piksel kalibrasyon doğrulama testleri
+========================================================================
+
+Test türü: STATİK VERİ TESTİ (Display Gerektirmez)
+
+Amaç:
+    Bob panel'inde gösterilen "alice and bob.png" akış diyagramı üzerinde
+    Alice'in 6 adımını vurgulamak için kullanılan _STEP_RECTS koordinat
+    listesinin geçerliliğini doğrular. Bu rect'ler 2752×1536 piksel
+    referans görselinden manuel kenar tespitiyle ölçülmüş ve 623×283
+    sanal koordinat uzayına ölçeklenmiştir.
+
+Kapsam:
+    - test_rect_count: 6 dikdörtgen (Alice'in 6 gönderim adımı)
+    - test_rects_positive_dimensions: genişlik ve yükseklik > 0
+    - test_rects_within_image_bounds: tüm rect'ler 623×283 görsel
+      sınırları içinde (taşma yok)
+    - test_image_file_exists: 'görseller/alice and bob.png' diskte
+      mevcut (refactor sonrası yol bozulmaması için)
+
+Strateji:
+    Hiçbir runtime'a bağlı değil — saf veri yapısı kontrolü. PyQt6,
+    QApplication, hiçbir bağımlılık yok; testler milisaniyelerde
+    çalışır. CI'da en hızlı yakalanabilen sınıf.
+
+Hata durumunda anlamı: Bob panel'inde adım vurgulama dikdörtgenleri
+görsel dışına taşar veya yanlış konumda → kullanıcı yanlış adıma
+bakar. Veya akış diyagramı dosyası kaybolmuş.
+"""
 
 DIAGRAM_W = 623
 DIAGRAM_H = 283

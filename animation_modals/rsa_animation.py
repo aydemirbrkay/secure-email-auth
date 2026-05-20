@@ -162,6 +162,22 @@ def _reseed_demo() -> None:
     _B64_DEMO = base64.b64encode(_DER_SEQ).decode()
 
 
+def _generate_demo_b64(seed_int: int) -> str:
+    """Eğitim amaçlı, (p,q,n,e) seed'ine bağlı deterministik fakat gerçekçi
+    görünümlü bir RSA-2048 public key b64'ü üretir. Her demo açılışında
+    farklı bir string oluşturur ki kullanıcı 'RSA üretimi rastgele' kavramını
+    Alice'in panel anahtarında somut gözlemleyebilsin.
+
+    Üretim: deterministik PRNG'den 256 byte rastgele veri → base64 → ilk 60
+    karakter + '…'. Gerçek RSA-2048 üretiminden çok daha hızlıdır
+    (microsaniye), eğitim amaçlı sahte b64 olarak yeterli.
+    """
+    rnd = random.Random(seed_int)
+    raw = bytes(rnd.randrange(256) for _ in range(256))
+    b64 = base64.b64encode(raw).decode()
+    return b64[:60] + "…"
+
+
 # ---------------------------------------------------------------------------
 # 1) Anahtar İnşa Paneli — kalıcı sol panel
 # ---------------------------------------------------------------------------
@@ -1066,7 +1082,12 @@ class _DERByteFlowWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._alice_b64 = alice_b64
-        self.setMinimumHeight(420)  # Base64 bit-çözümlemesi için ek alan
+        # Font büyütmeleri + word wrap + Alice/Bob anahtar kutuları için
+        # toplam yükseklik artışı (420 → 620). Parent QScrollArea zaten
+        # kaydırma sağlıyor; bu intrinsic yükseklik bildirimi scrollbar'ın
+        # tam aralığı kaydırabilmesini sağlar (K⁻ Bob anahtarı dahil son
+        # satırlar erişilebilir kalır).
+        self.setMinimumHeight(620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._phase = 0
         self._timer = QTimer(self)
@@ -1123,14 +1144,21 @@ class _DERByteFlowWidget(QWidget):
             p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
                        f"n = {_N} → {n_hex}    e = {_E} → {e_hex}")
             y += 16
-            p.setFont(QFont("Georgia", 8))
-            p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
-                       "(Sayılar ağ üzerinden bayt olarak iletildiği için "
-                       "big-endian bayt dizisine çevrilir; her bayt 2 hex hane.)")
+            # Açıklayıcı yazı 10pt + text_secondary (okunaklı renk) + word wrap.
+            # Tek satıra sığmazsa iki satıra geçer, y koordinatı buna göre artar.
+            p.setFont(QFont("Georgia", 10))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            note_text = ("(Sayılar ağ üzerinden bayt olarak iletildiği için "
+                         "big-endian bayt dizisine çevrilir; her bayt 2 hex hane.)")
+            note_flags = (Qt.AlignmentFlag.AlignHCenter
+                          | Qt.AlignmentFlag.AlignTop
+                          | Qt.TextFlag.TextWordWrap)
+            note_rect = p.boundingRect(QRect(20, y, W - 40, 60), note_flags, note_text)
+            p.drawText(note_rect, note_flags, note_text)
+            y += note_rect.height()
 
         # 3) DER yapısı — kompakt tek-satır
-        y += 24
+        y += 18
         if self._phase >= 2:
             p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
@@ -1145,17 +1173,23 @@ class _DERByteFlowWidget(QWidget):
                        f"30 {len(_DER_SEQ)-2:02X}  ·  02 {len(_DER_N)-2:02X} {' '.join(f'{b:02X}' for b in _DER_N[2:])}"
                        f"  ·  02 {len(_DER_E)-2:02X} {' '.join(f'{b:02X}' for b in _DER_E[2:])}")
             y += 16
-            p.setFont(QFont("Georgia", 8))
-            p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+            # 9pt → 10pt + text_secondary (okunaklılığı artırma)
+            p.setFont(QFont("Georgia", 10))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
                        "[SEQ] [INT n] [INT e]   →   ham byte dizisi")
-            y += 14
+            y += 18
             p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_primary"]))
             p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                        f"DER ({len(_DER_SEQ)} bayt): {der_hex}")
 
         # 4) Base64 — byte gruplarını ve karakter eşleşmesini göster
+        # Dinamik: artık DEMO _DER_SEQ yerine Alice'in GERÇEK b64'ünün ilk 12
+        # karakteri ve karşılık gelen 9 byte'ı gösterilir. Bu sayede üst
+        # satırdaki "Tam sayılar/Byte/DER paketleme" eğitim aşamalarından sonra
+        # base64 dönüşümü doğrudan Alice anahtarına bağlanır — kullanıcı her
+        # reseed'de gerçek anahtardan türeyen tutarlı bir örnek görür.
         y += 22
         if self._phase >= 3:
             p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
@@ -1164,11 +1198,19 @@ class _DERByteFlowWidget(QWidget):
                        "4)  Base64 dönüşümü  (her 3 bayt → 4 karakter):")
             y += 20
 
-            # 3'lü byte gruplarını ve karşılık gelen 4'lü Base64 karakter gruplarını
-            # yan yana çiz
-            der = _DER_SEQ
-            b64 = _B64_DEMO
-            # Grup sayısı: ceil(len(der) / 3), Base64 padding ile len(b64) buna karşılık gelir
+            # Alice'in b64'ünün ilk 12 karakterini al, 9 byte'a decode et.
+            # Decode başarısızsa DEMO değerlerine geri düş.
+            alice_b64_12 = self._alice_b64[:12]
+            try:
+                alice_bytes_9 = base64.b64decode(alice_b64_12 + "==")[:9]
+                if len(alice_bytes_9) < 9:
+                    raise ValueError("9 byte'tan az")
+                der = alice_bytes_9
+                b64 = alice_b64_12
+            except Exception:
+                der = _DER_SEQ
+                b64 = _B64_DEMO
+
             n_groups = (len(der) + 2) // 3
             group_w = 100
             total_groups_w = n_groups * group_w + (n_groups - 1) * 10
@@ -1198,11 +1240,11 @@ class _DERByteFlowWidget(QWidget):
                            Qt.AlignmentFlag.AlignCenter, b64_chunk)
 
             y += 46
-            # Toplam Base64
-            p.setFont(QFont("Georgia", 9))
-            p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                       f"= Base64 ({len(_B64_DEMO)} karakter): {_B64_DEMO}")
+            # Toplam: Alice'in b64'ünün ilk 12 karakteri (dinamik)
+            p.setFont(QFont("Georgia", 10))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       f"Alice b64'ünün ilk 12 karakteri: {b64}")
             y += 18
 
             # — Bit-seviyesi açıklama — DEMO yerine ALICE'in GERÇEK
@@ -1219,32 +1261,41 @@ class _DERByteFlowWidget(QWidget):
                 groups = [bits[i:i+6] for i in range(0, 24, 6)]      # 4 × 6-bit
                 indices = [int(g, 2) for g in groups]
 
-                p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+                # Font 9pt'a büyütüldü (önceki 8pt okunaksızdı). İki satıra
+                # bölünmüş — tek satırda dar pencerelerde "…ilk 4 b6" diye
+                # kırpılıyordu; iki satır + büyük font hem okunaklı hem sığar.
+                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
                 p.drawText(
-                    QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
-                    "Nasıl: 24 bit → 6-bit gruplar → A-Z a-z 0-9 + / alfabesinde indeks "
+                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                    "Nasıl: 24 bit → 6-bit gruplar → A-Z a-z 0-9 + / alfabesinde indeks",
+                )
+                y += 16
+                p.drawText(
+                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                     "(Alice'in gerçek anahtarının ilk 4 b64 karakteri):",
                 )
-                y += 14
-                p.setFont(QFont("Courier New", 8))
+                y += 16
+                # Hex/binary satırı 9pt — önceki 8pt çok küçüktü.
+                p.setFont(QFont("Courier New", 9))
                 p.setPen(QColor(ANIM_COLORS["text_secondary"]))
                 hex_str = " ".join(f"{b:02X}" for b in alice_first3)
                 bin_str = " ".join(f"{b:08b}" for b in alice_first3)
                 p.drawText(
-                    QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                     f"{hex_str}  =  {bin_str}",
                 )
-                y += 12
+                y += 14
                 mapping = "   ".join(
                     f"{g}={idx}={ch}" for g, idx, ch in zip(groups, indices, alice_first4)
                 )
+                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_green"]))
                 p.drawText(
-                    QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                     f"→ {mapping}",
                 )
-                y += 14
+                y += 16
 
         # 5) ALICE'İN GERÇEK ANAHTARLARI — son faz
         y += 26
@@ -1301,24 +1352,25 @@ class _DERByteFlowWidget(QWidget):
         p.drawText(QRect(x + 4, y, icon_w, h),
                    Qt.AlignmentFlag.AlignCenter, icon)
 
-        # Etiket
-        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        # Etiket — "Alice Açık Anahtarı:" 19 karakter, eski 110 px dar kalıyordu.
+        # 150 px ve 10pt font ile kırpılmadan sığar.
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        label_w = 110
+        label_w = 150
         p.drawText(QRect(x + icon_w + 4, y, label_w, h),
                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    label)
 
-        # Değer
-        font = QFont("Courier New", 8)
+        # Değer — Courier 8pt çok küçüktü, 9pt'a büyütüldü
+        font = QFont("Courier New", 9)
         if italic_value:
             font.setItalic(True)
         p.setFont(font)
         p.setPen(QColor(value_color or ANIM_COLORS["text_primary"]))
         value_x = x + icon_w + 4 + label_w + 4
         value_w = w - (value_x - x) - 6
-        # Tek satıra sığacak şekilde uzun b64'ü kırp
-        max_chars = max(20, value_w // 6)
+        # Tek satıra sığacak şekilde uzun b64'ü kırp (9pt için karakter ~7px)
+        max_chars = max(20, value_w // 7)
         display = value if len(value) <= max_chars else value[:max_chars - 1] + "…"
         p.drawText(QRect(value_x, y, value_w, h),
                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -1392,11 +1444,12 @@ class _KeyMatchWidget(QWidget):
         outer.addLayout(cards_row)
 
         # Gerçek anahtar önizlemesi (alt) — kelime kaydırma ile genişlikten bağımsız
+        # Font 8pt → 9pt (önceki çok küçüktü, okunaksızdı)
         keys_lbl = QLabel(
             f"<b>Alice açık anahtarı:</b> {self._alice_b64[:48]}…<br>"
             f"<b>Bob açık anahtarı:</b> {self._bob_b64[:48]}…"
         )
-        keys_lbl.setFont(QFont("Courier New", 8))
+        keys_lbl.setFont(QFont("Courier New", 9))
         keys_lbl.setStyleSheet(
             f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
             f"background: {ANIM_COLORS['bg_input']}; "
@@ -1526,7 +1579,9 @@ class _RSAEncryptDecryptWidget(QWidget):
         margin = 14
         ox = margin
 
-        # Formül kutusu — m ve c arasında kalan boşluğa uyarlanır
+        # Formül kutusu — m ve c/m' arasında kalan boşluğa uyarlanır
+        # m' artık c ile aynı genişlikte (86 px) olduğu için ek hesaplama
+        # gerekmez; "= m ✓" doğrulama etiketi kutunun altına çizilir.
         formula_x = margin + box_w + 12
         formula_right_lim = W - margin - box_w - 12
         formula_w = max(220, formula_right_lim - formula_x)
@@ -1601,21 +1656,26 @@ class _RSAEncryptDecryptWidget(QWidget):
                     ANIM_COLORS["accent_mauve"],
                     width=card_w, height=card_h,
                 )
-        # m' kutusu — başarı etiketinde m' = 65 = m ✓ 13 karakterlik metin
-        # 100 px sığmıyor; bu yüzden son fazda kutu genişletilir ve sola
-        # kaydırılır ki c kutusuyla çakışmasın, içerik (özellikle "m' "
-        # apostrofu) kırpılmadan görünsün.
+        # m' kutusu — üstündeki c kutusuyla AYNI genişlikte ve aynı stilde.
+        # Eski tasarımda "m' = 65 = m ✓" tek kutuya sığdırılıyor ve kutu
+        # genişlediği için formül kutusuyla çakışıyordu. Yeni yaklaşım: kutu
+        # yalnızca "m' = değer" gösterir (c kutusuyla simetrik), eşleşme
+        # doğrulaması (=m ✓) kutunun ALTINDA ayrı bir küçük etiket olarak
+        # verilir. Bu sayede 3-4 haneli M_PRIME değerlerinde bile sığma sorunu
+        # kalmaz.
         if t >= self._T_DEC_END:
             opacity = min(1.0, (t - self._T_DEC_END) / (self._T_PLAIN_OUT_END - self._T_DEC_END))
-            if t >= self._T_PLAIN_OUT_END:
-                label = f"m' = {self._M_PRIME} = m ✓"
-                final_box_w = 170
+            # Başarı durumunda kutu içinde küçük ✓ — c kutusuyla aynı boyut.
+            # M_PRIME == M olduğunda etiket "m' = N ✓" olur; aksi halde
+            # yalnızca "m' = N" gösterilir. Bu sayede ek banner gerekmez,
+            # ✓ doğrudan kutunun içinde görünür ve sayfa kompakt kalır.
+            if t >= self._T_PLAIN_OUT_END and self._M_PRIME == self._M:
+                label = f"m' = {self._M_PRIME} ✓"
             else:
                 label = f"m' = {self._M_PRIME}"
-                final_box_w = box_w
             color = ANIM_COLORS["accent_green"] if t >= self._T_PLAIN_OUT_END else ANIM_COLORS["accent_blue"]
             self._draw_box(
-                p, W - margin - final_box_w, dec_y, final_box_w, box_h,
+                p, W - margin - box_w, dec_y, box_w, box_h,
                 label, color, opacity=opacity,
                 pulse=(t >= self._T_PLAIN_OUT_END and t < self._T_MATCH_END),
             )
@@ -1637,7 +1697,10 @@ class _RSAEncryptDecryptWidget(QWidget):
         p.setBrush(QBrush(fill))
         p.setPen(QPen(col, 2))
         p.drawRoundedRect(x, y, w, h, 6, 6)
-        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+        # Adaptive font — m' = 1804 ✓ gibi uzun etiketler 86 px kutuya
+        # sığsın diye 10+ karakterde 10pt'a düşülür.
+        font_size = 11 if len(text) <= 10 else 10
+        p.setFont(QFont("Courier New", font_size, QFont.Weight.Bold))
         text_col = QColor(ANIM_COLORS["text_primary"])
         text_col.setAlphaF(opacity)
         p.setPen(text_col)
@@ -1746,7 +1809,13 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         # cari modül sabitlerini okuduğu için bu çağrı SUPER ÇAĞRISINDAN
         # ÖNCE yapılmalıdır (super → _init_content → widget'lar).
         _reseed_demo()
-        self._alice_b64 = alice_pub_b64
+        # Alice b64: RSA panelinde eğitim amaçlı her açılışta (p,q,n,e)
+        # seed'ine göre farklı görünür — kullanıcı 'her RSA üretimi farklı'
+        # gerçeğini panel anahtarında doğrudan gözlemler.
+        # Bob b64: main_gui'den gelen GERÇEK 2048-bit anahtardır; oturum
+        # boyunca sabit kalır ve email sekmesindeki AES/oturum anahtarı
+        # şifrelemesiyle birebir aynıdır (kriptografik tutarlılık).
+        self._alice_b64 = _generate_demo_b64(_N * 31 + _E) or alice_pub_b64
         self._bob_b64 = bob_pub_b64
         super().__init__(
             "RSA-2048 Anahtar Üretimi",
@@ -1788,6 +1857,12 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         split.addWidget(kb_frame, stretch=0)
 
         # Sağ: 8 sayfalı stack
+        # Scroll yalnızca Adım 6 (DER byte flow) için gerekli — uzun içerikli
+        # tek sayfa odur. Outer stack scroll TÜM sayfalara scrollbar
+        # eklediği için (örn. Adım 2 gibi kompakt sayfalarda da) kaldırıldı;
+        # bunun yerine sadece _DERByteFlowWidget kendi QScrollArea'sıyla
+        # sarılır → diğer sayfalar (Adım 1-5, 7, 8) scroll'suz görünür.
+        from PyQt6.QtWidgets import QScrollArea
         stack_frame = QFrame()
         stack_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
@@ -1796,6 +1871,17 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         stack_layout = QVBoxLayout(stack_frame)
         stack_layout.setContentsMargins(4, 4, 4, 4)
 
+        # DER widget'ı QScrollArea içine sarılır — uzun içeriği gerekirse kaydırılır
+        der_widget = _DERByteFlowWidget(self._alice_b64)
+        der_scroll = QScrollArea()
+        der_scroll.setWidget(der_widget)
+        der_scroll.setWidgetResizable(True)
+        der_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        der_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        der_scroll.setStyleSheet("background: transparent; border: none;")
+
         self._stack = QStackedWidget()
         self._page_widgets: list[QWidget] = [
             _PrimeSieveWidget(),
@@ -1803,7 +1889,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
             _TotientWidget(),
             _GCDWidget(),
             _EEAWidget(),
-            _DERByteFlowWidget(self._alice_b64),
+            der_scroll,
             _KeyMatchWidget(self._alice_b64, self._bob_b64),
             _RSAEncryptDecryptWidget(),
         ]
@@ -1816,9 +1902,11 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         split_holder.setLayout(split)
         self.content_layout.addWidget(split_holder, stretch=1)
 
-        # Alt: kompakt açıklama
+        # Alt: kompakt açıklama — font 9pt → 10pt (okunaklığı artırma)
+        # Word wrap aktif ve max yükseklik 50'ye çıkarıldı; uzun cümleler
+        # iki satıra geçer ama taşmaz.
         self._caption = QLabel()
-        self._caption.setFont(QFont("Georgia", 9))
+        self._caption.setFont(QFont("Georgia", 10))
         self._caption.setStyleSheet(
             f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
             f"background: {ANIM_COLORS['bg_input']}; "
@@ -1827,7 +1915,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         )
         self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._caption.setWordWrap(True)
-        self._caption.setMaximumHeight(40)
+        self._caption.setMaximumHeight(50)
         self.content_layout.addWidget(self._caption)
 
     # ------------------------------------------------------------------

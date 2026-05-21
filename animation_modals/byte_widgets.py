@@ -68,9 +68,14 @@ class _ColoredByteGridWidget(QWidget):
         self.update()
 
     def resizeEvent(self, e) -> None:
-        # Adaptive cell width — dar ekranlarda hücreler küçülür
-        avail = self.width() - 40
+        # Adaptive cell width — dar ekranlarda hücreler küçülür.
+        # Toplam paint genişliği: 80 (sol etiket) + 6 (margin) + N×cell_w
+        # + (N-1)×2 (hücreler arası gap). Doğru cell_w sınırlaması:
+        #   cell_w_max = (width - 86 - (N-1)*2) / N
+        # Eski formül (width - 40) etiketi az tahmin ediyordu → son
+        # hücreler widget bounds'unu aşıyor ve clip ediliyordu.
         if self._max_cells > 0:
+            avail = self.width() - 86 - (self._max_cells - 1) * 2
             self._cell_w = max(36, min(56, avail // self._max_cells))
         self.update()
 

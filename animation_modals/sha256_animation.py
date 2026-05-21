@@ -1496,17 +1496,21 @@ class _SHA256PaddingWidget(QWidget):
         from animation_modals.byte_widgets import _ColoredByteGridWidget
         initial_mask = self._full_padding_mask()
         initial_labels = self._full_padding_labels()
+        # Hücre boyutu: 48×30 — binary satırının 8 karakterli "01100101" gösterimi
+        # 7pt Courier'da yaklaşık 40 px genişlik kaplar, 48 px hücrede rahat sığar.
+        # Yükseklik 30 px ise 4 satırın (karakter / ASCII / hex / binary) dikey
+        # nefes alanı + okunaklık için. Önceki 36×22 sığmıyordu (binary kırpılıyordu).
         self._grid = _ColoredByteGridWidget(
             self._current_block_bytes(),
             max_cells=64,
-            cell_w=36,
-            cell_h=22,
+            cell_w=48,
+            cell_h=30,
             padding_mask=initial_mask,
             padding_labels=initial_labels,
         )
-        # 64 hücre × (36+2) + label (80) + sol kenar (6) ≈ 2518 px sabit
-        grid_width = 80 + 6 + 64 * (36 + 2)
-        grid_height = 4 * (22 + 4) + 30 + 16  # 4 satır + padding etiket alanı
+        # 64 hücre × (48+2) + label (80) + sol kenar (6) ≈ 3286 px sabit
+        grid_width = 80 + 6 + 64 * (48 + 2)
+        grid_height = 4 * (30 + 4) + 30 + 16  # 4 satır + padding etiket alanı
         self._grid.setFixedSize(grid_width, grid_height)
 
         grid_scroll = QScrollArea()

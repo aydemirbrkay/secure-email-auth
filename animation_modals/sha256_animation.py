@@ -1320,7 +1320,8 @@ class _SHAMessagePrepWidget(QWidget):
         strip_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         strip_scroll.setStyleSheet("background: transparent; border: none;")
-        strip_scroll.setFixedHeight(48)
+        # 22 (cell_h) + 24 (üst etiket alanı) ≈ 46, buffer ile 56
+        strip_scroll.setFixedHeight(56)
         self._strip.setVisible(False)
         lay.addWidget(strip_scroll)
 

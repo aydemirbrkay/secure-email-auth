@@ -36,7 +36,7 @@ class _ColoredByteGridWidget(QWidget):
         max_cells: int = 16,
         show_rows: tuple[str, ...] = ("char", "dec", "hex", "bin"),
         cell_w: int = 56,
-        cell_h: int = 22,
+        cell_h: int = 30,
         padding_mask: list[bool] | None = None,
         padding_labels: list[str] | None = None,
         parent: QWidget | None = None,
@@ -50,7 +50,35 @@ class _ColoredByteGridWidget(QWidget):
         self._padding_mask = padding_mask or []
         self._padding_labels = padding_labels or []
         self._highlighted_idx: int | None = None
+        # UTF-8 byte→karakter eşlemesi (önbellek) — her set_data'da yenilenir.
+        self._char_map: list[str] = self._compute_char_map()
         self.setMinimumHeight(len(show_rows) * (cell_h + 4) + 30)
+
+    def _compute_char_map(self) -> list[str]:
+        """Her byte için 'Karakter' satırında gösterilecek karakter.
+        UTF-8 çok-byte karakterler (Türkçe ş/ğ/ü/ö/ç/ı, emoji, vs.) için
+        karakterin TÜM byte hücrelerinde aynı karakter gösterilir; tek-byte
+        ASCII karakterler kendi konumunda görünür. Decode edilemezse '·'
+        fallback'i kullanılır.
+        """
+        if not self._data:
+            return []
+        try:
+            text = self._data.decode("utf-8", errors="strict")
+        except UnicodeDecodeError:
+            # Tam decode başarısızsa byte başına ASCII fallback
+            return [
+                chr(b) if 32 <= b < 127 else "·"
+                for b in self._data
+            ]
+        result: list[str] = []
+        for ch in text:
+            cp = ord(ch)
+            # Yazdırılabilir karakter (ASCII printable + Latin-Türkçe + emoji)
+            display = ch if cp >= 32 and cp != 127 else "·"
+            byte_count = len(ch.encode("utf-8"))
+            result.extend([display] * byte_count)
+        return result
 
     def set_highlighted_index(self, idx: int | None) -> None:
         self._highlighted_idx = idx
@@ -65,18 +93,16 @@ class _ColoredByteGridWidget(QWidget):
         self._data = data
         self._padding_mask = padding_mask or []
         self._padding_labels = padding_labels or []
+        self._char_map = self._compute_char_map()
         self.update()
 
     def resizeEvent(self, e) -> None:
-        # Adaptive cell width — dar ekranlarda hücreler küçülür.
-        # Toplam paint genişliği: 80 (sol etiket) + 6 (margin) + N×cell_w
-        # + (N-1)×2 (hücreler arası gap). Doğru cell_w sınırlaması:
-        #   cell_w_max = (width - 86 - (N-1)*2) / N
-        # Eski formül (width - 40) etiketi az tahmin ediyordu → son
-        # hücreler widget bounds'unu aşıyor ve clip ediliyordu.
+        # Adaptive cell width — paint formülüyle birebir tutarlı.
+        # Paint extent: 86 (sol etiket+margin) + N×cell_w + (N-1)×2 (gap) ≤ width
+        # → cell_w_max = (width - 84) // N - 2  (artık (width-84)/N - 2)
         if self._max_cells > 0:
-            avail = self.width() - 86 - (self._max_cells - 1) * 2
-            self._cell_w = max(36, min(56, avail // self._max_cells))
+            cell_w_max = (self.width() - 84) // self._max_cells - 2
+            self._cell_w = max(36, min(56, cell_w_max))
         self.update()
 
     def paintEvent(self, e) -> None:
@@ -133,8 +159,15 @@ class _ColoredByteGridWidget(QWidget):
                 # Hücre içeriği
                 p.setPen(QColor("#FFFFFF"))
                 if row_key == "char":
+                    # UTF-8 farkındalığı: Türkçe karakter (ü/ş/ğ vs.) ve emoji
+                    # gibi çok-byte karakterler her bir byte hücresinde aynı
+                    # karakteri gösterir; ASCII tek byte ise kendi karakteri.
                     p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
-                    ch_str = chr(byte_val) if 32 <= byte_val < 127 else "·"
+                    ch_str = (
+                        self._char_map[i]
+                        if i < len(self._char_map)
+                        else (chr(byte_val) if 32 <= byte_val < 127 else "·")
+                    )
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, ch_str)
                 elif row_key == "dec":
@@ -146,7 +179,9 @@ class _ColoredByteGridWidget(QWidget):
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, f"{byte_val:02x}")
                 elif row_key == "bin":
-                    p.setFont(QFont("Courier New", 7))
+                    # 8pt'a yükseltildi (eski 7pt çok küçüktü).
+                    # cell_w ≥ 48 olduğu durumlarda 8 karakterli binary sığar.
+                    p.setFont(QFont("Courier New", 8))
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, f"{byte_val:08b}")
 
@@ -165,17 +200,19 @@ class _ColoredByteGridWidget(QWidget):
 
 class _ByteStripWidget(QWidget):
     """
-    Tüm byte'ları tek satırda küçük (14×14 px) renkli kareler olarak gösterir.
-    Padding byte'ları beyaz 1px border + alpha 0.7 ile ayırt edilir.
-    32+ byte için yatay scroll (parent QScrollArea içinde kullanılır).
+    Tüm byte'ları tek satırda renkli kareler olarak gösterir — her karenin
+    içinde 2-haneli hex değeri yazılı (kullanıcı her byte'ın değerini de
+    görsün diye). Padding byte'ları beyaz 1px border + alpha 0.7 ile
+    ayırt edilir. 32+ byte için yatay scroll (parent QScrollArea içinde
+    kullanılır).
     """
 
     def __init__(
         self,
         data: bytes,
         *,
-        cell_w: int = 14,
-        cell_h: int = 14,
+        cell_w: int = 22,
+        cell_h: int = 22,
         show_label: str = "hex",
         padding_mask: list[bool] | None = None,
         parent: QWidget | None = None,
@@ -211,7 +248,7 @@ class _ByteStripWidget(QWidget):
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         p.drawText(0, 0, self.width(), 16,
                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                   f"Toplam: {len(self._data)} byte")
+                   f"Toplam: {len(self._data)} byte  —  her kare 1 byte'ın hex değerini gösterir")
 
         n = len(self._data)
         if n == 0:
@@ -234,3 +271,10 @@ class _ByteStripWidget(QWidget):
             else:
                 p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
             p.drawRect(x, y, cw, ch)
+
+            # Hücre içinde hex değeri (kompakt görünüm için 7pt Courier)
+            # 22×22 px hücrede "00".."ff" 14 px civarı yer kaplar.
+            p.setPen(QColor("#FFFFFF"))
+            p.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
+            p.drawText(x, y, cw, ch,
+                       Qt.AlignmentFlag.AlignCenter, f"{byte_val:02x}")

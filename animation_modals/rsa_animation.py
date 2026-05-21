@@ -1082,12 +1082,12 @@ class _DERByteFlowWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._alice_b64 = alice_b64
-        # Font büyütmeleri + word wrap + Alice/Bob anahtar kutuları için
-        # toplam yükseklik artışı (420 → 620). Parent QScrollArea zaten
-        # kaydırma sağlıyor; bu intrinsic yükseklik bildirimi scrollbar'ın
-        # tam aralığı kaydırabilmesini sağlar (K⁻ Bob anahtarı dahil son
-        # satırlar erişilebilir kalır).
-        self.setMinimumHeight(620)
+        # Font büyütmeleri + word wrap + Alice/Bob anahtar kutuları + yeni
+        # Aşama A/B (4 adım Alice anahtar dönüşümü) için toplam yükseklik
+        # 760 px. Parent QScrollArea kaydırma sağlar — bu intrinsic
+        # yükseklik bildirimi scrollbar'ın tam aralığı kaydırabilmesini
+        # sağlar (K⁻ Bob anahtarı dahil son satırlar erişilebilir kalır).
+        self.setMinimumHeight(760)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._phase = 0
         self._timer = QTimer(self)
@@ -1184,72 +1184,88 @@ class _DERByteFlowWidget(QWidget):
             p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                        f"DER ({len(_DER_SEQ)} bayt): {der_hex}")
 
-        # 4) Base64 — byte gruplarını ve karakter eşleşmesini göster
-        # Dinamik: artık DEMO _DER_SEQ yerine Alice'in GERÇEK b64'ünün ilk 12
-        # karakteri ve karşılık gelen 9 byte'ı gösterilir. Bu sayede üst
-        # satırdaki "Tam sayılar/Byte/DER paketleme" eğitim aşamalarından sonra
-        # base64 dönüşümü doğrudan Alice anahtarına bağlanır — kullanıcı her
-        # reseed'de gerçek anahtardan türeyen tutarlı bir örnek görür.
+        # 4) Base64 — adım adım anlaşılır anlatım:
+        #    Aşama A: DEMO DER byte'ları (üstteki bölüm 3'le aynı) gruplandırılır
+        #             ve hangi b64 karakterine karşılık geldiği gösterilir.
+        #    Aşama B: Aynı yöntem Alice'in GERÇEK 2048-bit anahtarının ilk 3 byte'ına
+        #             uygulanır; 24 bit → 6-bit gruplar → indeks → harf eşlemesi
+        #             tek tek izlenir (önceki ve sonraki örnek aynı algoritma).
+        #
+        # Önceki versiyon karışıktı: bölüm 4 doğrudan Alice byte'larını gösteriyor,
+        # bölüm 3 ise DEMO DER byte'larını gösteriyordu (5C ↔ 30 uyumsuzluğu). Şimdi
+        # bölüm 4 yukarıdaki DEMO bytes'ı izliyor, sonrasında ayrı bir "Aşama B"
+        # ile Alice anahtarına geçiş kuruluyor.
         y += 22
         if self._phase >= 3:
             p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
             p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
-                       "4)  Base64 dönüşümü  (her 3 bayt → 4 karakter):")
+                       "4)  Base64 dönüşümü  (her 3 bayt → 4 karakter)")
             y += 20
 
-            # Alice'in b64'ünün ilk 12 karakterini al, 9 byte'a decode et.
-            # Decode başarısızsa DEMO değerlerine geri düş.
-            alice_b64_12 = self._alice_b64[:12]
-            try:
-                alice_bytes_9 = base64.b64decode(alice_b64_12 + "==")[:9]
-                if len(alice_bytes_9) < 9:
-                    raise ValueError("9 byte'tan az")
-                der = alice_bytes_9
-                b64 = alice_b64_12
-            except Exception:
-                der = _DER_SEQ
-                b64 = _B64_DEMO
+            # --- AŞAMA A: DEMO DER bytes → DEMO Base64 ---
+            # Bölüm 3'te gösterilen aynı 9 byte (DEMO DER) Base64'e çevrilir.
+            # Böylece bölüm 3 → bölüm 4 byte zinciri kopmaz.
+            p.setFont(QFont("Georgia", 9))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                       "Aşama A — yukarıdaki DEMO DER (9 byte) gruplandırılır:")
+            y += 18
 
+            der = _DER_SEQ
+            b64 = _B64_DEMO
             n_groups = (len(der) + 2) // 3
-            group_w = 100
-            total_groups_w = n_groups * group_w + (n_groups - 1) * 10
+            group_w = 110
+            total_groups_w = n_groups * group_w + (n_groups - 1) * 12
             ox = max(8, (W - total_groups_w) // 2)
 
             for gi in range(n_groups):
-                gx = ox + gi * (group_w + 10)
+                gx = ox + gi * (group_w + 12)
                 byte_chunk = der[gi * 3 : gi * 3 + 3]
                 b64_chunk = b64[gi * 4 : gi * 4 + 4]
 
                 # Üst: 3 byte'lık grup
-                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_blue"]))
                 byte_hex = " ".join(f"{b:02X}" for b in byte_chunk)
                 p.drawText(QRect(gx, y, group_w, 16),
                            Qt.AlignmentFlag.AlignCenter, byte_hex)
 
                 # Ok
+                p.setFont(QFont("Georgia", 10))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
                 p.drawText(QRect(gx, y + 14, group_w, 12),
                            Qt.AlignmentFlag.AlignCenter, "↓")
 
                 # Alt: 4 base64 karakteri
-                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+                p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_green"]))
                 p.drawText(QRect(gx, y + 26, group_w, 18),
                            Qt.AlignmentFlag.AlignCenter, b64_chunk)
 
-            y += 46
-            # Toplam: Alice'in b64'ünün ilk 12 karakteri (dinamik)
+            y += 48
             p.setFont(QFont("Georgia", 10))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
             p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
-                       f"Alice b64'ünün ilk 12 karakteri: {b64}")
-            y += 18
+                       f"= Demo Base64 ({len(_B64_DEMO)} karakter): {_B64_DEMO}")
+            y += 22
 
-            # — Bit-seviyesi açıklama — DEMO yerine ALICE'in GERÇEK
-            # anahtarının ilk 4 b64 karakteri ile gösterilir. Kullanıcı
-            # "alice'in açık anahtarının başını" net görür.
+            # --- AŞAMA B: Alice'in gerçek anahtarına aynı yöntemin uygulanışı ---
+            # Bölüm 3'teki DEMO yapı sadece eğitim örneği; Alice'in 2048-bit
+            # anahtarı için DER ~270 byte ve b64 ~360 karakter. Burada sadece
+            # İLK 3 BYTE → İLK 4 KARAKTER dönüşümünü adım adım gösteriyoruz.
+            # Bu sayede kullanıcı "aynı algoritma gerçek anahtara şöyle uygulanır"
+            # bağlantısını net görür.
+            p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1, Qt.PenStyle.DashLine))
+            p.drawLine(40, y, W - 40, y)
+            y += 8
+
+            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       "Aşama B — Aynı yöntem Alice'in gerçek anahtarına uygulanırsa:")
+            y += 20
+
             alice_first4 = self._alice_b64[:4]   # ör. "MIIB"
             try:
                 alice_first3 = base64.b64decode(alice_first4 + "==")[:3]
@@ -1261,41 +1277,63 @@ class _DERByteFlowWidget(QWidget):
                 groups = [bits[i:i+6] for i in range(0, 24, 6)]      # 4 × 6-bit
                 indices = [int(g, 2) for g in groups]
 
-                # Font 9pt'a büyütüldü (önceki 8pt okunaksızdı). İki satıra
-                # bölünmüş — tek satırda dar pencerelerde "…ilk 4 b6" diye
-                # kırpılıyordu; iki satır + büyük font hem okunaklı hem sığar.
-                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-                p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-                p.drawText(
-                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                    "Nasıl: 24 bit → 6-bit gruplar → A-Z a-z 0-9 + / alfabesinde indeks",
-                )
+                # Adım B1: Alice anahtarının ilk 3 byte'ı
+                p.setFont(QFont("Georgia", 9))
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                           "B1) Alice 2048-bit anahtarının ilk 3 byte'ı:")
                 y += 16
-                p.drawText(
-                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                    "(Alice'in gerçek anahtarının ilk 4 b64 karakteri):",
-                )
-                y += 16
-                # Hex/binary satırı 9pt — önceki 8pt çok küçüktü.
-                p.setFont(QFont("Courier New", 9))
-                p.setPen(QColor(ANIM_COLORS["text_secondary"]))
                 hex_str = " ".join(f"{b:02X}" for b in alice_first3)
-                bin_str = " ".join(f"{b:08b}" for b in alice_first3)
-                p.drawText(
-                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                    f"{hex_str}  =  {bin_str}",
-                )
-                y += 14
-                mapping = "   ".join(
-                    f"{g}={idx}={ch}" for g, idx, ch in zip(groups, indices, alice_first4)
-                )
-                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
-                p.setPen(QColor(ANIM_COLORS["accent_green"]))
-                p.drawText(
-                    QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                    f"→ {mapping}",
-                )
+                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, hex_str)
+                y += 20
+
+                # Adım B2: 24-bit binary açılım
+                p.setFont(QFont("Georgia", 9))
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                           "B2) Hex → binary  (3 × 8 = 24 bit):")
                 y += 16
+                bin_str = " ".join(f"{b:08b}" for b in alice_first3)
+                p.setFont(QFont("Courier New", 10))
+                p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, bin_str)
+                y += 20
+
+                # Adım B3: 24 bit → 4 × 6-bit gruplar
+                p.setFont(QFont("Georgia", 9))
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                           "B3) 24 bit → 4 adet 6-bit grup:")
+                y += 16
+                grouped_str = " | ".join(groups)
+                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, grouped_str)
+                y += 20
+
+                # Adım B4: indeks → karakter eşleme
+                p.setFont(QFont("Georgia", 9))
+                p.setPen(QColor(ANIM_COLORS["text_muted"]))
+                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                           "B4) Her 6-bit grubun indeksi → Base64 alfabesi (A-Z a-z 0-9 + /):")
+                y += 16
+                mapping = "   ".join(
+                    f"{g}={idx}→{ch}"
+                    for g, idx, ch in zip(groups, indices, alice_first4)
+                )
+                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, mapping)
+                y += 20
+
+                # Sonuç: Alice b64'ün ilk 4 karakteri
+                p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+                p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                           f"= Alice b64'ünün ilk 4 karakteri: {alice_first4}")
+                y += 20
 
         # 5) ALICE'İN GERÇEK ANAHTARLARI — son faz
         y += 26

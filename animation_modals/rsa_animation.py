@@ -1082,12 +1082,12 @@ class _DERByteFlowWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._alice_b64 = alice_b64
-        # Font büyütmeleri + word wrap + Alice/Bob anahtar kutuları + yeni
-        # Aşama A/B (4 adım Alice anahtar dönüşümü) için toplam yükseklik
-        # 760 px. Parent QScrollArea kaydırma sağlar — bu intrinsic
-        # yükseklik bildirimi scrollbar'ın tam aralığı kaydırabilmesini
-        # sağlar (K⁻ Bob anahtarı dahil son satırlar erişilebilir kalır).
-        self.setMinimumHeight(760)
+        # Bölüm 2 sadeleştirilmiş 3 narratif satırla + Bölüm 3 blok yapısı
+        # (SEQUENCE / n-INT / e-INT, 3 başlık + 8 detay satırı) + Aşama A/B +
+        # Alice/Bob anahtar kutuları için intrinsic yükseklik 1000 px.
+        # Parent QScrollArea bunu kullanarak K⁻ Bob anahtarı dahil tüm
+        # içeriği erişilebilir tutar.
+        self.setMinimumHeight(1000)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._phase = 0
         self._timer = QTimer(self)
@@ -1117,71 +1117,146 @@ class _DERByteFlowWidget(QWidget):
 
         # 1) Sayılar
         y = 6
-        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
-                   "1)  Tam sayılar:")
-        y += 20
-        p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
-        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
+                   "1)  Tam sayılar:")
+        y += 22
+        p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, y, W, 22), Qt.AlignmentFlag.AlignCenter,
                    f"n = {_N}    e = {_E}")
 
-        # 2) Byte gösterimi
-        y += 26
+        # 2) Byte gösterimi — n ve e için 'sayı → byte dizisi' dönüşümü iki narratif
+        # satırda anlatılır: bölme işlemi + sonuç hex'i aynı satırda; ek detay/not
+        # gerektirmez. Önceki versiyondaki üst hex satırı ve "yüksek/düşük bayt"
+        # ayrı satırı kaldırıldı — bilgi narratif satırlara gömüldü.
+        y += 28
         n_bytes = _N.to_bytes((_N.bit_length() + 7) // 8, "big")
         e_bytes = _E.to_bytes(max(1, (_E.bit_length() + 7) // 8), "big")
         if self._phase >= 1:
-            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
                        "2)  Big-endian byte dizisi:")
-            y += 20
+            y += 22
+
+            # n için narratif satır: bölme / tek-bayt / çok-bayt durumlarına göre
+            # uygun ifade. 2-baytta "N ÷ 256 = hi kalan lo → HI LO".
             n_hex = " ".join(f"{b:02X}" for b in n_bytes)
             e_hex = " ".join(f"{b:02X}" for b in e_bytes)
-            p.setFont(QFont("Courier New", 10))
+            p.setFont(QFont("Courier New", 11))
             p.setPen(QColor(ANIM_COLORS["accent_blue"]))
-            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
-                       f"n = {_N} → {n_hex}    e = {_E} → {e_hex}")
-            y += 16
-            # Açıklayıcı yazı 10pt + text_secondary (okunaklı renk) + word wrap.
-            # Tek satıra sığmazsa iki satıra geçer, y koordinatı buna göre artar.
-            p.setFont(QFont("Georgia", 10))
-            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-            note_text = ("(Sayılar ağ üzerinden bayt olarak iletildiği için "
-                         "big-endian bayt dizisine çevrilir; her bayt 2 hex hane.)")
-            note_flags = (Qt.AlignmentFlag.AlignHCenter
-                          | Qt.AlignmentFlag.AlignTop
-                          | Qt.TextFlag.TextWordWrap)
-            note_rect = p.boundingRect(QRect(20, y, W - 40, 60), note_flags, note_text)
-            p.drawText(note_rect, note_flags, note_text)
-            y += note_rect.height()
+            if len(n_bytes) == 2:
+                hi, lo = n_bytes[0], n_bytes[1]
+                line_n = f"n = {_N}:  {_N} ÷ 256 = {hi} kalan {lo}   →   {n_hex}"
+            elif len(n_bytes) == 1:
+                line_n = f"n = {_N}:  {_N} < 256, tek bayta sığar   →   {n_hex}"
+            else:
+                line_n = f"n = {_N}:  ardışık 256'ya bölme ile {len(n_bytes)} bayt   →   {n_hex}"
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter, line_n)
+            y += 22
 
-        # 3) DER yapısı — kompakt tek-satır
+            # e için narratif satır — e tipik olarak 7 veya 65537.
+            if len(e_bytes) == 1:
+                line_e = f"e = {_E}:  {_E} < 256, tek bayta sığar   →   {e_hex}"
+            else:
+                line_e = f"e = {_E}:  {len(e_bytes)} bayta açılır       →   {e_hex}"
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter, line_e)
+            y += 22
+
+            # Kısa tek-satır not.
+            p.setFont(QFont("Georgia", 10))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                       "(Sayı 256'ya bölünerek bayt-bayt parçalanır; her bayt = 2 hex hane.)")
+            y += 20
+
+        # 3) DER yapısı — kompakt tek-satır + 3 mantıksal blok (SEQUENCE başlığı,
+        # n'nin INTEGER kaydı, e'nin INTEGER kaydı). Her satır 'hex değer =
+        # Türkçe açıklama' biçiminde. Kullanıcı 0x02'nin INTEGER etiketi olduğu,
+        # sonraki baytın uzunluk, devamının değer olduğu yapıyı net görür.
         y += 18
         if self._phase >= 2:
-            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
                        "3)  ASN.1 / DER paketleme:")
-            y += 20
+            y += 22
             # SEQUENCE [ 02 len(n) <n_bytes>  02 len(e) <e_bytes> ]
             der_hex = " ".join(f"{b:02X}" for b in _DER_SEQ)
-            p.setFont(QFont("Courier New", 9))
+            seq_content_len = len(_DER_SEQ) - 2
+            len_n = len(_DER_N) - 2
+            len_e = len(_DER_E) - 2
+            n_value_hex = " ".join(f"{b:02X}" for b in _DER_N[2:])
+            e_value_hex = " ".join(f"{b:02X}" for b in _DER_E[2:])
+
+            # Kompakt tek-satır özet (üst görsel anchor)
+            p.setFont(QFont("Courier New", 10))
             p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
-            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
-                       f"30 {len(_DER_SEQ)-2:02X}  ·  02 {len(_DER_N)-2:02X} {' '.join(f'{b:02X}' for b in _DER_N[2:])}"
-                       f"  ·  02 {len(_DER_E)-2:02X} {' '.join(f'{b:02X}' for b in _DER_E[2:])}")
-            y += 16
-            # 9pt → 10pt + text_secondary (okunaklılığı artırma)
-            p.setFont(QFont("Georgia", 10))
-            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
             p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
-                       "[SEQ] [INT n] [INT e]   →   ham byte dizisi")
-            y += 18
-            p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+                       f"30 {seq_content_len:02X}  ·  02 {len_n:02X} {n_value_hex}"
+                       f"  ·  02 {len_e:02X} {e_value_hex}")
+            y += 22
+
+            # Yardımcı: 2 sütun satırı (sol: hex, sağ: açıklama). Sayfanın
+            # ortasını blok-başlangıcı olarak kullan; sol sütun sağ-hizalı,
+            # sağ sütun sol-hizalı.
+            mid_x = W // 2 - 60   # bloğun ortası biraz sola kaydırılır
+            hex_col_w = 120
+            desc_col_w = W // 2 + 80
+
+            def _block_header(title: str, color_key: str) -> None:
+                nonlocal y
+                font = QFont("Georgia", 10, QFont.Weight.Bold)
+                font.setItalic(True)
+                p.setFont(font)
+                p.setPen(QColor(ANIM_COLORS[color_key]))
+                p.drawText(QRect(0, y, W, 18),
+                           Qt.AlignmentFlag.AlignCenter, title)
+                y += 18
+
+            def _row(hex_txt: str, desc: str) -> None:
+                nonlocal y
+                # Hex (sağ-hizalı, sayfanın ortasına kadar)
+                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+                p.drawText(QRect(mid_x - hex_col_w, y, hex_col_w, 18),
+                           Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                           hex_txt)
+                # Açıklama (sol-hizalı, sayfanın ortasından sağa)
+                p.setFont(QFont("Georgia", 10))
+                p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+                p.drawText(QRect(mid_x + 12, y, desc_col_w, 18),
+                           Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                           "=  " + desc)
+                y += 18
+
+            # SEQUENCE başlığı
+            _block_header("SEQUENCE başlığı:", "accent_blue")
+            _row("0x30", "SEQUENCE etiketi  (sonraki öğeler bir grup olarak gelir)")
+            _row(f"0x{seq_content_len:02X}", f"grubun toplam uzunluğu ({seq_content_len} bayt)")
+            y += 6
+
+            # n için INTEGER kaydı
+            _block_header("n için INTEGER kaydı:", "accent_mauve")
+            _row("0x02", "INTEGER etiketi  (ASN.1'de \"tam sayı\" anlamına gelen sabit kod)")
+            _row(f"0x{len_n:02X}", f"n'nin uzunluğu = {len_n} bayt")
+            _row(n_value_hex, "n'nin baytları (Bölüm 2'den)")
+            y += 6
+
+            # e için INTEGER kaydı
+            _block_header("e için INTEGER kaydı:", "accent_peach")
+            _row("0x02", "INTEGER etiketi (aynı kod)")
+            _row(f"0x{len_e:02X}", f"e'nin uzunluğu = {len_e} bayt")
+            _row(e_value_hex, "e'nin baytı (Bölüm 2'den)" if len_e == 1
+                              else "e'nin baytları (Bölüm 2'den)")
+            y += 8
+
+            # Final birleşik DER hex
+            p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_primary"]))
-            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
                        f"DER ({len(_DER_SEQ)} bayt): {der_hex}")
 
         # 4) Base64 — adım adım anlaşılır anlatım:
@@ -1197,20 +1272,20 @@ class _DERByteFlowWidget(QWidget):
         # ile Alice anahtarına geçiş kuruluyor.
         y += 22
         if self._phase >= 3:
-            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
                        "4)  Base64 dönüşümü  (her 3 bayt → 4 karakter)")
-            y += 20
+            y += 22
 
             # --- AŞAMA A: DEMO DER bytes → DEMO Base64 ---
             # Bölüm 3'te gösterilen aynı 9 byte (DEMO DER) Base64'e çevrilir.
             # Böylece bölüm 3 → bölüm 4 byte zinciri kopmaz.
-            p.setFont(QFont("Georgia", 9))
+            p.setFont(QFont("Georgia", 10))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
                        "Aşama A — yukarıdaki DEMO DER (9 byte) gruplandırılır:")
-            y += 18
+            y += 20
 
             der = _DER_SEQ
             b64 = _B64_DEMO
@@ -1225,30 +1300,30 @@ class _DERByteFlowWidget(QWidget):
                 b64_chunk = b64[gi * 4 : gi * 4 + 4]
 
                 # Üst: 3 byte'lık grup
-                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_blue"]))
                 byte_hex = " ".join(f"{b:02X}" for b in byte_chunk)
-                p.drawText(QRect(gx, y, group_w, 16),
+                p.drawText(QRect(gx, y, group_w, 18),
                            Qt.AlignmentFlag.AlignCenter, byte_hex)
 
                 # Ok
-                p.setFont(QFont("Georgia", 10))
+                p.setFont(QFont("Georgia", 11))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                p.drawText(QRect(gx, y + 14, group_w, 12),
+                p.drawText(QRect(gx, y + 16, group_w, 14),
                            Qt.AlignmentFlag.AlignCenter, "↓")
 
-                # Alt: 4 base64 karakteri
-                p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
+                # Alt: 4 base64 karakteri (13pt → grup okunaklığı belirgin)
+                p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_green"]))
-                p.drawText(QRect(gx, y + 26, group_w, 18),
+                p.drawText(QRect(gx, y + 30, group_w, 20),
                            Qt.AlignmentFlag.AlignCenter, b64_chunk)
 
-            y += 48
+            y += 54
             p.setFont(QFont("Georgia", 10))
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
                        f"= Demo Base64 ({len(_B64_DEMO)} karakter): {_B64_DEMO}")
-            y += 22
+            y += 24
 
             # --- AŞAMA B: Alice'in gerçek anahtarına aynı yöntemin uygulanışı ---
             # Bölüm 3'teki DEMO yapı sadece eğitim örneği; Alice'in 2048-bit
@@ -1260,11 +1335,11 @@ class _DERByteFlowWidget(QWidget):
             p.drawLine(40, y, W - 40, y)
             y += 8
 
-            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-            p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+            p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
                        "Aşama B — Aynı yöntem Alice'in gerçek anahtarına uygulanırsa:")
-            y += 20
+            y += 22
 
             alice_first4 = self._alice_b64[:4]   # ör. "MIIB"
             try:
@@ -1278,62 +1353,62 @@ class _DERByteFlowWidget(QWidget):
                 indices = [int(g, 2) for g in groups]
 
                 # Adım B1: Alice anahtarının ilk 3 byte'ı
-                p.setFont(QFont("Georgia", 9))
+                p.setFont(QFont("Georgia", 10))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                            "B1) Alice 2048-bit anahtarının ilk 3 byte'ı:")
-                y += 16
+                y += 18
                 hex_str = " ".join(f"{b:02X}" for b in alice_first3)
-                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
+                p.setFont(QFont("Courier New", 12, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_blue"]))
-                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, hex_str)
-                y += 20
+                p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter, hex_str)
+                y += 22
 
                 # Adım B2: 24-bit binary açılım
-                p.setFont(QFont("Georgia", 9))
+                p.setFont(QFont("Georgia", 10))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                            "B2) Hex → binary  (3 × 8 = 24 bit):")
-                y += 16
+                y += 18
                 bin_str = " ".join(f"{b:08b}" for b in alice_first3)
-                p.setFont(QFont("Courier New", 10))
+                p.setFont(QFont("Courier New", 11))
                 p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, bin_str)
-                y += 20
+                p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter, bin_str)
+                y += 22
 
                 # Adım B3: 24 bit → 4 × 6-bit gruplar
-                p.setFont(QFont("Georgia", 9))
+                p.setFont(QFont("Georgia", 10))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                            "B3) 24 bit → 4 adet 6-bit grup:")
-                y += 16
+                y += 18
                 grouped_str = " | ".join(groups)
-                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
-                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, grouped_str)
-                y += 20
+                p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter, grouped_str)
+                y += 22
 
                 # Adım B4: indeks → karakter eşleme
-                p.setFont(QFont("Georgia", 9))
+                p.setFont(QFont("Georgia", 10))
                 p.setPen(QColor(ANIM_COLORS["text_muted"]))
-                p.drawText(QRect(0, y, W, 14), Qt.AlignmentFlag.AlignCenter,
+                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
                            "B4) Her 6-bit grubun indeksi → Base64 alfabesi (A-Z a-z 0-9 + /):")
-                y += 16
+                y += 18
                 mapping = "   ".join(
                     f"{g}={idx}→{ch}"
                     for g, idx, ch in zip(groups, indices, alice_first4)
                 )
-                p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+                p.setFont(QFont("Courier New", 11, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_green"]))
-                p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter, mapping)
-                y += 20
+                p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter, mapping)
+                y += 22
 
                 # Sonuç: Alice b64'ün ilk 4 karakteri
-                p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+                p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
                 p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-                p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                p.drawText(QRect(0, y, W, 20), Qt.AlignmentFlag.AlignCenter,
                            f"= Alice b64'ünün ilk 4 karakteri: {alice_first4}")
-                y += 20
+                y += 22
 
         # 5) ALICE'İN GERÇEK ANAHTARLARI — son faz
         y += 26
@@ -1694,28 +1769,21 @@ class _RSAEncryptDecryptWidget(QWidget):
                     ANIM_COLORS["accent_mauve"],
                     width=card_w, height=card_h,
                 )
-        # m' kutusu — üstündeki c kutusuyla AYNI genişlikte ve aynı stilde.
-        # Eski tasarımda "m' = 65 = m ✓" tek kutuya sığdırılıyor ve kutu
-        # genişlediği için formül kutusuyla çakışıyordu. Yeni yaklaşım: kutu
-        # yalnızca "m' = değer" gösterir (c kutusuyla simetrik), eşleşme
-        # doğrulaması (=m ✓) kutunun ALTINDA ayrı bir küçük etiket olarak
-        # verilir. Bu sayede 3-4 haneli M_PRIME değerlerinde bile sığma sorunu
-        # kalmaz.
+        # m' kutusu — diğer kutularla (m, c) tutarlı, ekstra efekt yok:
+        # pulse, renk geçişi ve label değişimi kaldırıldı (kullanıcı geri
+        # bildirimi). Sadece m ve c-üst kutularıyla aynı yumuşak fade-in
+        # opasitesi korunuyor. M_PRIME == M ise ✓ ilk kareden itibaren
+        # etikettedir, geçiş animasyonu yok.
         if t >= self._T_DEC_END:
             opacity = min(1.0, (t - self._T_DEC_END) / (self._T_PLAIN_OUT_END - self._T_DEC_END))
-            # Başarı durumunda kutu içinde küçük ✓ — c kutusuyla aynı boyut.
-            # M_PRIME == M olduğunda etiket "m' = N ✓" olur; aksi halde
-            # yalnızca "m' = N" gösterilir. Bu sayede ek banner gerekmez,
-            # ✓ doğrudan kutunun içinde görünür ve sayfa kompakt kalır.
-            if t >= self._T_PLAIN_OUT_END and self._M_PRIME == self._M:
+            if self._M_PRIME == self._M:
                 label = f"m' = {self._M_PRIME} ✓"
             else:
                 label = f"m' = {self._M_PRIME}"
-            color = ANIM_COLORS["accent_green"] if t >= self._T_PLAIN_OUT_END else ANIM_COLORS["accent_blue"]
             self._draw_box(
                 p, W - margin - box_w, dec_y, box_w, box_h,
-                label, color, opacity=opacity,
-                pulse=(t >= self._T_PLAIN_OUT_END and t < self._T_MATCH_END),
+                label, ANIM_COLORS["accent_green"], opacity=opacity,
+                pulse=False,
             )
 
         p.end()
@@ -1909,16 +1977,19 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         stack_layout = QVBoxLayout(stack_frame)
         stack_layout.setContentsMargins(4, 4, 4, 4)
 
-        # DER widget'ı QScrollArea içine sarılır — uzun içeriği gerekirse kaydırılır
+        # DER widget'ı QScrollArea içine sarılır — uzun içeriği gerekirse kaydırılır.
+        # Scrollbar policy sayfa değişiminde dinamik: yalnızca Adım 6 aktifken
+        # AsNeeded, aksi halde AlwaysOff (Adım 7/8'e scrollbar bant izi sızmasın).
         der_widget = _DERByteFlowWidget(self._alice_b64)
-        der_scroll = QScrollArea()
-        der_scroll.setWidget(der_widget)
-        der_scroll.setWidgetResizable(True)
-        der_scroll.setHorizontalScrollBarPolicy(
+        self._der_scroll = QScrollArea()
+        self._der_scroll.setWidget(der_widget)
+        self._der_scroll.setWidgetResizable(True)
+        self._der_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        der_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        der_scroll.setStyleSheet("background: transparent; border: none;")
+        # Başlangıçta Adım 1 (idx 0) gösterilir → der_scroll'un scrollbar'ı kapalı.
+        self._der_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._der_scroll.setStyleSheet("background: transparent; border: none;")
 
         self._stack = QStackedWidget()
         self._page_widgets: list[QWidget] = [
@@ -1927,12 +1998,14 @@ class RSAAnimationWindow(CryptoAnimationWindow):
             _TotientWidget(),
             _GCDWidget(),
             _EEAWidget(),
-            der_scroll,
+            self._der_scroll,
             _KeyMatchWidget(self._alice_b64, self._bob_b64),
             _RSAEncryptDecryptWidget(),
         ]
         for w in self._page_widgets:
             self._stack.addWidget(w)
+        # Sayfa değiştikçe der_scroll'un dikey scrollbar politikasını ayarla.
+        self._stack.currentChanged.connect(self._on_stack_page_changed)
         stack_layout.addWidget(self._stack)
         split.addWidget(stack_frame, stretch=1)
 
@@ -1990,3 +2063,16 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         anim.setEndValue(1.0)
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _on_stack_page_changed(self, idx: int) -> None:
+        """
+        der_scroll'un dikey scrollbar'ını yalnızca Adım 6 (idx=5) aktifken etkin
+        tut. Diğer sayfalar (Adım 7/8 dahil) gösterildiğinde AlwaysOff'a alarak
+        QStackedWidget'ın scrollbar alan tahsisinden doğan görsel sızıntıyı keser.
+        """
+        if idx == 5:
+            self._der_scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        else:
+            self._der_scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

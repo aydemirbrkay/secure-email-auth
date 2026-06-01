@@ -35,8 +35,8 @@ class _ColoredByteGridWidget(QWidget):
         *,
         max_cells: int = 16,
         show_rows: tuple[str, ...] = ("char", "dec", "hex", "bin"),
-        cell_w: int = 56,
-        cell_h: int = 30,
+        cell_w: int = 66,
+        cell_h: int = 36,
         padding_mask: list[bool] | None = None,
         padding_labels: list[str] | None = None,
         parent: QWidget | None = None,
@@ -50,9 +50,17 @@ class _ColoredByteGridWidget(QWidget):
         self._padding_mask = padding_mask or []
         self._padding_labels = padding_labels or []
         self._highlighted_idx: int | None = None
+        # Binary satırı için sabit 9pt — cell_w default 66 px'te
+        # "00000000" rahat sığar (~56 px metin + 10 px padding).
+        self._binary_font_pt: int = 9
         # UTF-8 byte→karakter eşlemesi (önbellek) — her set_data'da yenilenir.
         self._char_map: list[str] = self._compute_char_map()
         self.setMinimumHeight(len(show_rows) * (cell_h + 4) + 30)
+        # Sabit boyut — kutu BOYUTU değil, kutu SAYISI mesajla birlikte
+        # değişir. Mesaj uzunluğu × (cell_w + gap) + etiket alanı kadar
+        # genişlik gerekir; parent QScrollArea bunu yatay olarak kaydırır.
+        n_data = max(1, min(len(data), max_cells))
+        self.setMinimumWidth(80 + 6 + n_data * (cell_w + 3))
 
     def _compute_char_map(self) -> list[str]:
         """Her byte için 'Karakter' satırında gösterilecek karakter.
@@ -94,15 +102,16 @@ class _ColoredByteGridWidget(QWidget):
         self._padding_mask = padding_mask or []
         self._padding_labels = padding_labels or []
         self._char_map = self._compute_char_map()
+        # Veri değiştiğinde min width'i de güncelle — yeni n'e göre.
+        n_data = max(1, min(len(data), self._max_cells))
+        self.setMinimumWidth(80 + 6 + n_data * (self._cell_w + 3))
         self.update()
 
     def resizeEvent(self, e) -> None:
-        # Adaptive cell width — paint formülüyle birebir tutarlı.
-        # Paint extent: 86 (sol etiket+margin) + N×cell_w + (N-1)×2 (gap) ≤ width
-        # → cell_w_max = (width - 84) // N - 2  (artık (width-84)/N - 2)
-        if self._max_cells > 0:
-            cell_w_max = (self.width() - 84) // self._max_cells - 2
-            self._cell_w = max(36, min(56, cell_w_max))
+        # Kutu BOYUTU sabit (cell_w/cell_h __init__'ten gelir, değişmez).
+        # Kutu SAYISI mesaj uzunluğuyla birlikte değişir; widget toplam
+        # genişliği setMinimumWidth ile veriye göre ayarlandı. Parent
+        # QScrollArea bu fazla genişliği yatay olarak kaydırır.
         self.update()
 
     def paintEvent(self, e) -> None:
@@ -126,6 +135,7 @@ class _ColoredByteGridWidget(QWidget):
         row_label_w = 80
         cw, ch = self._cell_w, self._cell_h
         gap = 3
+        cell_gap = 3   # hücreler arası yatay boşluk (eski 2 → 3, görsel ayrım)
 
         for ri, row_key in enumerate(self._show_rows):
             y = 4 + ri * (ch + gap)
@@ -139,7 +149,7 @@ class _ColoredByteGridWidget(QWidget):
             # Hücreler
             for i in range(n):
                 byte_val = self._data[i]
-                x = row_label_w + 6 + i * (cw + 2)
+                x = row_label_w + 6 + i * (cw + cell_gap)
                 color_hex = _PALETTE_6[i % 6]
                 qc = QColor(color_hex)
                 is_padding = i < len(self._padding_mask) and self._padding_mask[i]
@@ -179,9 +189,12 @@ class _ColoredByteGridWidget(QWidget):
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, f"{byte_val:02x}")
                 elif row_key == "bin":
-                    # 8pt'a yükseltildi (eski 7pt çok küçüktü).
-                    # cell_w ≥ 48 olduğu durumlarda 8 karakterli binary sığar.
-                    p.setFont(QFont("Courier New", 8))
+                    # Dinamik punto — resizeEvent'te cell_w'ye göre 9→6pt
+                    # arasında seçildi. Monospace hint hücreler arası
+                    # yatay tutarlılık sağlar.
+                    bin_font = QFont("Courier New", self._binary_font_pt)
+                    bin_font.setStyleHint(QFont.StyleHint.Monospace)
+                    p.setFont(bin_font)
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, f"{byte_val:08b}")
 
@@ -192,7 +205,7 @@ class _ColoredByteGridWidget(QWidget):
             p.setPen(QColor(ANIM_COLORS["text_secondary"]))
             for i in range(n):
                 if i < len(self._padding_labels) and self._padding_labels[i]:
-                    x = row_label_w + 6 + i * (cw + 2)
+                    x = row_label_w + 6 + i * (cw + cell_gap)
                     p.drawText(x, label_y, cw, 12,
                                Qt.AlignmentFlag.AlignCenter,
                                f"[{self._padding_labels[i]}]")

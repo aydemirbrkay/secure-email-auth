@@ -543,8 +543,13 @@ class _WExpansionWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
 
-        self.setMinimumHeight(400)
-        self.setMaximumHeight(460)
+        # 400→340 / 460→400: QStackedWidget'ın max sizeHint'i en uzun
+        # sayfaya bağlı; SHA modalı alice panelinde QScrollArea içinde
+        # gömülü çalıştığı için yüksek minimum, Adım 1/2'de bile butonları
+        # ekrandan dışarı itiyordu. Mesaj genişletme widget'ı daha kompakt
+        # render edilebildiğinden 60 px düşürüldü.
+        self.setMinimumHeight(340)
+        self.setMaximumHeight(400)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
     def showEvent(self, event) -> None:  # type: ignore[override]
@@ -818,7 +823,11 @@ class _MatchAssemblyWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(510)
+        # 510→460: QStackedWidget'ın max sizeHint'i bu sayfaya endeksli;
+        # alice panelindeki gömülü scroll alanında Adım 1/2'de butonların
+        # ekranda kalması için 50 px düşürüldü. Paint koordinatları
+        # değişmedi; mevcut register/H[0..7] dağılımı 460 px'te de sığıyor.
+        self.setMinimumHeight(460)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._pre_h: list[str] = ["--------"] * 8
         self._working: list[str] = ["--------"] * 8
@@ -1298,13 +1307,37 @@ class _SHAMessagePrepWidget(QWidget):
         self._msg_lbl.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self._msg_lbl)
 
-        # Detail grid (ilk 16 byte)
-        detail_lbl = QLabel("İlk 16 byte detayı:")
+        # Detail grid — TÜM mesaj byte'ları gösterilir (16 cap KALDIRILDI):
+        # Kutu boyutu sabit (66 px), kutu SAYISI mesaj uzunluğuyla artar.
+        # 71-byte mesaj → 71 kutu, ~5000 px genişlikte widget; QScrollArea
+        # yatay scroll ile kullanıcı tüm byte'ları (e-mail boyu kadar uzun
+        # mesajı dahi) baştan sona gezebilir. Kutu boyutu küçülmez —
+        # binary, hex, decimal her durumda okunaklı kalır.
+        detail_lbl = QLabel("Byte detayı (yatay kaydırarak tüm byte'ları gör):")
         detail_lbl.setFont(QFont("IBM Plex Sans", 9))
         detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         lay.addWidget(detail_lbl)
-        self._grid = _ColoredByteGridWidget(message_bytes, max_cells=16)
-        lay.addWidget(self._grid)
+
+        # max_cells = len(data): cap yok, tüm byte'lar gösterilir.
+        # Boş mesaj için fallback 1 (görsel olarak hiçbir kutu çizmez).
+        n_cells = max(1, len(message_bytes))
+        self._grid = _ColoredByteGridWidget(message_bytes, max_cells=n_cells)
+        cell_w_fixed = 66
+        cell_h_fixed = 36
+        grid_w = 86 + n_cells * (cell_w_fixed + 3)
+        grid_h = 4 * (cell_h_fixed + 4) + 30
+        self._grid.setFixedSize(grid_w, grid_h)
+
+        grid_scroll = QScrollArea()
+        grid_scroll.setWidget(self._grid)
+        grid_scroll.setWidgetResizable(False)  # sabit boyut → yatay scroll
+        grid_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        grid_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        grid_scroll.setStyleSheet("background: transparent; border: none;")
+        grid_scroll.setFixedHeight(grid_h + 18)  # +18 yatay scrollbar payı
+        lay.addWidget(grid_scroll)
 
         # Byte strip (tüm byte'lar) — scroll içinde
         strip_lbl = QLabel("Tüm byte'lar:")
@@ -1497,21 +1530,24 @@ class _SHA256PaddingWidget(QWidget):
         from animation_modals.byte_widgets import _ColoredByteGridWidget
         initial_mask = self._full_padding_mask()
         initial_labels = self._full_padding_labels()
-        # Hücre boyutu: 48×30 — binary satırının 8 karakterli "01100101" gösterimi
-        # 7pt Courier'da yaklaşık 40 px genişlik kaplar, 48 px hücrede rahat sığar.
-        # Yükseklik 30 px ise 4 satırın (karakter / ASCII / hex / binary) dikey
-        # nefes alanı + okunaklık için. Önceki 36×22 sığmıyordu (binary kırpılıyordu).
+        # Hücre boyutu: 66×36 — binary satırı (Courier 9pt "01100101"
+        # ≈ 56 px) için 10 px padding'le rahat sığacak taban. Tüm satırlar
+        # (Karakter / ASCII / Hex / Binary) aynı 66 px genişliği kullanır;
+        # böylece satırlar bütünsel görünür ve binary kesilmez.
+        # (Önceki 54×34 + 9pt zaman zaman 1-2 px taşıyabiliyordu.)
         self._grid = _ColoredByteGridWidget(
             self._current_block_bytes(),
             max_cells=64,
-            cell_w=48,
-            cell_h=30,
+            cell_w=66,
+            cell_h=36,
             padding_mask=initial_mask,
             padding_labels=initial_labels,
         )
-        # 64 hücre × (48+2) + label (80) + sol kenar (6) ≈ 3286 px sabit
-        grid_width = 80 + 6 + 64 * (48 + 2)
-        grid_height = 4 * (30 + 4) + 30 + 16  # 4 satır + padding etiket alanı
+        # 64 hücre × (66+3) + label (80) + sol kenar (6) ≈ 4502 px sabit
+        # (yatay scroll mevcut, görsel etki yok — kullanıcı scroll'la
+        # 64 baytı tek tek gezebilir).
+        grid_width = 80 + 6 + 64 * (66 + 3)
+        grid_height = 4 * (36 + 4) + 30 + 16  # 4 satır + padding etiket alanı
         self._grid.setFixedSize(grid_width, grid_height)
 
         grid_scroll = QScrollArea()
@@ -1741,9 +1777,23 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._stack = QStackedWidget()
         self.content_layout.addWidget(self._stack, stretch=1)
 
-        # Sayfa 0 — Ön tanıtma (intro)
+        # Sayfa 0 — Ön tanıtma (intro). Akış şeması adım adım açıldığında
+        # widget'ın sizeHint'i ~480 px'e ulaşıyor → QStackedWidget tüm
+        # sayfalara bu yüksekliği dayatıyordu (Adım 2'de bile butonlar
+        # ekrandan dışarı itiliyordu). Intro'yu kendi vertical scroll'una
+        # sarıyoruz; sayfa intrinsic yüksekliği 290 px'te kalır, intro
+        # içeriği gerekirse kullanıcı sayfada dikey scroll yapar.
         self._page_intro = _SHA256IntroWidget(on_start=self._switch_to_content)
-        self._stack.addWidget(self._page_intro)
+        intro_scroll = QScrollArea()
+        intro_scroll.setWidget(self._page_intro)
+        intro_scroll.setWidgetResizable(True)
+        intro_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        intro_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        intro_scroll.setStyleSheet("background: transparent; border: none;")
+        intro_scroll.setMinimumHeight(260)
+        self._stack.addWidget(intro_scroll)
 
         # Sayfa 1 — Mesaj Hazırlığı (yeni, Adım 1/5)
         self._page_msgprep = self._make_msgprep_page()
@@ -1804,7 +1854,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         return w
 
     def _make_wexpand_page(self) -> QWidget:
-        """Mesaj genişletme sayfası — animasyonlu _WExpansionWidget."""
+        """Mesaj genişletme sayfası — _WExpansionWidget içerir.
+        Widget min 340 px; içerik kompakt sayfalarda bile stack'in tercih
+        yüksekliğini büyütüyordu. Scroll'a sararak sayfanın doğal yüksekliği
+        ~290 px'te kalır, alt navigasyon butonları daima görünür."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -1816,10 +1869,31 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay.addWidget(title)
 
         widget = _WExpansionWidget(self._data.get("w_expansion") or [])
-        lay.addWidget(widget, stretch=1)
+        wexp_scroll = QScrollArea()
+        wexp_scroll.setWidget(widget)
+        wexp_scroll.setWidgetResizable(True)
+        wexp_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        wexp_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        wexp_scroll.setStyleSheet("background: transparent; border: none;")
+        wexp_scroll.setMinimumHeight(260)
+        lay.addWidget(wexp_scroll, stretch=1)
         return w
 
     def _make_diagram_page(self) -> QWidget:
+        # Diyagram widget'ı setMinimumHeight(460) ile QStackedWidget'ın max
+        # sizeHint'ini büyütüyor; bu yüzden Adım 2 (padding) gibi kompakt
+        # sayfalarda bile modal'ın preferred yüksekliği 460+ olmak zorunda
+        # kalıyor ve alice panelindeki viewport'a sığmıyor → kullanıcı alt
+        # navigasyon butonlarını görmek için kaydırmak durumunda kalıyor.
+        #
+        # Çözüm: diyagram widget'ı kendi vertical QScrollArea'sına sar; scroll
+        # widget'ın 460 px talebini kapsasın, parent sayfanın doğal yüksekliği
+        # ise ~300 px'te kalsın. Böylece stack max sizeHint ~340'a düşer,
+        # modal tüm sayfalarda butonlar görünür şekilde sığar. Adım 4'te
+        # diyagramın tamamına ulaşmak için kullanıcı sayfa içinde dikey scroll
+        # yapar (zaten bilinen pattern).
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 4, 8, 4)
@@ -1831,10 +1905,19 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._diag_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._diag_title)
 
-        # Diyagram widget'ı sabit yükseklikte (max 360 px); scroll yok ki
-        # alt navigasyon butonları (◀ Geri / İleri ▶) hep ekranda kalsın.
+        # Diyagramı dikey scroll içine al — sayfa intrinsic yüksekliği 300 px
+        # civarında kalır; diyagramın 460 px min height'i stack'i büyütmez.
         self._diag_widget = _SHA256DiagramWidget()
-        lay.addWidget(self._diag_widget, stretch=0)
+        diag_scroll = QScrollArea()
+        diag_scroll.setWidget(self._diag_widget)
+        diag_scroll.setWidgetResizable(True)
+        diag_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        diag_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        diag_scroll.setStyleSheet("background: transparent; border: none;")
+        diag_scroll.setMinimumHeight(260)
+        lay.addWidget(diag_scroll, stretch=1)
 
         # Hash zinciri göstergesi (alt)
         self._chain_lbl = QLabel()
@@ -1843,14 +1926,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._chain_lbl.setWordWrap(True)
         self._chain_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._chain_lbl)
-
-        # Geri kalan boşluk altta — content yukarda, alt nav butonları
-        # window-level layout'ta zaten görünür konumda.
-        lay.addStretch(1)
         return w
 
     def _make_match_page(self) -> QWidget:
-        """Final eşleşme sayfası — animasyonlu _MatchAssemblyWidget."""
+        """Final eşleşme sayfası — _MatchAssemblyWidget içerir.
+        Widget setMinimumHeight(460) ile QStackedWidget'ın max sizeHint'ini
+        domine ediyordu → diğer kompakt sayfalarda bile modal'ın tercih
+        yüksekliği 460+ olunca alice panelindeki viewport'a sığmıyor,
+        kullanıcı butonları görmek için dikey scroll yapmak zorunda kalıyordu.
+        Match widget'ı kendi dikey QScrollArea'sına sararak bu 460 px talebi
+        sayfanın doğal yüksekliğine yansımıyor (sayfa ~290 px'te kalıyor)."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -1862,7 +1947,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay.addWidget(title)
 
         self._match_widget = _MatchAssemblyWidget()
-        lay.addWidget(self._match_widget, stretch=1)
+        match_scroll = QScrollArea()
+        match_scroll.setWidget(self._match_widget)
+        match_scroll.setWidgetResizable(True)
+        match_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        match_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        match_scroll.setStyleSheet("background: transparent; border: none;")
+        match_scroll.setMinimumHeight(260)
+        lay.addWidget(match_scroll, stretch=1)
         return w
 
     # ------------------------------------------------------------------

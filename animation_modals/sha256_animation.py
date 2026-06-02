@@ -823,11 +823,13 @@ class _MatchAssemblyWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        # 510→460: QStackedWidget'ın max sizeHint'i bu sayfaya endeksli;
-        # alice panelindeki gömülü scroll alanında Adım 1/2'de butonların
-        # ekranda kalması için 50 px düşürüldü. Paint koordinatları
-        # değişmedi; mevcut register/H[0..7] dağılımı 460 px'te de sığıyor.
-        self.setMinimumHeight(460)
+        # Widget min 510 px — Faz 4'teki eşleşme kartı (card_y=448, card_h=36
+        # → 484'te biter) tam görünsün diye. Widget artık _make_match_page
+        # içinde QScrollArea ile sarıldığı için bu yükseklik QStackedWidget'in
+        # stack height'ini büyütmez; scroll içinde gerekirse dikey kaydırılır.
+        # (Önceki 460 değeri kartı kırpıyordu — kullanıcı en alttaki yeşil
+        # 'Eşleşme: Başarılı' kutusunu göremiyordu.)
+        self.setMinimumHeight(510)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._pre_h: list[str] = ["--------"] * 8
         self._working: list[str] = ["--------"] * 8
@@ -1292,19 +1294,20 @@ class _SHAMessagePrepWidget(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
 
-        # Mesaj label
+        # Mesaj label — TAM mesaj gösterilir (eski 60 karakter kesilmesi
+        # kaldırıldı); uzun mesajlarda QLabel word-wrap ile alt satıra iner.
         if self._is_empty:
             label_text = "<i>(boş mesaj)</i>"
             label_color = ANIM_COLORS["text_muted"]
         else:
-            preview = message_text[:60] + ("…" if len(message_text) > 60 else "")
-            label_text = f"Mesaj: \"{preview}\""
+            label_text = f"Mesaj: \"{message_text}\""
             label_color = ANIM_COLORS["text_secondary"]
         self._msg_lbl = QLabel(label_text)
         self._msg_lbl.setFont(QFont("IBM Plex Sans", 11))
         self._msg_lbl.setStyleSheet(f"color: {label_color};")
         self._msg_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._msg_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self._msg_lbl.setWordWrap(True)
         lay.addWidget(self._msg_lbl)
 
         # Detail grid — TÜM mesaj byte'ları gösterilir (16 cap KALDIRILDI):
@@ -1447,12 +1450,14 @@ class _SHA256PaddingWidget(QWidget):
         message_bytes: bytes,
         padded_bytes: bytes,
         blocks_count: int,
+        message_text: str = "",
         on_finished=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         from animation_modals.byte_widgets import _ByteStripWidget
 
+        self._message_text = message_text
         self._message_bytes = message_bytes
         self._padded_bytes = padded_bytes
         self._blocks_count = blocks_count
@@ -1473,6 +1478,22 @@ class _SHA256PaddingWidget(QWidget):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
 
+        # Mesaj label — Adım 1 ile simetri; kullanıcının yazdığı metin tam
+        # haliyle görünür (word-wrap ile uzun mesajlar alt satıra iner).
+        if len(message_bytes) == 0:
+            msg_label_text = "<i>(boş mesaj)</i>"
+            msg_color = ANIM_COLORS["text_muted"]
+        else:
+            msg_label_text = f"Mesaj: \"{message_text}\""
+            msg_color = ANIM_COLORS["text_secondary"]
+        self._msg_lbl = QLabel(msg_label_text)
+        self._msg_lbl.setFont(QFont("IBM Plex Sans", 11))
+        self._msg_lbl.setStyleSheet(f"color: {msg_color};")
+        self._msg_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._msg_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self._msg_lbl.setWordWrap(True)
+        lay.addWidget(self._msg_lbl)
+
         # Info etiketi — boş mesaj durumunda özel mesaj
         if len(message_bytes) == 0:
             info_text = "Boş mesaj — padding tek 64 byte blok oluşturur"
@@ -1489,30 +1510,33 @@ class _SHA256PaddingWidget(QWidget):
         self._info_lbl.setWordWrap(True)
         lay.addWidget(self._info_lbl)
 
-        # Block navigation (>1 blok varsa)
+        # Blok navigasyon butonları — eskiden burada başlıkla grid arasındaydı;
+        # kullanıcı geri bildirimi: yatay scrollbar'ın hemen ÜSTÜNDE, sol-alt
+        # köşede küçük butonlar olsun. Buton oluşturuluyor ama lay'e burada
+        # eklenmiyor — grid'den sonra eklenecek (aşağı bak).
         self._block_lbl = None
         self._btn_prev_block = None
         self._btn_next_block = None
         if blocks_count > 1:
-            nav_row = QHBoxLayout()
-            self._btn_prev_block = QPushButton("◀ Önceki Blok")
-            self._btn_prev_block.setFont(QFont("IBM Plex Sans", 9))
+            self._btn_prev_block = QPushButton("◀ Önceki")
+            self._btn_prev_block.setFont(QFont("IBM Plex Sans", 8))
+            self._btn_prev_block.setFixedHeight(22)
+            self._btn_prev_block.setMaximumWidth(82)
             self._btn_prev_block.clicked.connect(self._prev_block)
             self._btn_prev_block.setEnabled(False)
-            nav_row.addWidget(self._btn_prev_block)
 
             self._block_lbl = QLabel(f"Blok 1 / {blocks_count}")
-            self._block_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            self._block_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
             self._block_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
             self._block_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            nav_row.addWidget(self._block_lbl)
+            self._block_lbl.setFixedHeight(22)
 
-            self._btn_next_block = QPushButton("Sonraki Blok ▶")
-            self._btn_next_block.setFont(QFont("IBM Plex Sans", 9))
+            self._btn_next_block = QPushButton("Sonraki ▶")
+            self._btn_next_block.setFont(QFont("IBM Plex Sans", 8))
+            self._btn_next_block.setFixedHeight(22)
+            self._btn_next_block.setMaximumWidth(82)
             self._btn_next_block.clicked.connect(self._next_block)
             self._btn_next_block.setEnabled(blocks_count > 1)
-            nav_row.addWidget(self._btn_next_block)
-            lay.addLayout(nav_row)
 
         # Faz etiketi — kullanıcıya hangi padding bileşeninin vurgulandığını söyler
         self._phase_lbl = QLabel(self._phase_label_text(0))
@@ -1561,6 +1585,19 @@ class _SHA256PaddingWidget(QWidget):
         grid_scroll.setFixedHeight(grid_height + 24)
         lay.addWidget(grid_scroll)
         self._grid_scroll = grid_scroll
+
+        # Blok navigasyon satırı — grid scroll'un HEMEN ALTINA, sol-alta küçük
+        # butonlar olarak yerleştirilir (kullanıcı isteği). Sağ tarafta esnek
+        # boşluk → tek mesajda nav row dahil edilmez.
+        if blocks_count > 1:
+            nav_row = QHBoxLayout()
+            nav_row.setContentsMargins(0, 0, 0, 0)
+            nav_row.setSpacing(6)
+            nav_row.addWidget(self._btn_prev_block)
+            nav_row.addWidget(self._block_lbl)
+            nav_row.addWidget(self._btn_next_block)
+            nav_row.addStretch(1)   # geri kalan boşluğu sağa it
+            lay.addLayout(nav_row)
 
         # Bit length etiketi
         bit_len = len(message_bytes) * 8
@@ -1849,6 +1886,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             message_bytes=self._data["message_bytes"],
             padded_bytes=self._data["padded_bytes"],
             blocks_count=self._data["blocks_count"],
+            message_text=self._data["message_text"],
         )
         lay.addWidget(self._padding_widget, alignment=Qt.AlignmentFlag.AlignTop)
         return w
@@ -1882,18 +1920,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         return w
 
     def _make_diagram_page(self) -> QWidget:
-        # Diyagram widget'ı setMinimumHeight(460) ile QStackedWidget'ın max
-        # sizeHint'ini büyütüyor; bu yüzden Adım 2 (padding) gibi kompakt
-        # sayfalarda bile modal'ın preferred yüksekliği 460+ olmak zorunda
-        # kalıyor ve alice panelindeki viewport'a sığmıyor → kullanıcı alt
-        # navigasyon butonlarını görmek için kaydırmak durumunda kalıyor.
+        # Sayfa düzeni:
+        #   - Başlık (Blok N / Sıkıştırma Round M)
+        #   - Round bar (tıklanabilir 9 buton: R1, R9, R17, ..., R64)
+        #     + çok blok varsa solda blok seçici (◀ Blok N/M Blok ▶)
+        #   - Diyagram widget'ı QScrollArea'da (stack height kontrolü)
+        #   - Hash zinciri göstergesi
         #
-        # Çözüm: diyagram widget'ı kendi vertical QScrollArea'sına sar; scroll
-        # widget'ın 460 px talebini kapsasın, parent sayfanın doğal yüksekliği
-        # ise ~300 px'te kalsın. Böylece stack max sizeHint ~340'a düşer,
-        # modal tüm sayfalarda butonlar görünür şekilde sığar. Adım 4'te
-        # diyagramın tamamına ulaşmak için kullanıcı sayfa içinde dikey scroll
-        # yapar (zaten bilinen pattern).
+        # Round bar AES'in tıklanabilir round bar deseninden esinleniyor;
+        # kullanıcı bottom-bar ◀/▶ butonlarına gitmeden diyagramda
+        # roundlar arası gezebilir.
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 4, 8, 4)
@@ -1904,6 +1940,64 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._diag_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._diag_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._diag_title)
+
+        # Round bar (tıklanabilir 9 buton — her snapshot için). Çok blok
+        # varsa solda blok navigasyonu.
+        rb_frame = QFrame()
+        rb_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border-radius: 6px; }}"
+        )
+        rb_lay = QHBoxLayout(rb_frame)
+        rb_lay.setContentsMargins(6, 4, 6, 4)
+        rb_lay.setSpacing(4)
+
+        # Blok navigasyonu — yalnızca >1 blok varsa
+        self._diag_blk_prev: QPushButton | None = None
+        self._diag_blk_next: QPushButton | None = None
+        self._diag_blk_lbl: QLabel | None = None
+        if self._data["blocks_count"] > 1:
+            self._diag_blk_prev = QPushButton("◀ Blok")
+            self._diag_blk_prev.setFixedHeight(28)
+            self._diag_blk_prev.setFont(QFont("IBM Plex Sans", 9))
+            self._diag_blk_prev.clicked.connect(
+                lambda: self._diag_jump_block(-1))
+            rb_lay.addWidget(self._diag_blk_prev)
+
+            self._diag_blk_lbl = QLabel(f"Blok 1 / {self._data['blocks_count']}")
+            self._diag_blk_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+            self._diag_blk_lbl.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_yellow']};")
+            self._diag_blk_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._diag_blk_lbl.setMinimumWidth(80)
+            rb_lay.addWidget(self._diag_blk_lbl)
+
+            self._diag_blk_next = QPushButton("Blok ▶")
+            self._diag_blk_next.setFixedHeight(28)
+            self._diag_blk_next.setFont(QFont("IBM Plex Sans", 9))
+            self._diag_blk_next.clicked.connect(
+                lambda: self._diag_jump_block(+1))
+            rb_lay.addWidget(self._diag_blk_next)
+
+            sep = QLabel("│")
+            sep.setStyleSheet(f"color: {ANIM_COLORS['border']};")
+            rb_lay.addWidget(sep)
+
+        # Round buton dizisi — 9 buton (snapshot başına bir tane)
+        self._diag_round_btns: list[QPushButton] = []
+        round_labels = ["R1", "R9", "R17", "R25", "R33", "R41", "R49", "R57", "R64"]
+        for idx, lbl in enumerate(round_labels):
+            btn = QPushButton(lbl)
+            btn.setFixedWidth(40)
+            btn.setFixedHeight(28)
+            btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            btn.setStyleSheet(self._diag_round_btn_style(False))
+            btn.clicked.connect(lambda checked=False, i=idx: self._diag_jump_round(i))
+            rb_lay.addWidget(btn)
+            self._diag_round_btns.append(btn)
+
+        rb_lay.addStretch()
+        lay.addWidget(rb_frame)
 
         # Diyagramı dikey scroll içine al — sayfa intrinsic yüksekliği 300 px
         # civarında kalır; diyagramın 460 px min height'i stack'i büyütmez.
@@ -1916,7 +2010,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         diag_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         diag_scroll.setStyleSheet("background: transparent; border: none;")
-        diag_scroll.setMinimumHeight(260)
+        diag_scroll.setMinimumHeight(230)
         lay.addWidget(diag_scroll, stretch=1)
 
         # Hash zinciri göstergesi (alt)
@@ -1927,6 +2021,69 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._chain_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._chain_lbl)
         return w
+
+    @staticmethod
+    def _diag_round_btn_style(active: bool) -> str:
+        if active:
+            return (
+                f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+                f"color: {ANIM_COLORS['bg_main']}; border: none; "
+                f"border-radius: 4px; font-weight: bold; }}"
+            )
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['text_muted']}; border: none; "
+            f"border-radius: 4px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['border']}; "
+            f"color: {ANIM_COLORS['text_primary']}; }}"
+        )
+
+    def _diag_jump_round(self, round_idx_in_block: int) -> None:
+        """Round bar'daki butonla aynı blok içinde başka bir snapshot'a atla.
+        round_idx_in_block: 0..8 (R1, R9, R17, ..., R64'e karşılık gelir)."""
+        # Mevcut blok numarasını current_step'ten çıkar
+        cur_snap_idx = self.current_step - 3
+        if cur_snap_idx < 0 or cur_snap_idx >= len(self._snaps):
+            cur_block = 0
+        else:
+            cur_block = cur_snap_idx // _SNAPS_PER_BLOCK
+        target_snap_idx = cur_block * _SNAPS_PER_BLOCK + round_idx_in_block
+        if target_snap_idx >= len(self._snaps):
+            return
+        self._diag_jump_to_step(3 + target_snap_idx)
+
+    def _diag_jump_block(self, delta: int) -> None:
+        """◀ Blok / Blok ▶ butonu — aynı round (snapshot in-block index)
+        konumunu koruyarak farklı bloka atla."""
+        cur_snap_idx = self.current_step - 3
+        if cur_snap_idx < 0 or cur_snap_idx >= len(self._snaps):
+            return
+        cur_block = cur_snap_idx // _SNAPS_PER_BLOCK
+        in_block_idx = cur_snap_idx % _SNAPS_PER_BLOCK
+        new_block = cur_block + delta
+        if new_block < 0 or new_block >= self._data["blocks_count"]:
+            return
+        target_snap_idx = new_block * _SNAPS_PER_BLOCK + in_block_idx
+        if target_snap_idx >= len(self._snaps):
+            return
+        self._diag_jump_to_step(3 + target_snap_idx)
+
+    def _diag_jump_to_step(self, target_step: int) -> None:
+        """Diyagram sayfasındaki butonlardan birine basıldığında modal'ın
+        current_step / progress / bottom button state'ini güncelleyerek
+        hedef adıma atla (AES'in _jump_to_round desenine paralel)."""
+        self.current_step = target_step
+        self._render_step(target_step)
+        self._progress.setValue(target_step + 1)
+        if hasattr(self, "_btn_prev"):
+            self._btn_prev.setEnabled(target_step > 0)
+        if hasattr(self, "_btn_next"):
+            self._btn_next.setEnabled(True)
+            self._btn_next.setText("İleri  ▶")
+
+    def _diag_update_round_bar(self, in_block_idx: int) -> None:
+        for i, btn in enumerate(self._diag_round_btns):
+            btn.setStyleSheet(self._diag_round_btn_style(i == in_block_idx))
 
     def _make_match_page(self) -> QWidget:
         """Final eşleşme sayfası — _MatchAssemblyWidget içerir.
@@ -1987,10 +2144,21 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         # Hangi blok, hangi round?
         snap_round = snap["round"]
         block_no = snap_idx // _SNAPS_PER_BLOCK + 1
+        in_block_idx = snap_idx % _SNAPS_PER_BLOCK
         self._diag_title.setText(
             f"Blok {block_no} / {self._data['blocks_count']}  —  "
             f"Sıkıştırma Round {snap_round} / 64"
         )
+        # Round bar ve blok etiketi senkronize
+        self._diag_update_round_bar(in_block_idx)
+        if self._diag_blk_lbl is not None:
+            self._diag_blk_lbl.setText(
+                f"Blok {block_no} / {self._data['blocks_count']}")
+        if self._diag_blk_prev is not None:
+            self._diag_blk_prev.setEnabled(block_no > 1)
+        if self._diag_blk_next is not None:
+            self._diag_blk_next.setEnabled(
+                block_no < self._data["blocks_count"])
 
         # Mevcut register değerleri (bu snapshot'taki çıkış)
         regs_out = snap["registers"]

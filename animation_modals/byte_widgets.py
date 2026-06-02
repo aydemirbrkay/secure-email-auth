@@ -65,28 +65,54 @@ class _ColoredByteGridWidget(QWidget):
     def _compute_char_map(self) -> list[str]:
         """Her byte için 'Karakter' satırında gösterilecek karakter.
         UTF-8 çok-byte karakterler (Türkçe ş/ğ/ü/ö/ç/ı, emoji, vs.) için
-        karakterin TÜM byte hücrelerinde aynı karakter gösterilir; tek-byte
-        ASCII karakterler kendi konumunda görünür. Decode edilemezse '·'
-        fallback'i kullanılır.
+        karakterin TÜM byte hücrelerinde aynı karakter gösterilir.
+
+        Padding-aware: SHA padding byte'ları (0x80 ayraç, 0x00 dolgu, length)
+        UTF-8'de geçerli değil → tüm veriyi tek seferde decode etmeye
+        çalışırsak UnicodeDecodeError atar ve fallback ASCII'ye düşeriz;
+        bu durumda Türkçe karakter byte'ları (0xC3, 0xBC...) printable
+        range dışı olduğu için '·' basılır. ÇÖZÜM: padding_mask'i kullanarak
+        mesaj/padding sınırını bul, decode'u SADECE mesaj kısmına uygula,
+        padding byte'ları için sade '·' kullan.
         """
         if not self._data:
             return []
+
+        # Padding mask varsa mesaj/padding sınırını tespit et.
+        if self._padding_mask:
+            try:
+                first_pad = self._padding_mask.index(True)
+            except ValueError:
+                first_pad = len(self._data)  # mask var ama padding yok
+            msg_bytes = bytes(self._data[:first_pad])
+        else:
+            # Mask yok → tüm veri mesaj sayılır (örn. Mesaj Hazırlığı sayfası).
+            msg_bytes = bytes(self._data)
+
+        n_padding = len(self._data) - len(msg_bytes)
+
+        # Mesaj kısmını UTF-8 decode et — padding byte'ları (0x80 vb.) decode'u
+        # kırmasın diye onları ayrı tutuyoruz.
         try:
-            text = self._data.decode("utf-8", errors="strict")
+            text = msg_bytes.decode("utf-8", errors="strict")
         except UnicodeDecodeError:
-            # Tam decode başarısızsa byte başına ASCII fallback
-            return [
+            # Bozuk mesaj — byte başına ASCII fallback (eski davranış).
+            msg_chars: list[str] = [
                 chr(b) if 32 <= b < 127 else "·"
-                for b in self._data
+                for b in msg_bytes
             ]
-        result: list[str] = []
-        for ch in text:
-            cp = ord(ch)
-            # Yazdırılabilir karakter (ASCII printable + Latin-Türkçe + emoji)
-            display = ch if cp >= 32 and cp != 127 else "·"
-            byte_count = len(ch.encode("utf-8"))
-            result.extend([display] * byte_count)
-        return result
+        else:
+            # UTF-8 başarılı: her karakter kendi byte sayısı kadar replikle
+            # (ü = 2 byte → iki hücrede 'ü'; emoji = 4 byte → dört hücre).
+            msg_chars = []
+            for ch in text:
+                cp = ord(ch)
+                display = ch if cp >= 32 and cp != 127 else "·"
+                byte_count = len(ch.encode("utf-8"))
+                msg_chars.extend([display] * byte_count)
+
+        # Padding byte'ları için sade '·' (anlamlı karakter taşımaz).
+        return msg_chars + ["·"] * n_padding
 
     def set_highlighted_index(self, idx: int | None) -> None:
         self._highlighted_idx = idx

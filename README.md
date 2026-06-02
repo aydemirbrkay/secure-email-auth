@@ -73,33 +73,48 @@ Mesaj (m)
 
 ## Proje Yapısı
 
+Proje **paket bazlı klasör düzeniyle** organize edilmiştir — arayüz, kriptografik çekirdek, animasyon modülleri ve testler ayrı paketlere bölünmüştür:
+
 ```
 secure-email-auth/
 ├── main_gui.py                     # Ana uygulama penceresi ve iş akışı yöneticisi
-├── alice_panel.py                  # Alice (gönderici) paneli ve animasyon konteyneri
-├── bob_panel.py                    # Bob (alıcı) paneli ve deşifre diyagram bileşeni
-├── crypto_core.py                  # Kriptografik iş mantığı (backend)
-├── theme.py                        # Renk paleti ve tema sabitleri
-├── toast.py                        # Doğrulama bildirimi bileşeni (VerificationToast)
-├── utils.py                        # Yardımcı fonksiyonlar (adım kutusu, renk hesaplama)
-├── animation_modals/
+├── arayuz/                         # Kullanıcı arayüzü paneller ve görsel bileşenler
+│   ├── alice_panel.py              # Alice (gönderici) paneli ve animasyon konteyneri
+│   ├── bob_panel.py                # Bob (alıcı) paneli ve deşifre diyagram bileşeni
+│   ├── theme.py                    # Renk paleti ve tema sabitleri
+│   └── toast.py                    # Doğrulama bildirimi bileşeni (VerificationToast)
+├── kriptografi/                    # Kriptografik iş mantığı (backend)
+│   ├── crypto_core.py              # Hibrit şifreleme/imzalama API'ı (cryptography lib)
+│   ├── crypto_workers.py           # QThread tabanlı asenkron worker'lar (UI donmasın)
+│   └── utils.py                    # Yardımcı fonksiyonlar (adım kutusu, renk hesaplama)
+├── animation_modals/               # Pedagojik animasyon pencereleri
 │   ├── base.py                     # CryptoAnimationWindow temel sınıfı
 │   ├── matrix_widget.py            # AES durum matrisi görselleştirme bileşeni
-│   ├── aes_animation.py            # AES-256-GCM adım adım animasyon penceresi
+│   ├── byte_widgets.py             # Paylaşılan byte ızgara/strip widget'ları (UTF-8 aware)
+│   ├── aes_animation.py            # AES-256 animasyon penceresi (tıklanabilir round bar)
 │   ├── aes_pure.py                 # Saf Python AES-256 (14 turlu durum verisi)
-│   ├── rsa_animation.py            # RSA-2048 animasyon penceresi (7 eğitim adımı)
+│   ├── rsa_animation.py            # RSA-2048 animasyon penceresi (8 eğitim adımı)
 │   ├── sha256_animation.py         # SHA-256 animasyon penceresi (padding, W_i, sıkıştırma)
 │   └── sha256_pure.py              # Saf Python SHA-256 (adım ve W_i verisi)
+├── testler/                        # Birim ve smoke testleri (200+ test senaryosu)
+│   ├── test_crypto_core.py         # Kriptografik API testleri
+│   ├── test_crypto_workers.py      # Worker thread testleri
+│   ├── test_aes_pure.py            # Saf AES implementasyonu testleri
+│   ├── test_sha256_pure.py         # Saf SHA-256 implementasyonu testleri
+│   ├── test_diagram_rects.py       # Diyagram dikdörtgen sınır testleri
+│   ├── test_aes_matrix_view.py     # AES matris görünüm testleri
+│   ├── test_animation_smoke.py     # Animasyon penceresi smoke testleri
+│   ├── test_animation_widgets_smoke.py  # Widget instantiation testleri
+│   ├── test_message_prep_animation.py   # Mesaj hazırlığı animasyon testleri
+│   ├── test_rsa_animation.py       # RSA animasyon adım testleri
+│   └── test_utils.py               # Yardımcı fonksiyon testleri
 ├── görseller/                      # Tüm görsel kaynaklar (SVG ikonlar + PNG akış diyagramları)
 │   ├── alice and bob.png           # Alice tarafı şifreleme akış diyagramı
 │   ├── bob-tarafi-sifre-cozme.png  # Bob tarafı deşifre akış diyagramı
 │   ├── secure-email-simge.png      # Uygulama ana ikonu
 │   └── *.svg                       # Tema simgeleri (gear, network, shield, vb.)
-├── test_crypto_core.py             # Birim testleri (26 test senaryosu)
-├── test_aes_pure.py                # Saf AES implementasyonu testleri
-├── test_sha256_pure.py             # Saf SHA-256 implementasyonu testleri
-├── test_diagram_rects.py           # Diyagram dikdörtgen sınır testleri
-├── requirements.txt                # Python bağımlılıkları
+├── requirements.txt                # Python bağımlılıkları (çalışma zamanı)
+├── requirements-dev.txt            # Test ve geliştirme bağımlılıkları
 └── Thesis.pdf                      # Bitirme tezi belgesi
 ```
 
@@ -110,7 +125,8 @@ secure-email-auth/
 Proje, her kriptografik algoritmanın iç işleyişini adım adım görselleştiren bağımsız animasyon pencereleri içerir. Bu pencereler Alice panelinin içine gömülü olarak çalışır ve her pencere **kriptografik standartlara uygun, pedagojik olarak doğru** gösterimler sunar.
 
 ### AES-256-GCM Animasyonu (`animation_modals/aes_animation.py`)
-- Giriş animasyonu ve tıklanabilir tur çubuğu (Round 0 – Round 14)
+- Giriş animasyonu ve **tıklanabilir tur çubuğu** (Round 0 – Round 14, R0–R14 butonları)
+- Sayfa düzeni viewport'a oranlı genişler (matris ~%40 / akış şeması ~%60), yatay scroll çıkmaz
 - 14 tura ait durum matrisi görselleştirmesi (`MatrixWidget`)
 - **SubBytes**: S-Box ile byte değiştirme, hücre hücre animasyon
 - **ShiftRows**: Satır kaydırma (0, 1, 2, 3 bayt sola) için renkli ok gösterimi
@@ -119,22 +135,25 @@ Proje, her kriptografik algoritmanın iç işleyişini adım adım görselleşti
 - Eşleşme ekranı: ECB blok çıktısı ile GCM şifreli metninin neden farklı olduğunu açıklar (CTR sayacı + keystream ⊕ plaintext)
 
 ### RSA-2048 Animasyonu (`animation_modals/rsa_animation.py`)
-- 7 adımlı manuel eğitim akışı: asal sayılar → n → φ(n) → e → d (EEA) → DER/Base64 → gerçek anahtar
+- **8 adımlı** manuel eğitim akışı: asal sayılar → n → φ(n) → e → d (EEA) → DER/Base64 → gerçek anahtar eşleşmesi → şifreleme/deşifreleme turu
 - Her adımda matematiksel formül gösterimi
-- **Genişletilmiş Öklid Algoritması**: İleri Öklid ve geri iz adımları kaynak satır referansları ile açıklanır
+- **Adım 5 — Genişletilmiş Öklid Algoritması**: İleri Öklid ve geri iz adımları kaynak satır referansları ile açıklanır
   (ör. `← satır 3'ten: 9 = 1×8 + 1 → 1 = 9 − 8`)
-- **Şifreleme/Deşifreleme doğrulaması**: Demo değerler üzerinde `m=65 → c = 65¹⁷ mod 3233 = 2790 → m = 2790²⁷⁵³ mod 3233 = 65`
-- Gerçek DER→Base64 dönüşümü (p=61, q=53 demo değerleriyle), demo ve gerçek 2048-bit anahtar farkı vurgulanır
+- **Adım 6 — DER / Base64**: Bölüm 2'de sayı → bayt dönüşümü narratif (örn. `n = 2291: 2291 ÷ 256 = 8 kalan 243 → 08 F3`); Bölüm 3'te ASN.1 / DER yapısı 3 mantıksal blokta — SEQUENCE başlığı, n için INTEGER kaydı, e için INTEGER kaydı; `0x02 = INTEGER etiketi` kavramı net biçimde açıklanır
+- **Adım 8 — Şifreleme / Deşifreleme**: Demo değerler üzerinde `m=65 → c = 65¹⁷ mod 3233 = 2790 → m = 2790²⁷⁵³ mod 3233 = 65`; `m'` kutusu efektsiz açılır (pulse/renk geçişi yok), diğer kutularla tutarlı
+- Gerçek DER→Base64 dönüşümü demo değerleriyle, demo ve gerçek 2048-bit anahtar farkı vurgulanır
 
 ### SHA-256 Animasyonu (`animation_modals/sha256_animation.py`)
-- Padding görselleştirmesi (0x80 biti + 0 bitleri + 64-bit uzunluk)
-- **Mesaj Genişletme (Message Schedule)**: W[0..15] bloktan, W[16..63] için `σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)` ve `σ1(x) = ROTR(x,17) ⊕ ROTR(x,19) ⊕ SHR(x,10)` formülleri ile ilk bloğun W[16..31] tablosu
-- QPainter tabanlı sıkıştırma diyagramı
+- **Adım 1 — Mesaj Hazırlığı**: Kullanıcının tam metni (uzun mesajlarda word-wrap ile alt satıra inerek) gösterilir; byte detay tablosu **tüm baytları** içerir (16-byte kapasitesi kaldırıldı), uzun mesajda yatay scroll ile gezilir
+- **UTF-8 / Türkçe karakter desteği**: Karakter satırı `ş, ğ, ü, ö, ç, ı` gibi çok-baytlı UTF-8 karakterleri her iki bayt hücresinde de doğru gösterir; padding-aware decoding ile padding baytları (0x80, 0x00, length) decode'u kırmaz
+- **Adım 2 — Padding Görselleştirmesi**: Aynı mesaj etiketi simetrik olarak gösterilir; 0x80 biti + 0 bitleri + 64-bit uzunluk; çok-bloklu mesajlarda kompakt blok navigasyonu (◀ Önceki / Sonraki ▶) yatay scrollbar'ın hemen altında
+- **Adım 3 — Mesaj Genişletme (Message Schedule)**: W[0..15] bloktan, W[16..63] için `σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)` ve `σ1(x) = ROTR(x,17) ⊕ ROTR(x,19) ⊕ SHR(x,10)` formülleri ile ilk bloğun W[16..31] tablosu
+- **Adım 4 — Sıkıştırma Diyagramı**: AES tarzı **tıklanabilir round bar** (R1, R9, R17, R25, R33, R41, R49, R57, R64) ile snapshot'lar arası serbest navigasyon; çok bloklu mesajlarda ◀ Blok / Blok ▶ butonları
   - 8 register (A–H) giriş ve çıkış kutuları
   - T1 = Σ1(E) + Ch(E,F,G) + H + K + W ve T2 = Σ0(A) + Maj(A,B,C) kutuları
   - D → E' bağlantısı ve kaydırma legend'i (`B'=A  C'=B  D'=C  F'=E  G'=F  H'=G`)
-- Her blok için 9 snapshot (round 1, 9, 17, 25, 33, 41, 49, 57, 64)
-- Son blok toplama ve H0..H7 + çalışma değişkenleri → 256-bit hash üretimi
+- **Adım 5 — Final Hash Eşleşmesi**: Önceki H + Çalışma → Yeni H; 256-bit hash şeridi; crypto_core çıktısıyla karakter karakter eşleme + sonuç kartı
+- Manuel ◀ Geri / İleri ▶ butonları her sayfada görünür kalır (uzun sayfa içerikleri kendi dikey scroll'larına alındı)
 
 ---
 

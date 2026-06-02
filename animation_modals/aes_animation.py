@@ -69,7 +69,10 @@ class _MatrixDemoWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._step)
         self._timer.start(110)
-        self.setMinimumSize(220, 220)
+        # 220×220 → 180×180: kompakt left_frame'e (max 200 px) sığacak
+        # şekilde; matris hücreleri paintEvent'te adaptive cell_size ile
+        # ölçeklendiği için içerik korunur (daha küçük ama yine okunaklı).
+        self.setMinimumSize(180, 180)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def _step(self) -> None:
@@ -185,21 +188,20 @@ class _AESIntroWidget(QWidget):
 
     def _init_ui(self) -> None:
         main = QVBoxLayout(self)
-        main.setContentsMargins(8, 4, 8, 4)
+        # 16 px sağ margin → kullanıcının istediği "~5% sağ boşluk"
+        main.setContentsMargins(8, 4, 16, 4)
         main.setSpacing(3)
 
-        title = QLabel("AES-256  Şifreleme Süreci")
-        title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main.addWidget(title)
-
-        # ── Yatay bölüm: sol=canlı matris, sağ=akış şeması ──
+        # ── Yatay bölüm: sol=canlı matris, sağ=başlık + akış şeması ──
+        # (Başlık eskiden main'de full-width centered idi → kullanıcı geri
+        # bildirimi: başlık adımların üstünde, sağ kolonun başında olsun.)
         h_row = QHBoxLayout()
         h_row.setSpacing(8)
         main.addLayout(h_row)
 
-        # Sol: canlı matris animasyonu (kompakt)
+        # Sol: canlı matris animasyonu — max width kaldırıldı, stretch ile
+        # viewport'a oranlı genişler (matris paintEvent içinde cell_size'i
+        # adaptive ölçeklendiriyor).
         left_frame = QFrame()
         left_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
@@ -215,23 +217,29 @@ class _AESIntroWidget(QWidget):
         left_lay.addWidget(demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
-        # Sol panel daha dar tutuluyor → sağ akış için yer açar
-        left_frame.setMinimumWidth(170)
-        left_frame.setMaximumWidth(210)
-        h_row.addWidget(left_frame, stretch=0)
+        left_frame.setMinimumWidth(220)
+        h_row.addWidget(left_frame, stretch=2)
 
-        # Sağ: akış şeması — maksimum genişlik sınırı + sağa stretch ile
-        # boş alan → kutular makul daralır, içlerinde aşırı boşluk olmaz.
+        # Sağ: başlık + akış şeması — max width kaldırıldı, stretch ile
+        # viewport'a oranlı genişler. Stretch ratio 2:3 (sol:sağ) → matris
+        # ~%40, akış şeması ~%60 kapsar; sağ kenarda main margin'inden
+        # gelen ~16 px (≈%5) boşluk kalır.
         right_w = QWidget()
         right_lay = QVBoxLayout(right_w)
         right_lay.setContentsMargins(0, 0, 0, 0)
         right_lay.setSpacing(0)
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
-        right_w.setMaximumWidth(420)
-        h_row.addWidget(right_w, stretch=0)
-        h_row.addStretch(1)  # sağ kenardaki boşluğu emer
+        right_w.setMinimumWidth(300)
+        h_row.addWidget(right_w, stretch=3)
 
-        # ── Sağ taraf: akış şeması widget'ları ──
+        # ── Sağ taraf: önce BAŞLIK, sonra akış şeması widget'ları ──
+
+        title = QLabel("AES-256  Şifreleme Süreci")
+        title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_lay.addWidget(title)
+        right_lay.addSpacing(4)
 
         # Giriş kutusu
         self._intro_plain = self._make_box(
@@ -1769,9 +1777,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         content_row.addWidget(mat_frame)
 
-        # Sağ panel — operasyona göre değişir
+        # Sağ panel — operasyona göre değişir. Min 280 (eski 320) ve
+        # max 430: dar alice viewport'larında round sayfası yatay scroll'a
+        # düşmesin; geniş viewport'larda gerektiği kadar yer alır.
         self._side_stack = QStackedWidget()
-        self._side_stack.setMinimumWidth(320)
+        self._side_stack.setMinimumWidth(280)
         self._side_stack.setMaximumWidth(430)
 
         empty = QWidget()  # boş panel (yedek)

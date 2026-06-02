@@ -230,7 +230,7 @@ class CryptoAnimationWindow(QWidget):
                 self._progress.setValue(self.total_steps)
                 self._show_match_result()
                 self._btn_next.setEnabled(False)
-                self._btn_next.setText("✅  Tamamlandı")
+                self._btn_next.setText("Tamamlandı")
                 return
             self.current_step += 1
             self._render_step(self.current_step)

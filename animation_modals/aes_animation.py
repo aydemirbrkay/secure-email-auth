@@ -202,7 +202,8 @@ class _AESIntroWidget(QWidget):
         # Sol: canlı matris animasyonu — max width kaldırıldı, stretch ile
         # viewport'a oranlı genişler (matris paintEvent içinde cell_size'i
         # adaptive ölçeklendiriyor).
-        left_frame = QFrame()
+        self._left_frame = QFrame()
+        left_frame = self._left_frame
         left_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
@@ -210,11 +211,11 @@ class _AESIntroWidget(QWidget):
         left_lay = QVBoxLayout(left_frame)
         left_lay.setContentsMargins(6, 4, 6, 4)
         left_lay.setSpacing(2)
-        demo_title = QLabel("Canlı Şifreleme Önizlemesi")
-        demo_title.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-        demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        demo_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_lay.addWidget(demo_title)
+        self._demo_title = QLabel("Canlı Şifreleme Önizlemesi")
+        self._demo_title.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        self._demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._demo_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_lay.addWidget(self._demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
         left_frame.setMinimumWidth(220)
@@ -234,16 +235,18 @@ class _AESIntroWidget(QWidget):
 
         # ── Sağ taraf: önce BAŞLIK, sonra akış şeması widget'ları ──
 
-        title = QLabel("AES-256  Şifreleme Süreci")
-        title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right_lay.addWidget(title)
+        self._intro_title = QLabel("AES-256  Şifreleme Süreci")
+        self._intro_title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        self._intro_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        self._intro_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_lay.addWidget(self._intro_title)
         right_lay.addSpacing(4)
+
+        self._arrows: list[QLabel] = []
 
         # Giriş kutusu
         self._intro_plain = self._make_box(
-            "Düz Metin  (Plaintext)", ANIM_COLORS["text_secondary"]
+            "Düz Metin  (Plaintext)", "text_secondary"
         )
         right_lay.addWidget(self._intro_plain)
         self._intro_plain.setVisible(False)
@@ -253,11 +256,12 @@ class _AESIntroWidget(QWidget):
         right_lay.addWidget(arr0)
         arr0.setVisible(False)
         self._widgets.append(arr0)
+        self._arrows.append(arr0)
 
         self._box_r0 = self._make_round_box(
             "Initial Round  (Round 0)",
             ["AddRoundKey"],
-            ANIM_COLORS["accent_peach"],
+            "accent_peach",
         )
         right_lay.addWidget(self._box_r0)
         self._box_r0.setVisible(False)
@@ -267,11 +271,12 @@ class _AESIntroWidget(QWidget):
         right_lay.addWidget(arr1)
         arr1.setVisible(False)
         self._widgets.append(arr1)
+        self._arrows.append(arr1)
 
         self._box_main = self._make_round_box(
             "Ana Roundlar  (R1 – R13)",
             ["1-SubBytes", "2-ShiftRows", "3-MixColumns", "4-AddRoundKey"],
-            ANIM_COLORS["accent_blue"],
+            "accent_blue",
         )
         right_lay.addWidget(self._box_main)
         self._box_main.setVisible(False)
@@ -281,11 +286,12 @@ class _AESIntroWidget(QWidget):
         right_lay.addWidget(arr2)
         arr2.setVisible(False)
         self._widgets.append(arr2)
+        self._arrows.append(arr2)
 
         self._box_r14 = self._make_round_box(
             "Son Round  (R14)",
             ["1-SubBytes", "2-ShiftRows", "3-AddRoundKey  (MixColumns yok)"],
-            ANIM_COLORS["accent_green"],
+            "accent_green",
         )
         right_lay.addWidget(self._box_r14)
         self._box_r14.setVisible(False)
@@ -295,9 +301,10 @@ class _AESIntroWidget(QWidget):
         right_lay.addWidget(arr3)
         arr3.setVisible(False)
         self._widgets.append(arr3)
+        self._arrows.append(arr3)
 
         self._intro_cipher = self._make_box(
-            "Şifreli Metin  (Ciphertext)", ANIM_COLORS["accent_green"]
+            "Şifreli Metin  (Ciphertext)", "accent_green"
         )
         right_lay.addWidget(self._intro_cipher)
         self._intro_cipher.setVisible(False)
@@ -308,12 +315,7 @@ class _AESIntroWidget(QWidget):
         # Başla butonu
         self._btn_start = QPushButton("Görselleştirmeyi Başlat")
         self._btn_start.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
-        self._btn_start.setStyleSheet(
-            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border: none; "
-            f"border-radius: 6px; padding: 6px 18px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-        )
+        self._btn_start.setStyleSheet(self._start_btn_style())
         self._btn_start.setVisible(False)
         self._btn_start.clicked.connect(self._on_complete)
         right_lay.addWidget(self._btn_start, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -321,7 +323,8 @@ class _AESIntroWidget(QWidget):
         right_lay.addStretch()
 
     @staticmethod
-    def _make_box(text: str, color: str) -> QFrame:
+    def _make_box(text: str, color_key: str) -> QFrame:
+        color = ANIM_COLORS[color_key]
         f = QFrame()
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
@@ -335,10 +338,14 @@ class _AESIntroWidget(QWidget):
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setWordWrap(True)
         lay.addWidget(lbl)
+        f._accent_key = color_key      # type: ignore[attr-defined]
+        f._accent_lbls = [lbl]         # type: ignore[attr-defined]
+        f._muted_lbls = []             # type: ignore[attr-defined]
         return f
 
     @staticmethod
-    def _make_round_box(title: str, ops: list[str], color: str) -> QFrame:
+    def _make_round_box(title: str, ops: list[str], color_key: str) -> QFrame:
+        color = ANIM_COLORS[color_key]
         f = QFrame()
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
@@ -353,12 +360,17 @@ class _AESIntroWidget(QWidget):
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
         t.setWordWrap(True)
         lay.addWidget(t)
+        muted = []
         for op in ops:
             o = QLabel(f"  →  {op}")
             o.setFont(QFont("Segoe UI", 9))
             o.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
             o.setWordWrap(True)
             lay.addWidget(o)
+            muted.append(o)
+        f._accent_key = color_key      # type: ignore[attr-defined]
+        f._accent_lbls = [t]           # type: ignore[attr-defined]
+        f._muted_lbls = muted          # type: ignore[attr-defined]
         return f
 
     @staticmethod
@@ -369,6 +381,41 @@ class _AESIntroWidget(QWidget):
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setFixedHeight(20)
         return lbl
+
+    @staticmethod
+    def _start_btn_style() -> str:
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; "
+            f"border-radius: 6px; padding: 6px 18px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
+
+    def restyle(self) -> None:
+        """Tema değişiminde QLabel/QFrame içeriğini durum bozmadan yeniden boyar.
+        _MatrixDemoWidget (QPainter) update() ile yenilenir."""
+        self._left_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        self._demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._intro_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        for box in (self._intro_plain, self._box_r0, self._box_main,
+                    self._box_r14, self._intro_cipher):
+            color = ANIM_COLORS[box._accent_key]  # type: ignore[attr-defined]
+            box.setStyleSheet(
+                f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+                f"border: 2px solid {color}; border-radius: 6px; }}"
+            )
+            for lbl in box._accent_lbls:  # type: ignore[attr-defined]
+                lbl.setStyleSheet(f"color: {color}; border: none;")
+            for lbl in box._muted_lbls:  # type: ignore[attr-defined]
+                lbl.setStyleSheet(
+                    f"color: {ANIM_COLORS['text_secondary']}; border: none;"
+                )
+        for arr in self._arrows:
+            arr.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; border: none;")
+        self._btn_start.setStyleSheet(self._start_btn_style())
 
     def start(self) -> None:
         self._timer.start(600)
@@ -436,11 +483,11 @@ class _AESPlaintextPrepWidget(QWidget):
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(6)
 
-        title = QLabel("Plaintext Hazırlığı — Metin → 4×4 State Matrix")
-        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(title)
+        self._pp_title = QLabel("Plaintext Hazırlığı — Metin → 4×4 State Matrix")
+        self._pp_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        self._pp_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        self._pp_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self._pp_title)
 
         # Plaintext label
         if self._is_empty:
@@ -458,10 +505,10 @@ class _AESPlaintextPrepWidget(QWidget):
         lay.addWidget(self._txt_lbl)
 
         # Detail grid (ilk 16 byte = first_block)
-        detail_lbl = QLabel("İlk blok (16 byte) — PKCS#7 padding dahil:")
-        detail_lbl.setFont(QFont("IBM Plex Sans", 9))
-        detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        lay.addWidget(detail_lbl)
+        self._detail_lbl = QLabel("İlk blok (16 byte) — PKCS#7 padding dahil:")
+        self._detail_lbl.setFont(QFont("IBM Plex Sans", 9))
+        self._detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(self._detail_lbl)
         # Padding mask: orijinal plaintext byte'larından sonrası PKCS#7
         n_orig = min(len(plaintext_bytes), 16)
         padding_mask = [False] * n_orig + [True] * (16 - n_orig)
@@ -475,13 +522,13 @@ class _AESPlaintextPrepWidget(QWidget):
         lay.addWidget(self._grid)
 
         # Byte strip (tüm padded plaintext) — scroll
-        strip_lbl = QLabel(
+        self._strip_lbl = QLabel(
             f"Tüm byte'lar (toplam {len(padded_plaintext)} byte, "
             f"blok sayısı: {blocks_total}):"
         )
-        strip_lbl.setFont(QFont("IBM Plex Sans", 9))
-        strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        lay.addWidget(strip_lbl)
+        self._strip_lbl.setFont(QFont("IBM Plex Sans", 9))
+        self._strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(self._strip_lbl)
         # Padding mask tüm strip için
         n_orig_all = len(plaintext_bytes)
         full_mask = [False] * n_orig_all + [True] * (len(padded_plaintext) - n_orig_all)
@@ -498,24 +545,17 @@ class _AESPlaintextPrepWidget(QWidget):
         lay.addWidget(strip_scroll)
 
         # 4×4 state matrix gösterimi
-        matrix_lbl = QLabel("4×4 State Matrix (column-major):")
-        matrix_lbl.setFont(QFont("IBM Plex Sans", 9))
-        matrix_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        lay.addWidget(matrix_lbl)
+        self._matrix_lbl = QLabel("4×4 State Matrix (column-major):")
+        self._matrix_lbl.setFont(QFont("IBM Plex Sans", 9))
+        self._matrix_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lay.addWidget(self._matrix_lbl)
         self._matrix_widget = self._build_state_matrix_widget()
         lay.addWidget(self._matrix_widget, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Devam butonu
         self._btn_continue = QPushButton("Devam ▶")
         self._btn_continue.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
-        self._btn_continue.setStyleSheet(
-            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border: none; border-radius: 6px; "
-            f"padding: 6px 18px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-            f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
-            f"color: {ANIM_COLORS['text_muted']}; }}"
-        )
+        self._btn_continue.setStyleSheet(self._continue_btn_style())
         self._btn_continue.setEnabled(False)
         self._btn_continue.clicked.connect(self._on_continue_clicked)
         lay.addWidget(self._btn_continue, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -546,17 +586,62 @@ class _AESPlaintextPrepWidget(QWidget):
             for c in range(4):
                 cell = QLabel("--")
                 cell.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
-                cell.setStyleSheet(
-                    f"background: {ANIM_COLORS['bg_input']}; "
-                    f"color: {ANIM_COLORS['text_muted']}; "
-                    f"border: 1px solid {ANIM_COLORS['border']}; "
-                    f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
-                )
+                cell.setStyleSheet(self._cell_style(False))
                 cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 grid.addWidget(cell, r, c)
                 row_lbls.append(cell)
             self._cell_lbls.append(row_lbls)
         return w
+
+    @staticmethod
+    def _cell_style(filled: bool) -> str:
+        if filled:
+            return (
+                f"background: {ANIM_COLORS['accent_blue']}; "
+                f"color: #FFFFFF; border: 1px solid {ANIM_COLORS['accent_blue']}; "
+                f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
+            )
+        return (
+            f"background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['text_muted']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
+        )
+
+    @staticmethod
+    def _continue_btn_style() -> str:
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; border-radius: 6px; "
+            f"padding: 6px 18px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+            f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
+            f"color: {ANIM_COLORS['text_muted']}; }}"
+        )
+
+    def restyle(self) -> None:
+        """Tema değişiminde QLabel/QFrame içeriğini durum bozmadan yeniden boyar.
+        Byte ızgaraları (_ColoredByteGridWidget/_ByteStripWidget) QPainter'dır →
+        update() ile yenilenir."""
+        self._pp_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        label_color = (
+            ANIM_COLORS["text_muted"] if self._is_empty
+            else ANIM_COLORS["text_secondary"]
+        )
+        self._txt_lbl.setStyleSheet(f"color: {label_color};")
+        for lbl in (self._detail_lbl, self._strip_lbl, self._matrix_lbl):
+            lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._matrix_widget.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 6px; padding: 4px; }}"
+        )
+        for r in range(4):
+            for c in range(4):
+                self._cell_lbls[r][c].setStyleSheet(
+                    self._cell_style(self._matrix_filled[r][c])
+                )
+        self._btn_continue.setStyleSheet(self._continue_btn_style())
 
     def start(self) -> None:
         self._timer.start(self._TICK_MS)
@@ -588,11 +673,7 @@ class _AESPlaintextPrepWidget(QWidget):
                 for r in range(4):
                     if not self._matrix_filled[r][col]:
                         self._cell_lbls[r][col].setText(self._state_matrix[r][col])
-                        self._cell_lbls[r][col].setStyleSheet(
-                            f"background: {ANIM_COLORS['accent_blue']}; "
-                            f"color: #FFFFFF; border: 1px solid {ANIM_COLORS['accent_blue']}; "
-                            f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
-                        )
+                        self._cell_lbls[r][col].setStyleSheet(self._cell_style(True))
                         self._matrix_filled[r][col] = True
         elif self._tick >= 151:
             self._fill_matrix_immediate()
@@ -1707,7 +1788,8 @@ class AESAnimationWindow(CryptoAnimationWindow):
         lay.setSpacing(6)
 
         # Tıklanabilir round bar
-        rb_frame = QFrame()
+        self._rb_frame = QFrame()
+        rb_frame = self._rb_frame
         rb_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border-radius: 6px; }}"
@@ -1727,15 +1809,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         # Tüm Roundlar Akışı butonu (FIPS 197 tarzı görünüm)
         rb_lay.addStretch()
-        flow_btn = QPushButton("Tüm Akış")
+        self._flow_btn = QPushButton("Tüm Akış")
+        flow_btn = self._flow_btn
         flow_btn.setFixedHeight(28)
         flow_btn.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-        flow_btn.setStyleSheet(
-            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border: none; border-radius: 5px; "
-            f"padding: 4px 12px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-        )
+        flow_btn.setStyleSheet(self._flow_btn_style())
         flow_btn.clicked.connect(self._switch_to_flow_view)
         rb_lay.addWidget(flow_btn)
         lay.addWidget(rb_frame)
@@ -1759,7 +1837,8 @@ class AESAnimationWindow(CryptoAnimationWindow):
         content_row = QHBoxLayout()
         content_row.setSpacing(12)
 
-        mat_frame = QFrame()
+        self._mat_frame = QFrame()
+        mat_frame = self._mat_frame
         mat_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {ANIM_COLORS['accent_blue']}; border-radius: 8px; }}"
@@ -1828,39 +1907,32 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         # Üst bar — geri dönüş + başlık
         top_row = QHBoxLayout()
-        back_btn = QPushButton("◀  Tek Round Detayı")
-        back_btn.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-        back_btn.setFixedHeight(30)
-        back_btn.setStyleSheet(
-            f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
-            f"color: {ANIM_COLORS['text_secondary']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; "
-            f"border-radius: 5px; padding: 4px 12px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; }}"
-        )
-        back_btn.clicked.connect(self._back_to_round_view)
-        top_row.addWidget(back_btn)
+        self._flow_back_btn = QPushButton("◀  Tek Round Detayı")
+        self._flow_back_btn.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        self._flow_back_btn.setFixedHeight(30)
+        self._flow_back_btn.setStyleSheet(self._flow_back_btn_style())
+        self._flow_back_btn.clicked.connect(self._back_to_round_view)
+        top_row.addWidget(self._flow_back_btn)
 
-        title = QLabel("Tüm 14 Round Akışı  (FIPS 197 referans biçimi)")
-        title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        top_row.addWidget(title, stretch=1)
+        self._flow_title = QLabel("Tüm 14 Round Akışı  (FIPS 197 referans biçimi)")
+        self._flow_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        self._flow_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._flow_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        top_row.addWidget(self._flow_title, stretch=1)
         top_row.addStretch()
         lay.addLayout(top_row)
 
         # Açıklayıcı alt başlık
-        legend = QLabel(
+        self._flow_legend = QLabel(
             "Her satır bir round'u gösterir. Soldan sağa: Başlangıç → SubBytes → "
             "ShiftRows → MixColumns ⊕ Round Key.   "
             "Round 0 sadece AddRoundKey içerir; Round 14'te MixColumns atlanır."
         )
-        legend.setFont(QFont("IBM Plex Sans", 9))
-        legend.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-        legend.setWordWrap(True)
-        legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(legend)
+        self._flow_legend.setFont(QFont("IBM Plex Sans", 9))
+        self._flow_legend.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._flow_legend.setWordWrap(True)
+        self._flow_legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(self._flow_legend)
 
         # Scroll area içine yeni round flow widget'ı
         from PyQt6.QtWidgets import QScrollArea
@@ -1869,7 +1941,8 @@ class AESAnimationWindow(CryptoAnimationWindow):
             round_keys_hex=self._round_keys_hex,
             initial_state_hex=self._initial_state_hex,
         )
-        scroll = QScrollArea()
+        self._flow_scroll = QScrollArea()
+        scroll = self._flow_scroll
         scroll.setWidget(flow)
         scroll.setWidgetResizable(False)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -1900,7 +1973,8 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._match_lbl.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        card = QFrame()
+        self._match_card = QFrame()
+        card = self._match_card
         card.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
@@ -1978,9 +2052,64 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"color: {ANIM_COLORS['text_primary']}; }}"
         )
 
+    @staticmethod
+    def _flow_btn_style() -> str:
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; border-radius: 5px; "
+            f"padding: 4px 12px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
+
+    @staticmethod
+    def _flow_back_btn_style() -> str:
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
+            f"color: {ANIM_COLORS['text_secondary']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 5px; padding: 4px 12px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; }}"
+        )
+
     def _update_round_bar(self, active: int) -> None:
+        self._active_round = active
         for i, btn in enumerate(self._round_btns):
             btn.setStyleSheet(self._round_btn_style(i == active))
+
+    def _restyle_content(self) -> None:
+        """Tema değişiminde QLabel/QFrame tabanlı AES içeriğini durum bozmadan
+        yeniden boyar. QPainter widget'ları (matrisler, shift/mix/sub/ark/flow)
+        refresh_theme'deki update() ile yenilenir."""
+        _card = (
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; border-radius: 6px; }}"
+        )
+        self._rb_frame.setStyleSheet(_card)
+        self._flow_btn.setStyleSheet(self._flow_btn_style())
+        self._update_round_bar(getattr(self, "_active_round", 0))
+        self._op_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._desc_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._mat_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {ANIM_COLORS['accent_blue']}; border-radius: 8px; }}"
+        )
+        # Akış sayfası
+        self._flow_back_btn.setStyleSheet(self._flow_back_btn_style())
+        self._flow_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._flow_legend.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._flow_scroll.setStyleSheet(
+            f"QScrollArea {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        # Eşleşme kartı
+        self._match_card.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        # QLabel tabanlı sayfa widget'ları
+        for w in (getattr(self, "_intro", None), getattr(self, "_plaintext_widget", None)):
+            if w is not None and hasattr(w, "restyle"):
+                w.restyle()
 
     # ------------------------------------------------------------------
     # Adım render

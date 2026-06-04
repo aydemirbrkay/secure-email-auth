@@ -197,27 +197,17 @@ class CryptoAnimationWindow(QWidget):
         self._btn_close.setStyleSheet(_close_style())
 
     def refresh_theme(self) -> None:
-        """Tema değişiminde tüm pencereyi (chrome + içerik) yeniden temalandırır.
+        """Tema değişiminde pencereyi DURUMUNU BOZMADAN yeniden temalandırır.
 
-        İçerik alt-widget'ları renklerini kurulumda sabitlediğinden, içerik
-        sıfırdan yeniden kurulur ve görünür adım geri yüklenir.
+        Chrome (başlık/progress/butonlar/arka plan) stilleri yeniden uygulanır;
+        QPainter tabanlı içerik (SHA diyagramı, matrisler, byte ızgaraları)
+        ANIM_COLORS'u çizim anında okuduğu için update() ile canlı yeniden
+        boyanır. İçerik YENİDEN KURULMAZ → animasyon durumu (round, timer,
+        görünür adım) korunur; animasyon sıfırlanmaz/bitmez.
         """
         self._apply_base_styles()
-        self._rebuild_content()
-        self.update()
-
-    def _rebuild_content(self) -> None:
-        """content_area'yı temizleyip _init_content ile yeniden kurar, adımı korur."""
-        self._stop_timers()
-        while self.content_layout.count():
-            item = self.content_layout.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
-        self._init_content()
-        # Görünür adımı ve ilerleme çubuğunu geri yükle
-        self._render_step(self.current_step)
-        self._progress.setValue(self.current_step + 1)
+        for w in self.findChildren(QWidget):
+            w.update()
 
     # ------------------------------------------------------------------
     # Alt sınıf arayüzü

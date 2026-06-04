@@ -169,23 +169,34 @@ def _png_icon_pixmap(filename: str, color: str, size: int, thickness: float = 1.
     return QPixmap.fromImage(img)
 
 
-def _make_step_box(title: str, content: str, border_color: str) -> QGroupBox:
-    """Kümülatif görselleştirme için renkli çerçeveli kutucuk oluşturur."""
-    box = QGroupBox(title)
+def _style_step_box(box: QGroupBox, border_color: str) -> None:
+    """Adım kutusunun kenarlık/başlık ve içerik metni rengini aktif palete göre
+    (yeniden) uygular. Tema değişiminde panellerden tekrar çağrılır."""
     box.setStyleSheet(
         f"QGroupBox {{ border: 2px solid {border_color}; border-radius: 8px; "
         f"margin-top: 14px; padding: 14px 8px 8px 8px; }}"
         f"QGroupBox::title {{ color: {border_color}; font-family: 'Georgia', 'Palatino Linotype', serif; "
         f"font-weight: bold; font-size: 15px; }}"
     )
+    lbl = getattr(box, "_content_lbl", None)
+    if lbl is not None:
+        lbl.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 14px;")
+
+
+def _make_step_box(title: str, content: str, border_color: str) -> QGroupBox:
+    """Kümülatif görselleştirme için renkli çerçeveli kutucuk oluşturur."""
+    box = QGroupBox(title)
     layout = QVBoxLayout(box)
     layout.setContentsMargins(8, 18, 8, 8)
 
     lbl = QLabel(content)
     lbl.setWordWrap(True)
-    lbl.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 14px;")
     lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     layout.addWidget(lbl)
+
+    # Tema değişiminde yeniden stillendirilebilmesi için içerik etiketini sakla.
+    box._content_lbl = lbl  # type: ignore[attr-defined]
+    _style_step_box(box, border_color)
 
     return box
 

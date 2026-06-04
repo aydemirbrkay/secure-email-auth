@@ -308,7 +308,7 @@ class BobDecryptDiagramWidget(QWidget):
 
 
 from kriptografi.crypto_core import EncryptedPacket, StepResult
-from kriptografi.utils import _build_step_content, _make_step_box
+from kriptografi.utils import _build_step_content, _make_step_box, _style_step_box
 from arayuz.theme import COLORS, STEP_COLORS_BOB
 
 
@@ -420,6 +420,9 @@ class BobPanel(QWidget):
             f"QPushButton:disabled {{ background: {c['bg_card']}; "
             f"border: 1px solid {c['border']}; color: {c['text_muted']}; }}"
         )
+        # Mevcut adım kutularını da aktif temaya göre yeniden stillendir
+        for i, box in enumerate(self._step_widgets):
+            _style_step_box(box, STEP_COLORS_BOB[i % len(STEP_COLORS_BOB)])
 
     # ------------------------------------------------------------------
     # Diyagram API

@@ -116,23 +116,15 @@ class CryptoAnimationWindow(QWidget):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
 
-        header = QLabel(self.windowTitle())
-        header.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
-        header.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(header)
+        self._header_lbl = QLabel(self.windowTitle())
+        self._header_lbl.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
+        self._header_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._header_lbl)
 
         self._progress = QProgressBar()
         self._progress.setMaximum(self.total_steps)
         self._progress.setValue(0)
         self._progress.setTextVisible(True)
-        self._progress.setStyleSheet(
-            f"QProgressBar {{ border: 1px solid {ANIM_COLORS['border']}; "
-            f"border-radius: 4px; background: {ANIM_COLORS['bg_card']}; "
-            f"color: {ANIM_COLORS['text_primary']}; text-align: center; height: 18px; }}"
-            f"QProgressBar::chunk {{ background-color: {ANIM_COLORS['accent_blue']}; "
-            f"border-radius: 3px; }}"
-        )
         layout.addWidget(self._progress)
 
         self.content_area = QWidget()
@@ -145,43 +137,87 @@ class CryptoAnimationWindow(QWidget):
 
         if self.manual_mode:
             self._btn_prev = QPushButton("◀  Geri")
-            self._btn_prev.setStyleSheet(_btn_style())
             self._btn_prev.setEnabled(False)
             self._btn_prev.clicked.connect(self._go_back)
             controls.addWidget(self._btn_prev)
 
             self._btn_next = QPushButton("İleri  ▶")
-            self._btn_next.setStyleSheet(_btn_style())
             self._btn_next.clicked.connect(self._advance_step)
             controls.addWidget(self._btn_next)
         else:
-            speed_lbl = QLabel("Hız:")
-            speed_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
-            controls.addWidget(speed_lbl)
+            self._speed_lbl = QLabel("Hız:")
+            controls.addWidget(self._speed_lbl)
 
             self._speed_combo = QComboBox()
             self._speed_combo.addItems(list(_SPEED_MAP.keys()))
             self._speed_combo.setCurrentText("Normal")
+            self._speed_combo.currentTextChanged.connect(self._on_speed_changed)
+            controls.addWidget(self._speed_combo)
+
+        controls.addStretch()
+
+        self._btn_close = QPushButton("✕  Kapat")
+        if self._on_close is not None:
+            self._btn_close.clicked.connect(self._on_close)
+        else:
+            self._btn_close.clicked.connect(self.close)
+        controls.addWidget(self._btn_close)
+
+        layout.addLayout(controls)
+
+        self._apply_base_styles()
+
+    def _apply_base_styles(self) -> None:
+        """Pencere çerçevesi (chrome) stillerini aktif palete göre uygular."""
+        self.setStyleSheet(
+            f"background-color: {ANIM_COLORS['bg_main']}; "
+            f"color: {ANIM_COLORS['text_primary']};"
+        )
+        self._header_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        self._progress.setStyleSheet(
+            f"QProgressBar {{ border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 4px; background: {ANIM_COLORS['bg_card']}; "
+            f"color: {ANIM_COLORS['text_primary']}; text-align: center; height: 18px; }}"
+            f"QProgressBar::chunk {{ background-color: {ANIM_COLORS['accent_blue']}; "
+            f"border-radius: 3px; }}"
+        )
+        if hasattr(self, "_btn_prev"):
+            self._btn_prev.setStyleSheet(_btn_style())
+        if hasattr(self, "_btn_next"):
+            self._btn_next.setStyleSheet(_btn_style())
+        if hasattr(self, "_speed_lbl"):
+            self._speed_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        if hasattr(self, "_speed_combo"):
             self._speed_combo.setStyleSheet(
                 f"QComboBox {{ background: {ANIM_COLORS['bg_input']}; "
                 f"color: {ANIM_COLORS['text_primary']}; "
                 f"border: 1px solid {ANIM_COLORS['border']}; "
                 f"border-radius: 4px; padding: 4px 8px; }}"
             )
-            self._speed_combo.currentTextChanged.connect(self._on_speed_changed)
-            controls.addWidget(self._speed_combo)
+        self._btn_close.setStyleSheet(_close_style())
 
-        controls.addStretch()
+    def refresh_theme(self) -> None:
+        """Tema değişiminde tüm pencereyi (chrome + içerik) yeniden temalandırır.
 
-        btn_close = QPushButton("✕  Kapat")
-        btn_close.setStyleSheet(_close_style())
-        if self._on_close is not None:
-            btn_close.clicked.connect(self._on_close)
-        else:
-            btn_close.clicked.connect(self.close)
-        controls.addWidget(btn_close)
+        İçerik alt-widget'ları renklerini kurulumda sabitlediğinden, içerik
+        sıfırdan yeniden kurulur ve görünür adım geri yüklenir.
+        """
+        self._apply_base_styles()
+        self._rebuild_content()
+        self.update()
 
-        layout.addLayout(controls)
+    def _rebuild_content(self) -> None:
+        """content_area'yı temizleyip _init_content ile yeniden kurar, adımı korur."""
+        self._stop_timers()
+        while self.content_layout.count():
+            item = self.content_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self._init_content()
+        # Görünür adımı ve ilerleme çubuğunu geri yükle
+        self._render_step(self.current_step)
+        self._progress.setValue(self.current_step + 1)
 
     # ------------------------------------------------------------------
     # Alt sınıf arayüzü

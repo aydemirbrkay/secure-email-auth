@@ -35,6 +35,7 @@ from kriptografi.crypto_core import CryptoCore, EncryptedPacket
 from kriptografi.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
 from kriptografi.utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
+from animation_modals.base import CryptoAnimationWindow
 from arayuz import theme
 from arayuz.theme import COLORS, MANAGER
 from arayuz.theme_toggle import ThemeToggle
@@ -428,6 +429,9 @@ class MainWindow(QMainWindow):
             panel = getattr(self, panel_attr, None)
             if panel is not None and hasattr(panel, "_apply_styles"):
                 panel._apply_styles()
+        # Açık (gömülü) animasyon pencerelerini içerikleriyle yeniden temalandır
+        for anim in self.findChildren(CryptoAnimationWindow):
+            anim.refresh_theme()
         for w in self.findChildren(QWidget):
             w.update()
 

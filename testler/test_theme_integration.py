@@ -74,6 +74,42 @@ class TestThemeIntegration(unittest.TestCase):
             self.assertIsNotNone(w)
             w.deleteLater()
 
+    def test_open_animations_refresh_theme(self) -> None:
+        """Açık animasyon, tema değişiminde içerik+chrome yeniden temalanır;
+        görünür adım korunur ve istisna atılmaz (RSA/SHA/AES)."""
+        import os
+        from arayuz import theme
+        from animation_modals import (
+            RSAAnimationWindow,
+            SHA256AnimationWindow,
+            AESAnimationWindow,
+        )
+
+        theme.MANAGER.set_mode("light")
+        builders = [
+            lambda: RSAAnimationWindow("QUJDRA==", "WFlaVw==", on_close=lambda: None),
+            lambda: SHA256AnimationWindow("merhaba dünya", "ab" * 32, on_close=lambda: None),
+            lambda: AESAnimationWindow(os.urandom(32), b"merhaba dunya", "", on_close=lambda: None),
+        ]
+        for build in builders:
+            w = build()
+            for _ in range(min(2, max(1, w.total_steps - 1))):
+                w._advance_step()
+            before = w.current_step
+
+            theme.MANAGER.set_mode("dark")
+            w.refresh_theme()
+            self.assertEqual(w.current_step, before)
+
+            theme.MANAGER.set_mode("light")
+            w.refresh_theme()
+            self.assertEqual(w.current_step, before)
+
+            w._stop_timers()
+            w.deleteLater()
+
+        theme.MANAGER.set_mode("dark")
+
 
 if __name__ == "__main__":
     unittest.main()

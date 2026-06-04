@@ -1098,6 +1098,7 @@ class _SHA256IntroWidget(QWidget):
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(title)
+        self._title_lbl = title
 
         # ── Yatay bölüm: sol=register demo, sağ=akış şeması ──
         h_row = QHBoxLayout()
@@ -1110,6 +1111,7 @@ class _SHA256IntroWidget(QWidget):
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
         )
+        self._left_frame = left_frame
         left_lay = QVBoxLayout(left_frame)
         left_lay.setContentsMargins(8, 6, 8, 6)
         left_lay.setSpacing(2)
@@ -1117,6 +1119,7 @@ class _SHA256IntroWidget(QWidget):
         demo_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         demo_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         demo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._demo_lbl = demo_lbl
         left_lay.addWidget(demo_lbl)
         self._reg_demo = _RegisterDemoWidget()
         left_lay.addWidget(self._reg_demo, stretch=1)
@@ -1132,36 +1135,43 @@ class _SHA256IntroWidget(QWidget):
         right_lay = right_container_lay
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # Akış şeması kutular + oklar
+        # Akış şeması kutular + oklar. Renk DEĞERİ değil ANAHTARI saklanır;
+        # tema değişiminde restyle ANIM_COLORS[key] ile yeniden çözer.
         flow_items = [
-            ("plain",  "Mesaj Girişi",                          ANIM_COLORS["text_secondary"],  None),
+            ("plain",  "Mesaj Girişi",                          "text_secondary",  None),
             ("arrow",  None, None, None),
-            ("detail", "Padding  (512-bit katı)",                ANIM_COLORS["accent_peach"],
+            ("detail", "Padding  (512-bit katı)",                "accent_peach",
              ["→  '1' biti eklenir",
               "→  '0' bitleriyle 512-bit katına tamamlanır",
               "→  Sonuna 64-bit mesaj uzunluğu yazılır"]),
             ("arrow",  None, None, None),
-            ("detail", "Blok Bölme  (N × 512-bit)",              ANIM_COLORS["accent_blue"],
+            ("detail", "Blok Bölme  (N × 512-bit)",              "accent_blue",
              ["→  Her blok 64 bayt / 512 bit",
               "→  16 adet 32-bit kelime  (W0 – W15)"]),
             ("arrow",  None, None, None),
-            ("detail", "Sıkıştırma  (64 Round / Blok)",          ANIM_COLORS["accent_mauve"],
+            ("detail", "Sıkıştırma  (64 Round / Blok)",          "accent_mauve",
              ["→  Çalışma değişkenleri: A, B, C, D, E, F, G, H",
               "→  T1 = Σ1(E) + Ch(E,F,G) + H + Kᵢ + Wᵢ",
               "→  T2 = Σ0(A) + Maj(A,B,C)"]),
             ("arrow",  None, None, None),
-            ("plain",  "H Değerlerini Güncelle",                 ANIM_COLORS["accent_yellow"],   None),
+            ("plain",  "H Değerlerini Güncelle",                 "accent_yellow",   None),
             ("arrow",  None, None, None),
-            ("plain",  "256-bit SHA-256 Hash",                   ANIM_COLORS["accent_green"],    None),
+            ("plain",  "256-bit SHA-256 Hash",                   "accent_green",    None),
         ]
 
-        for kind, text, color, subs in flow_items:
+        # restyle() için stillenebilir kutu/ok widget'larını sakla.
+        self._flow_widgets: list[QFrame] = []
+        self._arrow_lbls: list[QLabel] = []
+        for kind, text, color_key, subs in flow_items:
             if kind == "arrow":
                 w = self._make_arrow()
+                self._arrow_lbls.append(w)
             elif kind == "plain":
-                w = self._make_box(text, color)
+                w = self._make_box(text, color_key)
+                self._flow_widgets.append(w)
             else:
-                w = self._make_detail_box(text, subs, color)
+                w = self._make_detail_box(text, subs, color_key)
+                self._flow_widgets.append(w)
             right_lay.addWidget(w)
             w.setVisible(False)
             self._reveal_widgets.append(w)
@@ -1181,8 +1191,10 @@ class _SHA256IntroWidget(QWidget):
         self._reveal_widgets.append(self._btn_start)
 
     @staticmethod
-    def _make_box(text: str, color: str) -> QFrame:
+    def _make_box(text: str, color_key: str) -> QFrame:
+        color = ANIM_COLORS[color_key]
         f = QFrame()
+        f._color_key = color_key  # type: ignore[attr-defined]
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -1195,11 +1207,15 @@ class _SHA256IntroWidget(QWidget):
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setWordWrap(True)
         lay.addWidget(lbl)
+        f._title_lbl = lbl       # type: ignore[attr-defined]
+        f._sub_lbls = []          # type: ignore[attr-defined]
         return f
 
     @staticmethod
-    def _make_detail_box(title: str, items: list[str], color: str) -> QFrame:
+    def _make_detail_box(title: str, items: list[str], color_key: str) -> QFrame:
+        color = ANIM_COLORS[color_key]
         f = QFrame()
+        f._color_key = color_key  # type: ignore[attr-defined]
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -1213,13 +1229,31 @@ class _SHA256IntroWidget(QWidget):
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
         t.setWordWrap(True)
         lay.addWidget(t)
+        sub_lbls = []
         for item in items:
             o = QLabel(item)
             o.setFont(QFont("Segoe UI", 9))
             o.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
             o.setWordWrap(True)
             lay.addWidget(o)
+            sub_lbls.append(o)
+        f._title_lbl = t          # type: ignore[attr-defined]
+        f._sub_lbls = sub_lbls    # type: ignore[attr-defined]
         return f
+
+    @staticmethod
+    def _restyle_flow_box(f: QFrame) -> None:
+        """Tema değişiminde akış kutusunu (plain/detail) saklı color_key ile
+        yeniden boyar; metin/görünürlük korunur."""
+        color = ANIM_COLORS[f._color_key]  # type: ignore[attr-defined]
+        f.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 2px solid {color}; border-radius: 6px; }}"
+        )
+        f._title_lbl.setStyleSheet(f"color: {color}; border: none;")  # type: ignore[attr-defined]
+        for o in f._sub_lbls:  # type: ignore[attr-defined]
+            o.setStyleSheet(
+                f"color: {ANIM_COLORS['text_secondary']}; border: none;")
 
     @staticmethod
     def _make_arrow() -> QLabel:
@@ -1229,6 +1263,27 @@ class _SHA256IntroWidget(QWidget):
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setFixedHeight(16)
         return lbl
+
+    def restyle(self) -> None:
+        """Tema değişiminde QLabel/QFrame tabanlı içeriği DURUM BOZMADAN yeniden
+        boyar (metin/görünürlük/timer korunur). İçteki _RegisterDemoWidget
+        QPainter'dır → refresh_theme'deki update() ile yenilenir."""
+        self._title_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        self._left_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 10px; }}"
+        )
+        self._demo_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        for f in self._flow_widgets:
+            self._restyle_flow_box(f)
+        for lbl in self._arrow_lbls:
+            lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; border: none;")
+        self._btn_start.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border: none; "
+            f"border-radius: 6px; padding: 6px 18px; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
 
     def start(self) -> None:
         self._reveal_timer.start(500)
@@ -1293,6 +1348,7 @@ class _SHAMessagePrepWidget(QWidget):
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
+        self._title_lbl = title
 
         # Mesaj label — TAM mesaj gösterilir (eski 60 karakter kesilmesi
         # kaldırıldı); uzun mesajlarda QLabel word-wrap ile alt satıra iner.
@@ -1320,6 +1376,7 @@ class _SHAMessagePrepWidget(QWidget):
         detail_lbl.setFont(QFont("IBM Plex Sans", 9))
         detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         lay.addWidget(detail_lbl)
+        self._detail_lbl = detail_lbl
 
         # max_cells = len(data): cap yok, tüm byte'lar gösterilir.
         # Boş mesaj için fallback 1 (görsel olarak hiçbir kutu çizmez).
@@ -1347,6 +1404,7 @@ class _SHAMessagePrepWidget(QWidget):
         strip_lbl.setFont(QFont("IBM Plex Sans", 9))
         strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         lay.addWidget(strip_lbl)
+        self._strip_lbl = strip_lbl
         self._strip = _ByteStripWidget(message_bytes)
         strip_scroll = QScrollArea()
         strip_scroll.setWidget(self._strip)
@@ -1386,6 +1444,22 @@ class _SHAMessagePrepWidget(QWidget):
         # Timer
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
+
+    def restyle(self) -> None:
+        """Tema değişiminde QLabel stillerini DURUM BOZMADAN yeniden uygular.
+        İçteki _ColoredByteGridWidget / _ByteStripWidget QPainter'dır →
+        refresh_theme'deki update() ile yenilenir, dokunulmaz."""
+        self._title_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        label_color = (ANIM_COLORS["text_muted"] if self._is_empty
+                       else ANIM_COLORS["text_secondary"])
+        self._msg_lbl.setStyleSheet(f"color: {label_color};")
+        self._detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._summary.setStyleSheet(
+            f"color: {ANIM_COLORS['accent_green']}; "
+            f"padding: 8px; background: {ANIM_COLORS['bg_card']}; "
+            f"border-radius: 6px;"
+        )
 
     def start(self) -> None:
         self._timer.start(self._TICK_MS)
@@ -1477,6 +1551,8 @@ class _SHA256PaddingWidget(QWidget):
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
+        self._title_lbl = title
+        self._msg_is_empty = len(message_bytes) == 0
 
         # Mesaj label — Adım 1 ile simetri; kullanıcının yazdığı metin tam
         # haliyle görünür (word-wrap ile uzun mesajlar alt satıra iner).
@@ -1612,6 +1688,24 @@ class _SHA256PaddingWidget(QWidget):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
+
+    def restyle(self) -> None:
+        """Tema değişiminde QLabel stillerini DURUM BOZMADAN yeniden uygular
+        (metin/görünürlük/faz/timer korunur). İçteki _ColoredByteGridWidget
+        QPainter'dır → refresh_theme'deki update() ile yenilenir."""
+        self._title_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
+        msg_color = (ANIM_COLORS["text_muted"] if self._msg_is_empty
+                     else ANIM_COLORS["text_secondary"])
+        self._msg_lbl.setStyleSheet(f"color: {msg_color};")
+        self._info_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS['text_secondary']};")
+        self._phase_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS['accent_green']};")
+        self._bitlen_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS['accent_yellow']};")
+        if self._block_lbl is not None:
+            self._block_lbl.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_yellow']};")
 
     def _full_padding_mask(self) -> list[bool]:
         """Tam padding mask — mesaj byte'ları False, geri kalan tüm
@@ -1808,6 +1902,52 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
     # İçerik kurulumu
     # ------------------------------------------------------------------
 
+    def _restyle_content(self) -> None:
+        """Tema değişiminde QLabel/QFrame tabanlı içeriği DURUM BOZMADAN yeniden
+        boyar (içerik rebuild edilmez; current_step/timer/görünür sayfa korunur).
+        QPainter sayfaları (diagram, register demo, W genişletme, eşleşme)
+        refresh_theme'deki update() ile canlı yenilenir."""
+        # QLabel tabanlı sayfa widget'ları
+        for w in (
+            getattr(self, "_page_intro", None),
+            getattr(self, "_msgprep_widget", None),
+            getattr(self, "_padding_widget", None),
+        ):
+            if w is not None and hasattr(w, "restyle"):
+                w.restyle()
+
+        # _make_wexpand_page başlığı
+        if hasattr(self, "_wexpand_title"):
+            self._wexpand_title.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_mauve']};")
+
+        # _make_match_page başlığı
+        if hasattr(self, "_match_title"):
+            self._match_title.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_green']};")
+
+        # _make_diagram_page chrome'u (başlık, round bar, blok nav, zincir)
+        if hasattr(self, "_diag_title"):
+            self._diag_title.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_yellow']};")
+        if hasattr(self, "_diag_rb_frame"):
+            self._diag_rb_frame.setStyleSheet(
+                f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+                f"border-radius: 6px; }}"
+            )
+        if getattr(self, "_diag_blk_lbl", None) is not None:
+            self._diag_blk_lbl.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_yellow']};")
+        if getattr(self, "_diag_sep", None) is not None:
+            self._diag_sep.setStyleSheet(f"color: {ANIM_COLORS['border']};")
+        if hasattr(self, "_diag_round_btns"):
+            active = getattr(self, "_diag_active_round_idx", 0)
+            for i, btn in enumerate(self._diag_round_btns):
+                btn.setStyleSheet(self._diag_round_btn_style(i == active))
+        if hasattr(self, "_chain_lbl"):
+            self._chain_lbl.setStyleSheet(
+                f"color: {ANIM_COLORS['text_muted']};")
+
     def _init_content(self) -> None:
         from PyQt6.QtWidgets import QStackedWidget
 
@@ -1905,6 +2045,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_mauve']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
+        self._wexpand_title = title
 
         widget = _WExpansionWidget(self._data.get("w_expansion") or [])
         wexp_scroll = QScrollArea()
@@ -1948,6 +2089,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border-radius: 6px; }}"
         )
+        self._diag_rb_frame = rb_frame
         rb_lay = QHBoxLayout(rb_frame)
         rb_lay.setContentsMargins(6, 4, 6, 4)
         rb_lay.setSpacing(4)
@@ -1956,6 +2098,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._diag_blk_prev: QPushButton | None = None
         self._diag_blk_next: QPushButton | None = None
         self._diag_blk_lbl: QLabel | None = None
+        self._diag_sep: QLabel | None = None
         if self._data["blocks_count"] > 1:
             self._diag_blk_prev = QPushButton("◀ Blok")
             self._diag_blk_prev.setFixedHeight(28)
@@ -1982,8 +2125,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             sep = QLabel("│")
             sep.setStyleSheet(f"color: {ANIM_COLORS['border']};")
             rb_lay.addWidget(sep)
+            self._diag_sep = sep
 
         # Round buton dizisi — 9 buton (snapshot başına bir tane)
+        self._diag_active_round_idx = 0
         self._diag_round_btns: list[QPushButton] = []
         round_labels = ["R1", "R9", "R17", "R25", "R33", "R41", "R49", "R57", "R64"]
         for idx, lbl in enumerate(round_labels):
@@ -2082,6 +2227,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             self._btn_next.setText("İleri  ▶")
 
     def _diag_update_round_bar(self, in_block_idx: int) -> None:
+        self._diag_active_round_idx = in_block_idx
         for i, btn in enumerate(self._diag_round_btns):
             btn.setStyleSheet(self._diag_round_btn_style(i == in_block_idx))
 
@@ -2102,6 +2248,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(title)
+        self._match_title = title
 
         self._match_widget = _MatchAssemblyWidget()
         match_scroll = QScrollArea()

@@ -22,41 +22,34 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-ANIM_COLORS = {
-    "bg_main":        "#3D4451",
-    "bg_card":        "#536070",
-    "bg_input":       "#4D5769",
-    "text_primary":   "#F1F3F7",
-    "text_secondary": "#CBD5E0",
-    "text_muted":     "#8896A8",
-    "accent_blue":    "#5B8EC2",
-    "accent_green":   "#6FC28C",
-    "accent_yellow":  "#C99B24",
-    "accent_mauve":   "#9B7EC7",
-    "accent_peach":   "#C4834A",
-    "border":         "#5A6272",
-}
+# Paylaşılan tek renk kaynağı (arayuz.theme). Tema değişiminde yerinde güncellenir,
+# bu yüzden animasyon pencereleri açıldıkları anda aktif temayı alır.
+from arayuz.theme import ANIM_COLORS
 
 _SPEED_MAP: dict[str, int] = {"Yavaş": 2000, "Normal": 1500, "Hızlı": 800}
 
-_BTN_STYLE = (
-    f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-    f"color: #FFFFFF; border: none; "
-    f"border-radius: 6px; padding: 8px 22px; font-weight: bold; font-size: 13px; "
-    f"min-height: 34px; min-width: 96px; }}"
-    f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-    f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
-    f"color: {ANIM_COLORS['text_muted']}; }}"
-)
 
-_CLOSE_STYLE = (
-    f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
-    f"color: {ANIM_COLORS['text_secondary']}; border: 1px solid {ANIM_COLORS['border']}; "
-    f"border-radius: 6px; padding: 8px 18px; font-size: 13px; "
-    f"min-height: 34px; }}"
-    f"QPushButton:hover {{ background: {ANIM_COLORS['accent_peach']}; "
-    f"color: #FFFFFF; }}"
-)
+def _btn_style() -> str:
+    return (
+        f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+        f"color: #FFFFFF; border: none; "
+        f"border-radius: 6px; padding: 8px 22px; font-weight: bold; font-size: 13px; "
+        f"min-height: 34px; min-width: 96px; }}"
+        f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
+        f"color: {ANIM_COLORS['text_muted']}; }}"
+    )
+
+
+def _close_style() -> str:
+    return (
+        f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
+        f"color: {ANIM_COLORS['text_secondary']}; border: 1px solid {ANIM_COLORS['border']}; "
+        f"border-radius: 6px; padding: 8px 18px; font-size: 13px; "
+        f"min-height: 34px; }}"
+        f"QPushButton:hover {{ background: {ANIM_COLORS['accent_peach']}; "
+        f"color: #FFFFFF; }}"
+    )
 
 
 class CryptoAnimationWindow(QWidget):
@@ -152,13 +145,13 @@ class CryptoAnimationWindow(QWidget):
 
         if self.manual_mode:
             self._btn_prev = QPushButton("◀  Geri")
-            self._btn_prev.setStyleSheet(_BTN_STYLE)
+            self._btn_prev.setStyleSheet(_btn_style())
             self._btn_prev.setEnabled(False)
             self._btn_prev.clicked.connect(self._go_back)
             controls.addWidget(self._btn_prev)
 
             self._btn_next = QPushButton("İleri  ▶")
-            self._btn_next.setStyleSheet(_BTN_STYLE)
+            self._btn_next.setStyleSheet(_btn_style())
             self._btn_next.clicked.connect(self._advance_step)
             controls.addWidget(self._btn_next)
         else:
@@ -181,7 +174,7 @@ class CryptoAnimationWindow(QWidget):
         controls.addStretch()
 
         btn_close = QPushButton("✕  Kapat")
-        btn_close.setStyleSheet(_CLOSE_STYLE)
+        btn_close.setStyleSheet(_close_style())
         if self._on_close is not None:
             btn_close.clicked.connect(self._on_close)
         else:

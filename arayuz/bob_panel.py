@@ -342,7 +342,6 @@ class BobPanel(QWidget):
         _th.addStretch()
         self._title_label = QLabel("Alıcı — Bob")
         self._title_label.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
-        self._title_label.setStyleSheet(f"color: {COLORS['accent_green']};")
         _th.addWidget(self._title_label)
         _th.addStretch()
         layout.addWidget(self._title_widget)
@@ -360,12 +359,6 @@ class BobPanel(QWidget):
         self._btn_close_diagram = QPushButton("✖  Kapat")
         self._btn_close_diagram.setEnabled(False)
         self._btn_close_diagram.setFixedHeight(32)
-        self._btn_close_diagram.setStyleSheet(
-            "QPushButton { background: rgba(198,40,40,0.12); border: 2px solid #C62828; "
-            "border-radius: 6px; color: #C62828; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background: rgba(198,40,40,0.28); }"
-            "QPushButton:disabled { background: #536070; border: 1px solid #5A6272; color: #8896A8; }"
-        )
         self._btn_close_diagram.clicked.connect(self._on_close_diagram)
         diag_layout.addWidget(self._btn_close_diagram)
 
@@ -376,9 +369,6 @@ class BobPanel(QWidget):
         recv_layout = QVBoxLayout(self._received_group)
         self._received_label = QLabel("Henüz bir paket alınmadı.")
         self._received_label.setWordWrap(True)
-        self._received_label.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 12px;"
-        )
         recv_layout.addWidget(self._received_label)
         layout.addWidget(self._received_group)
 
@@ -409,10 +399,27 @@ class BobPanel(QWidget):
 
         self.status_label = QLabel("Alice'den paket bekleniyor...")
         self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 12px; padding: 4px;"
-        )
         layout.addWidget(self.status_label)
+
+        self._apply_styles()
+
+    def _apply_styles(self) -> None:
+        """Renk taşıyan stilleri aktif palete göre (yeniden) uygular."""
+        c = COLORS
+        self._title_label.setStyleSheet(f"color: {c['accent_green']};")
+        _muted = f"color: {c['text_secondary']}; font-size: 12px;"
+        self._received_label.setStyleSheet(_muted)
+        self.status_label.setStyleSheet(
+            f"color: {c['text_secondary']}; font-size: 12px; padding: 4px;"
+        )
+        self._btn_close_diagram.setStyleSheet(
+            f"QPushButton {{ background: rgba(217,85,85,0.12); "
+            f"border: 2px solid {c['accent_red']}; border-radius: 6px; "
+            f"color: {c['accent_red']}; font-weight: bold; font-size: 12px; }}"
+            f"QPushButton:hover {{ background: rgba(217,85,85,0.28); }}"
+            f"QPushButton:disabled {{ background: {c['bg_card']}; "
+            f"border: 1px solid {c['border']}; color: {c['text_muted']}; }}"
+        )
 
     # ------------------------------------------------------------------
     # Diyagram API

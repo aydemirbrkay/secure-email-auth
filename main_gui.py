@@ -35,7 +35,9 @@ from kriptografi.crypto_core import CryptoCore, EncryptedPacket
 from kriptografi.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
 from kriptografi.utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
-from arayuz.theme import COLORS, GLOBAL_STYLESHEET
+from arayuz import theme
+from arayuz.theme import COLORS, MANAGER
+from arayuz.theme_toggle import ThemeToggle
 from arayuz.alice_panel import AlicePanel
 from arayuz.bob_panel import BobPanel
 from arayuz.toast import VerificationToast
@@ -86,47 +88,38 @@ class MainWindow(QMainWindow):
         header_row = QHBoxLayout()
         header_row.setSpacing(0)
         header_row.addStretch()
-        header = QLabel("Secure Email Authentication and Message Integrity")
-        header.setFont(QFont("Georgia", 20, QFont.Weight.Bold))
-        header.setStyleSheet(f"color: {COLORS['accent_blue']}; padding: 8px 0px 8px 8px;")
-        header_row.addWidget(header)
-        _nr = QLabel()
-        _nr.setPixmap(_png_icon_pixmap("secure-email-simge.png", COLORS["text_primary"], 96, thickness=1.25))
-        header_row.addWidget(_nr)
+        self._header = QLabel("Secure Email Authentication and Message Integrity")
+        self._header.setFont(QFont("Georgia", 20, QFont.Weight.Bold))
+        header_row.addWidget(self._header)
+        self._header_icon = QLabel()
+        header_row.addWidget(self._header_icon)
         header_row.addStretch()
+        self._theme_toggle = ThemeToggle()
+        header_row.addWidget(self._theme_toggle, alignment=Qt.AlignmentFlag.AlignVCenter)
         main_layout.addLayout(header_row)
 
-        subtitle = QLabel(
+        self._subtitle = QLabel(
             "Gizlilik (Confidentiality)  •  Bütünlük (Integrity)  •  Kimlik Doğrulama (Authentication)"
         )
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 13px;")
-        main_layout.addWidget(subtitle)
+        self._subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self._subtitle)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(3)
 
-        alice_frame = QFrame()
-        alice_frame.setStyleSheet(
-            f"QFrame {{ background-color: {COLORS['bg_panel']}; border-radius: 12px; "
-            f"border: 2px solid {COLORS['border']}; }}"
-        )
-        alice_inner = QVBoxLayout(alice_frame)
+        self._alice_frame = QFrame()
+        alice_inner = QVBoxLayout(self._alice_frame)
         alice_inner.setContentsMargins(0, 0, 0, 0)
         self._alice_panel = AlicePanel()
         alice_inner.addWidget(self._alice_panel)
-        splitter.addWidget(alice_frame)
+        splitter.addWidget(self._alice_frame)
 
-        bob_frame = QFrame()
-        bob_frame.setStyleSheet(
-            f"QFrame {{ background-color: {COLORS['bg_panel']}; border-radius: 12px; "
-            f"border: 2px solid {COLORS['border']}; }}"
-        )
-        bob_inner = QVBoxLayout(bob_frame)
+        self._bob_frame = QFrame()
+        bob_inner = QVBoxLayout(self._bob_frame)
         bob_inner.setContentsMargins(0, 0, 0, 0)
         self._bob_panel = BobPanel()
         bob_inner.addWidget(self._bob_panel)
-        splitter.addWidget(bob_frame)
+        splitter.addWidget(self._bob_frame)
 
         splitter.setSizes([600, 600])
         main_layout.addWidget(splitter, stretch=1)
@@ -159,29 +152,19 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(controls)
 
         self._key_info_group = QGroupBox("RSA-2048 Anahtar Bilgileri  —  Anahtarlar Başarıyla Üretildi")
-        self._key_info_group.setStyleSheet(
-            f"QGroupBox {{ border: 2px solid {COLORS['accent_green']}; "
-            f"border-radius: 8px; margin-top: 10px; padding: 4px 8px 4px 8px; }}"
-            f"QGroupBox::title {{ color: {COLORS['accent_green']}; "
-            f"font-size: 12px; font-weight: bold; subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
-        )
         self._key_info_group.setVisible(False)
         key_info_layout = QVBoxLayout(self._key_info_group)
         key_info_layout.setSpacing(3)
         key_info_layout.setContentsMargins(6, 8, 6, 4)
 
         alice_row = QHBoxLayout()
-        alice_key_lbl = QLabel("Alice Açık Anahtarı (K⁺_A):")
-        alice_key_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
-        alice_key_lbl.setStyleSheet(f"color: {COLORS['accent_blue']};")
-        alice_key_lbl.setMinimumWidth(190)
-        alice_key_lbl.setMaximumWidth(210)
-        alice_row.addWidget(alice_key_lbl)
+        self._alice_key_lbl = QLabel("Alice Açık Anahtarı (K⁺_A):")
+        self._alice_key_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        self._alice_key_lbl.setMinimumWidth(190)
+        self._alice_key_lbl.setMaximumWidth(210)
+        alice_row.addWidget(self._alice_key_lbl)
         self._alice_key_value = QLabel("")
         self._alice_key_value.setWordWrap(True)
-        self._alice_key_value.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 10px; font-family: monospace;"
-        )
         self._alice_key_value.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
@@ -189,17 +172,13 @@ class MainWindow(QMainWindow):
         key_info_layout.addLayout(alice_row)
 
         bob_row = QHBoxLayout()
-        bob_key_lbl = QLabel("Bob Açık Anahtarı (K⁺_B):")
-        bob_key_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
-        bob_key_lbl.setStyleSheet(f"color: {COLORS['accent_green']};")
-        bob_key_lbl.setMinimumWidth(190)
-        bob_key_lbl.setMaximumWidth(210)
-        bob_row.addWidget(bob_key_lbl)
+        self._bob_key_lbl = QLabel("Bob Açık Anahtarı (K⁺_B):")
+        self._bob_key_lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        self._bob_key_lbl.setMinimumWidth(190)
+        self._bob_key_lbl.setMaximumWidth(210)
+        bob_row.addWidget(self._bob_key_lbl)
         self._bob_key_value = QLabel("")
         self._bob_key_value.setWordWrap(True)
-        self._bob_key_value.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 10px; font-family: monospace;"
-        )
         self._bob_key_value.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
@@ -209,39 +188,32 @@ class MainWindow(QMainWindow):
         self._comparison_group = QGroupBox(
             "Orijinal Mesaj ↔ Alınan Mesaj Karşılaştırması"
         )
-        self._comparison_group.setStyleSheet(
-            f"QGroupBox {{ border: 2px solid {COLORS['accent_teal']}; "
-            f"border-radius: 8px; margin-top: 10px; padding: 4px 8px 4px 8px; }}"
-            f"QGroupBox::title {{ color: {COLORS['accent_teal']}; "
-            f"font-size: 12px; font-weight: bold; subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
-        )
         self._comparison_group.setVisible(False)
         cmp_outer = QVBoxLayout(self._comparison_group)
         cmp_outer.setSpacing(4)
         cmp_outer.setContentsMargins(6, 8, 6, 4)
 
-        _card = f"QFrame {{ background-color: {COLORS['bg_card']}; border: 1px solid {COLORS['border']}; border-radius: 8px; }}"
+        # Kart çerçeveleri tema değişiminde yeniden stillendirilmek üzere toplanır.
+        self._card_frames: list[QFrame] = []
 
         msg_row = QHBoxLayout()
         msg_row.setSpacing(10)
 
-        alice_msg_f = QFrame(); alice_msg_f.setStyleSheet(_card)
+        alice_msg_f = QFrame(); self._card_frames.append(alice_msg_f)
         alice_msg_f.setMinimumHeight(62)
         alice_msg_lay = QVBoxLayout(alice_msg_f)
         alice_msg_lay.setContentsMargins(8, 6, 8, 6)
         alice_msg_lay.setSpacing(2)
-        _lbl = QLabel("Alice'in Gönderdiği")
-        _lbl.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
-        _lbl.setStyleSheet(f"color: {COLORS['accent_blue']};")
-        alice_msg_lay.addWidget(_lbl)
+        self._alice_msg_title = QLabel("Alice'in Gönderdiği")
+        self._alice_msg_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        alice_msg_lay.addWidget(self._alice_msg_title)
         self._alice_msg_cmp = QLabel("")
         self._alice_msg_cmp.setWordWrap(True)
-        self._alice_msg_cmp.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 11px;")
         self._alice_msg_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         alice_msg_lay.addWidget(self._alice_msg_cmp)
         msg_row.addWidget(alice_msg_f, stretch=3)
 
-        msg_mid_f = QFrame(); msg_mid_f.setStyleSheet(_card)
+        msg_mid_f = QFrame(); self._card_frames.append(msg_mid_f)
         msg_mid_f.setMinimumHeight(62)
         msg_mid_f.setMaximumWidth(70)
         msg_mid_lay = QVBoxLayout(msg_mid_f)
@@ -254,22 +226,19 @@ class MainWindow(QMainWindow):
         msg_mid_lay.addWidget(self._cmp_msg_icon)
         self._cmp_msg_label = QLabel("Mesaj")
         self._cmp_msg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._cmp_msg_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 10px; font-weight: bold;")
         msg_mid_lay.addWidget(self._cmp_msg_label)
         msg_row.addWidget(msg_mid_f)
 
-        bob_msg_f = QFrame(); bob_msg_f.setStyleSheet(_card)
+        bob_msg_f = QFrame(); self._card_frames.append(bob_msg_f)
         bob_msg_f.setMinimumHeight(62)
         bob_msg_lay = QVBoxLayout(bob_msg_f)
         bob_msg_lay.setContentsMargins(8, 6, 8, 6)
         bob_msg_lay.setSpacing(2)
-        _lbl2 = QLabel("Bob'un Aldığı")
-        _lbl2.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
-        _lbl2.setStyleSheet(f"color: {COLORS['accent_green']};")
-        bob_msg_lay.addWidget(_lbl2)
+        self._bob_msg_title = QLabel("Bob'un Aldığı")
+        self._bob_msg_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        bob_msg_lay.addWidget(self._bob_msg_title)
         self._bob_msg_cmp = QLabel("")
         self._bob_msg_cmp.setWordWrap(True)
-        self._bob_msg_cmp.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 11px;")
         self._bob_msg_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         bob_msg_lay.addWidget(self._bob_msg_cmp)
         msg_row.addWidget(bob_msg_f, stretch=3)
@@ -279,20 +248,17 @@ class MainWindow(QMainWindow):
         hash_row = QHBoxLayout()
         hash_row.setSpacing(10)
 
-        alice_hash_f = QFrame(); alice_hash_f.setStyleSheet(_card)
+        alice_hash_f = QFrame(); self._card_frames.append(alice_hash_f)
         alice_hash_f.setMinimumHeight(48)
         alice_hash_lay = QVBoxLayout(alice_hash_f)
         alice_hash_lay.setContentsMargins(8, 4, 8, 4)
         self._alice_hash_cmp = QLabel("")
         self._alice_hash_cmp.setWordWrap(True)
-        self._alice_hash_cmp.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 10px; font-family: 'Courier New', monospace;"
-        )
         self._alice_hash_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         alice_hash_lay.addWidget(self._alice_hash_cmp)
         hash_row.addWidget(alice_hash_f, stretch=3)
 
-        hash_mid_f = QFrame(); hash_mid_f.setStyleSheet(_card)
+        hash_mid_f = QFrame(); self._card_frames.append(hash_mid_f)
         hash_mid_f.setMinimumHeight(48)
         hash_mid_f.setMaximumWidth(70)
         hash_mid_lay = QVBoxLayout(hash_mid_f)
@@ -305,19 +271,15 @@ class MainWindow(QMainWindow):
         hash_mid_lay.addWidget(self._cmp_hash_icon)
         self._cmp_hash_label = QLabel("Hash")
         self._cmp_hash_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._cmp_hash_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 10px; font-weight: bold;")
         hash_mid_lay.addWidget(self._cmp_hash_label)
         hash_row.addWidget(hash_mid_f)
 
-        bob_hash_f = QFrame(); bob_hash_f.setStyleSheet(_card)
+        bob_hash_f = QFrame(); self._card_frames.append(bob_hash_f)
         bob_hash_f.setMinimumHeight(48)
         bob_hash_lay = QVBoxLayout(bob_hash_f)
         bob_hash_lay.setContentsMargins(8, 4, 8, 4)
         self._bob_hash_cmp = QLabel("")
         self._bob_hash_cmp.setWordWrap(True)
-        self._bob_hash_cmp.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 10px; font-family: 'Courier New', monospace;"
-        )
         self._bob_hash_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         bob_hash_lay.addWidget(self._bob_hash_cmp)
         hash_row.addWidget(bob_hash_f, stretch=3)
@@ -331,14 +293,6 @@ class MainWindow(QMainWindow):
         bs_lay.setSpacing(4)
 
         self._bottom_toggle_btn = QPushButton()
-        self._bottom_toggle_btn.setStyleSheet(
-            f"QPushButton {{ background: {COLORS['bg_card']}; "
-            f"border: 1px solid {COLORS['border']}; border-radius: 8px; "
-            f"color: {COLORS['text_secondary']}; font-size: 12px; "
-            f"font-weight: bold; padding: 8px 16px; text-align: left; }}"
-            f"QPushButton:hover {{ background: {COLORS['bg_input']}; "
-            f"border-color: {COLORS['accent_blue']}; }}"
-        )
         self._bottom_toggle_btn.clicked.connect(self._toggle_bottom)
         bs_lay.addWidget(self._bottom_toggle_btn)
 
@@ -364,6 +318,119 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self._bottom_section)
 
+        # Renkleri tek noktadan uygula (tema değişiminde tekrar çağrılır)
+        self._apply_styles()
+        self._update_toggle_label()
+        MANAGER.themeChanged.connect(self._on_theme_changed)
+
+    # ------------------------------------------------------------------
+    # Tema / Stil
+    # ------------------------------------------------------------------
+
+    def _apply_styles(self) -> None:
+        """Renk taşıyan tüm widget stillerini aktif palete göre (yeniden) uygular.
+
+        İlk kurulumda bir kez, tema değişiminde tekrar çağrılır. Yalnız renk
+        değerlerini günceller; yerleşim/boyut/font değişmez.
+        """
+        c = COLORS
+        # Başlık + alt başlık + ikon
+        self._header.setStyleSheet(
+            f"color: {c['accent_blue']}; padding: 8px 0px 8px 8px;"
+        )
+        self._header_icon.setPixmap(
+            _png_icon_pixmap("secure-email-simge.png", c["text_primary"], 96, thickness=1.25)
+        )
+        self._subtitle.setStyleSheet(f"color: {c['text_muted']}; font-size: 13px;")
+
+        # Alice / Bob panel çerçeveleri
+        _panel_frame = (
+            f"QFrame {{ background-color: {c['bg_panel']}; border-radius: 12px; "
+            f"border: 2px solid {c['border']}; }}"
+        )
+        self._alice_frame.setStyleSheet(_panel_frame)
+        self._bob_frame.setStyleSheet(_panel_frame)
+
+        # Anahtar bilgi grubu (yeşil)
+        self._key_info_group.setStyleSheet(
+            f"QGroupBox {{ border: 2px solid {c['accent_green']}; "
+            f"border-radius: 8px; margin-top: 10px; padding: 4px 8px 4px 8px; }}"
+            f"QGroupBox::title {{ color: {c['accent_green']}; "
+            f"font-size: 12px; font-weight: bold; subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
+        )
+        # Alice = mor, Bob = yeşil
+        self._alice_key_lbl.setStyleSheet(f"color: {c['accent_mauve']};")
+        self._bob_key_lbl.setStyleSheet(f"color: {c['accent_green']};")
+        _key_val = f"color: {c['text_secondary']}; font-size: 10px; font-family: monospace;"
+        self._alice_key_value.setStyleSheet(_key_val)
+        self._bob_key_value.setStyleSheet(_key_val)
+
+        # Karşılaştırma grubu (teal) + kart çerçeveleri
+        self._comparison_group.setStyleSheet(
+            f"QGroupBox {{ border: 2px solid {c['accent_teal']}; "
+            f"border-radius: 8px; margin-top: 10px; padding: 4px 8px 4px 8px; }}"
+            f"QGroupBox::title {{ color: {c['accent_teal']}; "
+            f"font-size: 12px; font-weight: bold; subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
+        )
+        _card = (
+            f"QFrame {{ background-color: {c['bg_card']}; "
+            f"border: 1px solid {c['border']}; border-radius: 8px; }}"
+        )
+        for frame in self._card_frames:
+            frame.setStyleSheet(_card)
+        self._alice_msg_title.setStyleSheet(f"color: {c['accent_mauve']};")
+        self._bob_msg_title.setStyleSheet(f"color: {c['accent_green']};")
+        _cmp_val = f"color: {c['text_secondary']}; font-size: 11px;"
+        self._alice_msg_cmp.setStyleSheet(_cmp_val)
+        self._bob_msg_cmp.setStyleSheet(_cmp_val)
+        _hash_val = (
+            f"color: {c['text_secondary']}; font-size: 10px; "
+            f"font-family: 'Courier New', monospace;"
+        )
+        self._alice_hash_cmp.setStyleSheet(_hash_val)
+        self._bob_hash_cmp.setStyleSheet(_hash_val)
+        _mid_lbl = f"color: {c['text_muted']}; font-size: 10px; font-weight: bold;"
+        self._cmp_msg_label.setStyleSheet(_mid_lbl)
+        self._cmp_hash_label.setStyleSheet(_mid_lbl)
+
+        # Alt bölüm geçiş butonu
+        self._bottom_toggle_btn.setStyleSheet(
+            f"QPushButton {{ background: {c['bg_card']}; "
+            f"border: 1px solid {c['border']}; border-radius: 8px; "
+            f"color: {c['text_secondary']}; font-size: 12px; "
+            f"font-weight: bold; padding: 8px 16px; text-align: left; }}"
+            f"QPushButton:hover {{ background: {c['bg_input']}; "
+            f"border-color: {c['accent_blue']}; }}"
+        )
+
+        # Algoritma paneli
+        self._algo_box.setStyleSheet(
+            f"QGroupBox {{ border: 2px solid {c['accent_blue']}; "
+            f"border-radius: 8px; margin-top: 10px; padding: 4px 6px 4px 6px; }}"
+            f"QGroupBox::title {{ color: {c['accent_blue']}; "
+            f"font-size: 12px; font-weight: bold; "
+            f"subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
+        )
+        self._algo_gear.setPixmap(_svg_pixmap("gear.svg", c["accent_blue"], 14))
+        self._algo_info_lbl.setStyleSheet(f"color: {c['text_muted']}; font-size: 10px;")
+        self._btn_anim_rsa.setStyleSheet(self._algo_btn_style(c["accent_mauve"]))
+        self._btn_anim_sha.setStyleSheet(self._algo_btn_style(c["accent_blue"]))
+        self._btn_anim_aes.setStyleSheet(self._algo_btn_style(c["accent_yellow"]))
+
+    def _on_theme_changed(self, _mode: str) -> None:
+        """Tema değişiminde uygulama genelini ve panelleri yeniden stillendirir."""
+        app = QApplication.instance()
+        if app is not None:
+            app.setPalette(_build_app_palette())
+            app.setStyleSheet(theme.build_global_stylesheet())
+        self._apply_styles()
+        for panel_attr in ("_alice_panel", "_bob_panel"):
+            panel = getattr(self, panel_attr, None)
+            if panel is not None and hasattr(panel, "_apply_styles"):
+                panel._apply_styles()
+        for w in self.findChildren(QWidget):
+            w.update()
+
     # ------------------------------------------------------------------
     # Algoritma Paneli
     # ------------------------------------------------------------------
@@ -371,13 +438,7 @@ class MainWindow(QMainWindow):
     def _make_algo_panel(self) -> QGroupBox:
         """Algoritmaları tekrar izleme paneli (sağ alt)."""
         box = QGroupBox("Algoritmaları İzle")
-        box.setStyleSheet(
-            f"QGroupBox {{ border: 2px solid {COLORS['accent_blue']}; "
-            f"border-radius: 8px; margin-top: 10px; padding: 4px 6px 4px 6px; }}"
-            f"QGroupBox::title {{ color: {COLORS['accent_blue']}; "
-            f"font-size: 12px; font-weight: bold; "
-            f"subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
-        )
+        self._algo_box = box
         lay = QVBoxLayout(box)
         lay.setSpacing(5)
         lay.setContentsMargins(6, 8, 6, 6)
@@ -385,28 +446,23 @@ class MainWindow(QMainWindow):
         info_row = QHBoxLayout()
         info_row.setSpacing(6)
         info_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _gear = QLabel()
-        _gear.setPixmap(_svg_pixmap("gear.svg", COLORS["accent_blue"], 14))
-        info_row.addWidget(_gear)
-        info_lbl = QLabel("Her algoritmayı adım adım izleyin")
-        info_lbl.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 10px;")
-        info_row.addWidget(info_lbl)
+        self._algo_gear = QLabel()
+        info_row.addWidget(self._algo_gear)
+        self._algo_info_lbl = QLabel("Her algoritmayı adım adım izleyin")
+        info_row.addWidget(self._algo_info_lbl)
         lay.addLayout(info_row)
 
         self._btn_anim_rsa = QPushButton("RSA-2048\nAnahtar Şifreleme")
-        self._btn_anim_rsa.setStyleSheet(self._algo_btn_style(COLORS["accent_mauve"]))
         self._btn_anim_rsa.setEnabled(False)
         self._btn_anim_rsa.clicked.connect(self._reopen_rsa)
         lay.addWidget(self._btn_anim_rsa)
 
         self._btn_anim_sha = QPushButton("SHA-256\nHash Hesaplama")
-        self._btn_anim_sha.setStyleSheet(self._algo_btn_style(COLORS["accent_blue"]))
         self._btn_anim_sha.setEnabled(False)
         self._btn_anim_sha.clicked.connect(self._reopen_sha)
         lay.addWidget(self._btn_anim_sha)
 
         self._btn_anim_aes = QPushButton("AES-256-GCM\nSimetrik Şifreleme")
-        self._btn_anim_aes.setStyleSheet(self._algo_btn_style(COLORS["accent_yellow"]))
         self._btn_anim_aes.setEnabled(False)
         self._btn_anim_aes.clicked.connect(self._reopen_aes)
         lay.addWidget(self._btn_anim_aes)
@@ -423,8 +479,9 @@ class MainWindow(QMainWindow):
             f"border: 2px solid {color}; border-radius: 8px; color: {color}; "
             f"font-weight: bold; font-size: 11px; padding: 4px 6px; min-height: 36px; }}"
             f"QPushButton:hover {{ background: rgba({r},{g},{b},0.28); }}"
-            f"QPushButton:disabled {{ background: #536070; border: 1px solid #5A6272; "
-            f"color: #8896A8; font-size: 11px; padding: 4px 6px; min-height: 36px; }}"
+            f"QPushButton:disabled {{ background: {COLORS['bg_card']}; "
+            f"border: 1px solid {COLORS['border']}; "
+            f"color: {COLORS['text_muted']}; font-size: 11px; padding: 4px 6px; min-height: 36px; }}"
         )
 
     def _reopen_rsa(self) -> None:
@@ -759,28 +816,32 @@ class MainWindow(QMainWindow):
 # Uygulama Giriş Noktası
 # ---------------------------------------------------------------------------
 
+def _build_app_palette() -> QPalette:
+    """Aktif COLORS paletinden uygulama geneli QPalette üretir."""
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window,          QColor(COLORS["bg_main"]))
+    palette.setColor(QPalette.ColorRole.WindowText,      QColor(COLORS["text_primary"]))
+    palette.setColor(QPalette.ColorRole.Base,            QColor(COLORS["bg_input"]))
+    palette.setColor(QPalette.ColorRole.AlternateBase,   QColor(COLORS["bg_panel"]))
+    palette.setColor(QPalette.ColorRole.Text,            QColor(COLORS["text_primary"]))
+    palette.setColor(QPalette.ColorRole.BrightText,      QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorRole.Button,          QColor(COLORS["bg_panel"]))
+    palette.setColor(QPalette.ColorRole.ButtonText,      QColor(COLORS["text_primary"]))
+    palette.setColor(QPalette.ColorRole.Highlight,       QColor(COLORS["accent_blue"]))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#FFFFFF"))
+    palette.setColor(QPalette.ColorRole.ToolTipBase,     QColor(COLORS["bg_card"]))
+    palette.setColor(QPalette.ColorRole.ToolTipText,     QColor(COLORS["text_primary"]))
+    palette.setColor(QPalette.ColorRole.PlaceholderText, QColor(COLORS["text_muted"]))
+    return palette
+
+
 def main() -> None:
     """Uygulamayı tam ekran olarak başlatır."""
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    palette = QPalette()
-    palette.setColor(QPalette.ColorRole.Window,          QColor("#3D4451"))
-    palette.setColor(QPalette.ColorRole.WindowText,      QColor("#F1F3F7"))
-    palette.setColor(QPalette.ColorRole.Base,            QColor("#4D5769"))
-    palette.setColor(QPalette.ColorRole.AlternateBase,   QColor("#4A5568"))
-    palette.setColor(QPalette.ColorRole.Text,            QColor("#F1F3F7"))
-    palette.setColor(QPalette.ColorRole.BrightText,      QColor("#FFFFFF"))
-    palette.setColor(QPalette.ColorRole.Button,          QColor("#4A5568"))
-    palette.setColor(QPalette.ColorRole.ButtonText,      QColor("#F1F3F7"))
-    palette.setColor(QPalette.ColorRole.Highlight,       QColor("#5B8EC2"))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#FFFFFF"))
-    palette.setColor(QPalette.ColorRole.ToolTipBase,     QColor("#536070"))
-    palette.setColor(QPalette.ColorRole.ToolTipText,     QColor("#F1F3F7"))
-    palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("#8896A8"))
-    app.setPalette(palette)
-
-    app.setStyleSheet(GLOBAL_STYLESHEET)
+    app.setPalette(_build_app_palette())
+    app.setStyleSheet(theme.build_global_stylesheet())
     window = MainWindow()
     window.showMaximized()
     sys.exit(app.exec())

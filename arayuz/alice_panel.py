@@ -54,7 +54,6 @@ class AlicePanel(QWidget):
         _th.addStretch()
         self._title = QLabel("Gönderici — Alice")
         self._title.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
-        self._title.setStyleSheet(f"color: {COLORS['accent_mauve']};")
         _th.addWidget(self._title)
         _th.addStretch()
         layout.addWidget(self._title_widget)
@@ -84,9 +83,6 @@ class AlicePanel(QWidget):
 
         self.status_label = QLabel("Mesajınızı yazın ve şifreleme sürecini başlatın.")
         self.status_label.setWordWrap(True)
-        self.status_label.setStyleSheet(
-            f"color: {COLORS['text_secondary']}; font-size: 12px; padding: 4px;"
-        )
         layout.addWidget(self.status_label)
 
         # ── Animasyon container (başta gizli) ─────────────────────────────
@@ -114,12 +110,6 @@ class AlicePanel(QWidget):
         self._btn_close_bob_diag = QPushButton("✖  Kapat")
         self._btn_close_bob_diag.setEnabled(False)
         self._btn_close_bob_diag.setFixedHeight(32)
-        self._btn_close_bob_diag.setStyleSheet(
-            "QPushButton { background: rgba(198,40,40,0.12); border: 2px solid #C62828; "
-            "border-radius: 6px; color: #C62828; font-weight: bold; font-size: 12px; }"
-            "QPushButton:hover { background: rgba(198,40,40,0.28); }"
-            "QPushButton:disabled { background: #536070; border: 1px solid #5A6272; color: #8896A8; }"
-        )
         self._btn_close_bob_diag.clicked.connect(self._on_close_bob_diagram)
         bob_diag_layout.addWidget(self._btn_close_bob_diag)
         self._bob_diag_container.setVisible(False)
@@ -129,6 +119,24 @@ class AlicePanel(QWidget):
         self._normal_widgets: list[QWidget] = [
             self._title_widget, self._msg_group, self._scroll, self.status_label
         ]
+
+        self._apply_styles()
+
+    def _apply_styles(self) -> None:
+        """Renk taşıyan stilleri aktif palete göre (yeniden) uygular."""
+        c = COLORS
+        self._title.setStyleSheet(f"color: {c['accent_mauve']};")
+        self.status_label.setStyleSheet(
+            f"color: {c['text_secondary']}; font-size: 12px; padding: 4px;"
+        )
+        self._btn_close_bob_diag.setStyleSheet(
+            f"QPushButton {{ background: rgba(217,85,85,0.12); "
+            f"border: 2px solid {c['accent_red']}; border-radius: 6px; "
+            f"color: {c['accent_red']}; font-weight: bold; font-size: 12px; }}"
+            f"QPushButton:hover {{ background: rgba(217,85,85,0.28); }}"
+            f"QPushButton:disabled {{ background: {c['bg_card']}; "
+            f"border: 1px solid {c['border']}; color: {c['text_muted']}; }}"
+        )
 
     def show_animation(self, widget: QWidget) -> None:
         """Normal içeriği gizle, animasyon widget'ını QScrollArea içinde göster."""

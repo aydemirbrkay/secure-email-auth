@@ -212,11 +212,13 @@ class _RSAKeyBuilderWidget(QWidget):
         outer.setContentsMargins(6, 6, 6, 6)
         outer.setSpacing(4)
 
-        title = QLabel("ANAHTAR İNŞA PANELİ")
-        title.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-        title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']}; letter-spacing: 1px;")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        outer.addWidget(title)
+        self._title_lbl = QLabel("ANAHTAR İNŞA PANELİ")
+        self._title_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        self._title_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS['text_muted']}; letter-spacing: 1px;"
+        )
+        self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self._title_lbl)
 
         # Bireysel alanlar
         for key, _, sym, _val, color_key in self._FIELDS:
@@ -359,6 +361,15 @@ class _RSAKeyBuilderWidget(QWidget):
             self._pulse(self._private_card, "accent_green")
 
         self._last_step = step_idx
+
+    def restyle(self) -> None:
+        """Tema değişiminde alanları/kartları durum bozmadan yeniden boyar."""
+        self._title_lbl.setStyleSheet(
+            f"color: {ANIM_COLORS['text_muted']}; letter-spacing: 1px;"
+        )
+        # set_step mevcut adımı yeniden uygular; aynı adım olduğu için pulse
+        # tetiklenmez (was_filled == should_be_filled) → görsel sıçrama olmaz.
+        self.set_step(self._last_step if self._last_step >= 0 else 0)
 
     @staticmethod
     def _set_key_card(
@@ -1520,7 +1531,7 @@ class _KeyMatchWidget(QWidget):
         cards_row.setSpacing(10)
 
         # Sol: demo
-        demo = self._make_card(
+        self._demo_card = self._make_card(
             "DEMO",
             f"p = {_P}\n"
             f"q = {_Q}\n"
@@ -1529,20 +1540,19 @@ class _KeyMatchWidget(QWidget):
             f"e = {_E}\n"
             f"d = {_D}\n"
             f"Modülüs: 12 bit",
-            ANIM_COLORS["accent_blue"],
+            "accent_blue",
         )
-        cards_row.addWidget(demo, stretch=1)
+        cards_row.addWidget(self._demo_card, stretch=1)
 
         # Orta: ≈ sembolü
-        approx = QLabel("≈")
-        approx.setFont(QFont("Georgia", 28, QFont.Weight.Bold))
-        approx.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
-        approx.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        approx.setMaximumWidth(40)
-        cards_row.addWidget(approx)
+        self._approx = QLabel("≈")
+        self._approx.setFont(QFont("Georgia", 28, QFont.Weight.Bold))
+        self._approx.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._approx.setMaximumWidth(40)
+        cards_row.addWidget(self._approx)
 
         # Sağ: gerçek
-        real = self._make_card(
+        self._real_card = self._make_card(
             "GERÇEK (RSA-2048)",
             f"p, q ≈ 1024-bit asal\n"
             f"n ≈ 617 ondalık hane\n"
@@ -1550,68 +1560,81 @@ class _KeyMatchWidget(QWidget):
             f"d ≈ 2048-bit\n"
             f"Modülüs: 2048 bit\n"
             f"Base64 ≈ 360 karakter",
-            ANIM_COLORS["accent_green"],
+            "accent_green",
         )
-        cards_row.addWidget(real, stretch=1)
+        cards_row.addWidget(self._real_card, stretch=1)
 
         outer.addLayout(cards_row)
 
         # Gerçek anahtar önizlemesi (alt) — kelime kaydırma ile genişlikten bağımsız
         # Font 8pt → 9pt (önceki çok küçüktü, okunaksızdı)
-        keys_lbl = QLabel(
+        self._keys_lbl = QLabel(
             f"<b>Alice açık anahtarı:</b> {self._alice_b64[:48]}…<br>"
             f"<b>Bob açık anahtarı:</b> {self._bob_b64[:48]}…"
         )
-        keys_lbl.setFont(QFont("Courier New", 9))
-        keys_lbl.setStyleSheet(
+        self._keys_lbl.setFont(QFont("Courier New", 9))
+        self._keys_lbl.setWordWrap(True)
+        self._keys_lbl.setTextFormat(Qt.TextFormat.RichText)
+        outer.addWidget(self._keys_lbl)
+
+        # Alt: aynı matematik mesajı
+        self._msg = QLabel(
+            "Aynı matematik · farklı boyut: tüm adımlar gerçek 2048-bit p ve q ile aynen uygulanır."
+        )
+        self._msg.setFont(QFont("Georgia", 9))
+        self._msg.setWordWrap(True)
+        self._msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self._msg)
+
+        self.restyle()
+
+    def restyle(self) -> None:
+        """Tema değişiminde tüm etiket/kart stillerini yeniden uygular (statik içerik)."""
+        for card in (self._demo_card, self._real_card):
+            color = ANIM_COLORS[card._accent_key]  # type: ignore[attr-defined]
+            card.setStyleSheet(
+                f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+                f"border: 2px solid {color}; border-radius: 8px; }}"
+            )
+            card._title_lbl.setStyleSheet(f"color: {color}; border: none;")  # type: ignore[attr-defined]
+            card._body_lbl.setStyleSheet(  # type: ignore[attr-defined]
+                f"color: {ANIM_COLORS['text_secondary']}; border: none;"
+            )
+        self._approx.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._keys_lbl.setStyleSheet(
             f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
             f"background: {ANIM_COLORS['bg_input']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; "
             f"border-radius: 4px; padding: 4px 6px; }}"
         )
-        keys_lbl.setWordWrap(True)
-        keys_lbl.setTextFormat(Qt.TextFormat.RichText)
-        outer.addWidget(keys_lbl)
-
-        # Alt: aynı matematik mesajı
-        msg = QLabel(
-            "Aynı matematik · farklı boyut: tüm adımlar gerçek 2048-bit p ve q ile aynen uygulanır."
-        )
-        msg.setFont(QFont("Georgia", 9))
-        msg.setStyleSheet(
+        self._msg.setStyleSheet(
             f"QLabel {{ color: {ANIM_COLORS['accent_yellow']}; "
             f"background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; "
             f"border-radius: 5px; padding: 6px; }}"
         )
-        msg.setWordWrap(True)
-        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        outer.addWidget(msg)
 
     @staticmethod
-    def _make_card(title: str, body: str, color: str) -> QFrame:
+    def _make_card(title: str, body: str, color_key: str) -> QFrame:
         f = QFrame()
-        f.setStyleSheet(
-            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
-            f"border: 2px solid {color}; border-radius: 8px; }}"
-        )
+        f._accent_key = color_key  # type: ignore[attr-defined]
         lay = QVBoxLayout(f)
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
 
         t = QLabel(title)
         t.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
-        t.setStyleSheet(f"color: {color}; border: none;")
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(t)
 
         b = QLabel(body)
         b.setFont(QFont("Courier New", 9))
-        b.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']}; border: none;")
         b.setWordWrap(True)
         b.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lay.addWidget(b, stretch=1)
 
+        f._title_lbl = t  # type: ignore[attr-defined]
+        f._body_lbl = b   # type: ignore[attr-defined]
         return f
 
 
@@ -1949,18 +1972,18 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         split.setContentsMargins(0, 0, 0, 0)
 
         # Sol: KeyBuilder (dar)
-        kb_frame = QFrame()
-        kb_frame.setStyleSheet(
+        self._kb_frame = QFrame()
+        self._kb_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
-        kb_layout = QVBoxLayout(kb_frame)
+        kb_layout = QVBoxLayout(self._kb_frame)
         kb_layout.setContentsMargins(0, 0, 0, 0)
         self._kb = _RSAKeyBuilderWidget()
         kb_layout.addWidget(self._kb)
-        kb_frame.setMinimumWidth(155)
-        kb_frame.setMaximumWidth(210)
-        split.addWidget(kb_frame, stretch=0)
+        self._kb_frame.setMinimumWidth(155)
+        self._kb_frame.setMaximumWidth(210)
+        split.addWidget(self._kb_frame, stretch=0)
 
         # Sağ: 8 sayfalı stack
         # Scroll yalnızca Adım 6 (DER byte flow) için gerekli — uzun içerikli
@@ -1969,12 +1992,12 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         # bunun yerine sadece _DERByteFlowWidget kendi QScrollArea'sıyla
         # sarılır → diğer sayfalar (Adım 1-5, 7, 8) scroll'suz görünür.
         from PyQt6.QtWidgets import QScrollArea
-        stack_frame = QFrame()
-        stack_frame.setStyleSheet(
+        self._stack_frame = QFrame()
+        self._stack_frame.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
-        stack_layout = QVBoxLayout(stack_frame)
+        stack_layout = QVBoxLayout(self._stack_frame)
         stack_layout.setContentsMargins(4, 4, 4, 4)
 
         # DER widget'ı QScrollArea içine sarılır — uzun içeriği gerekirse kaydırılır.
@@ -2007,7 +2030,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         # Sayfa değiştikçe der_scroll'un dikey scrollbar politikasını ayarla.
         self._stack.currentChanged.connect(self._on_stack_page_changed)
         stack_layout.addWidget(self._stack)
-        split.addWidget(stack_frame, stretch=1)
+        split.addWidget(self._stack_frame, stretch=1)
 
         split_holder = QWidget()
         split_holder.setLayout(split)
@@ -2032,6 +2055,29 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
     # Adım render'ı
     # ------------------------------------------------------------------
+
+    def _restyle_content(self) -> None:
+        """Tema değişiminde QLabel/QFrame tabanlı içeriği durum bozmadan yeniden
+        boyar. QPainter sayfaları (sieve, çarpma, totient, gcd, eea, der, şifr.)
+        refresh_theme'deki update() ile yenilenir."""
+        self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        self._caption.setStyleSheet(
+            f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
+            f"background: {ANIM_COLORS['bg_input']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 5px; padding: 4px 8px; }}"
+        )
+        _frame_style = (
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        self._kb_frame.setStyleSheet(_frame_style)
+        self._stack_frame.setStyleSheet(_frame_style)
+        self._kb.restyle()
+        # QLabel tabanlı sayfa(lar) — _KeyMatchWidget vb. restyle() destekler
+        for page in self._page_widgets:
+            if hasattr(page, "restyle"):
+                page.restyle()
 
     def _render_step(self, idx: int) -> None:
         self._step_lbl.setText(self._TITLES[idx])

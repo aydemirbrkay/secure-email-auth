@@ -199,15 +199,24 @@ class CryptoAnimationWindow(QWidget):
     def refresh_theme(self) -> None:
         """Tema değişiminde pencereyi DURUMUNU BOZMADAN yeniden temalandırır.
 
-        Chrome (başlık/progress/butonlar/arka plan) stilleri yeniden uygulanır;
-        QPainter tabanlı içerik (SHA diyagramı, matrisler, byte ızgaraları)
-        ANIM_COLORS'u çizim anında okuduğu için update() ile canlı yeniden
-        boyanır. İçerik YENİDEN KURULMAZ → animasyon durumu (round, timer,
-        görünür adım) korunur; animasyon sıfırlanmaz/bitmez.
+        1) Chrome (başlık/progress/butonlar/arka plan) stilleri yeniden uygulanır.
+        2) _restyle_content(): QLabel/QFrame tabanlı içerik stilleri yeniden
+           uygulanır (alt sınıf override eder; mevcut render metotları çağrılır).
+        3) update(): QPainter tabanlı içerik (ANIM_COLORS'u çizimde okuyan)
+           canlı yeniden boyanır.
+
+        İçerik YENİDEN KURULMAZ → animasyon durumu (round, timer, görünür adım)
+        korunur; animasyon sıfırlanmaz/duraksamaz/iptal olmaz.
         """
         self._apply_base_styles()
+        self._restyle_content()
         for w in self.findChildren(QWidget):
             w.update()
+
+    def _restyle_content(self) -> None:
+        """Alt sınıf, QLabel/QFrame tabanlı içerik stillerini burada yeniden
+        uygular. Varsayılan: hiçbir şey (yalnız QPainter içerik varsa yeterli)."""
+        pass
 
     # ------------------------------------------------------------------
     # Alt sınıf arayüzü

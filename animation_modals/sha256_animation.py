@@ -170,7 +170,7 @@ class _SHA256DiagramWidget(QWidget):
         t1_w = int(total * 0.52)
 
         t2_border = QColor(ANIM_COLORS["accent_mauve"])
-        t2_fill = QColor("#3D2F56") if highlight_t2 else QColor("#536070")
+        t2_fill = QColor(ANIM_COLORS["hl_mauve"]) if highlight_t2 else QColor(ANIM_COLORS["bg_card"])
         self._draw_box(p, t2_x, mid_y, t2_w, 72, t2_fill, t2_border)
         p.setFont(font_mid)
         p.setPen(t2_border)
@@ -182,7 +182,7 @@ class _SHA256DiagramWidget(QWidget):
 
         # ── T1 kutusu ──
         t1_border = QColor(ANIM_COLORS["accent_yellow"])
-        t1_fill = QColor("#3D3119") if highlight_t1 else QColor("#536070")
+        t1_fill = QColor(ANIM_COLORS["hl_yellow"]) if highlight_t1 else QColor(ANIM_COLORS["bg_card"])
         self._draw_box(p, t1_x, mid_y, t1_w, 72, t1_fill, t1_border)
         p.setPen(t1_border)
         p.drawText(QRect(t1_x + 4, mid_y + 4, t1_w - 8, 20),
@@ -458,7 +458,7 @@ class _RegisterDemoWidget(QWidget):
         t2_lit = (phase == 1 and sub < 12)
         t1_lit = (phase == 1 and sub >= 12)
 
-        t2_fill   = QColor("#3D2F56" if t2_lit else "#536070")
+        t2_fill   = QColor(ANIM_COLORS["hl_mauve"] if t2_lit else ANIM_COLORS["bg_card"])
         t2_border = QColor(ANIM_COLORS["accent_mauve"] if t2_lit else ANIM_COLORS["border"])
         p.setBrush(QBrush(t2_fill))
         p.setPen(QPen(t2_border, 2 if t2_lit else 1))
@@ -471,7 +471,7 @@ class _RegisterDemoWidget(QWidget):
         p.drawText(QRect(t2_x + 2, mid_y + mid_h // 2, t2_w - 4, mid_h // 2),
                    Qt.AlignmentFlag.AlignCenter, "a1b2c3d4" if t2_lit else "...")
 
-        t1_fill   = QColor("#3D3119" if t1_lit else "#536070")
+        t1_fill   = QColor(ANIM_COLORS["hl_yellow"] if t1_lit else ANIM_COLORS["bg_card"])
         t1_border = QColor(ANIM_COLORS["accent_yellow"] if t1_lit else ANIM_COLORS["border"])
         p.setBrush(QBrush(t1_fill))
         p.setPen(QPen(t1_border, 2 if t1_lit else 1))

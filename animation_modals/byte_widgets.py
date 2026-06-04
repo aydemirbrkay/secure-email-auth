@@ -11,15 +11,23 @@ from PyQt6.QtWidgets import QWidget
 from animation_modals.base import ANIM_COLORS
 
 
-# Döngüsel 6 renkli palet — ANIM_COLORS'a eklenmez, byte_widgets'a özgüdür.
-_PALETTE_6 = [
-    ANIM_COLORS["accent_blue"],
-    ANIM_COLORS["accent_green"],
-    ANIM_COLORS["accent_yellow"],
-    ANIM_COLORS["accent_mauve"],
-    ANIM_COLORS["accent_peach"],
-    "#C26F6F",  # yerel 6. renk — ANIM_COLORS'a eklenmez
-]
+# Döngüsel 6 renkli palet — aktif temaya göre canlı okunur (yeni açılan animasyonlar
+# doğru renk alır). 6. renk ANIM_COLORS'a eklenmez, byte_widgets'a özgüdür.
+def _palette_6() -> list[str]:
+    from arayuz.theme import MANAGER
+    sixth = "#A35151" if MANAGER.mode == "light" else "#C26F6F"
+    return [
+        ANIM_COLORS["accent_blue"],
+        ANIM_COLORS["accent_green"],
+        ANIM_COLORS["accent_yellow"],
+        ANIM_COLORS["accent_mauve"],
+        ANIM_COLORS["accent_peach"],
+        sixth,
+    ]
+
+
+# Geriye dönük uyumluluk (test_animation_widgets_smoke): import anı anlık görüntüsü.
+_PALETTE_6 = _palette_6()
 
 
 class _ColoredByteGridWidget(QWidget):
@@ -176,7 +184,7 @@ class _ColoredByteGridWidget(QWidget):
             for i in range(n):
                 byte_val = self._data[i]
                 x = row_label_w + 6 + i * (cw + cell_gap)
-                color_hex = _PALETTE_6[i % 6]
+                color_hex = _palette_6()[i % 6]
                 qc = QColor(color_hex)
                 is_padding = i < len(self._padding_mask) and self._padding_mask[i]
                 if is_padding:
@@ -298,7 +306,7 @@ class _ByteStripWidget(QWidget):
         for i in range(n):
             byte_val = self._data[i]
             x = 2 + i * (cw + 1)
-            color_hex = _PALETTE_6[i % 6]
+            color_hex = _palette_6()[i % 6]
             qc = QColor(color_hex)
             is_padding = i < len(self._padding_mask) and self._padding_mask[i]
             if is_padding:

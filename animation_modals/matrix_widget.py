@@ -12,9 +12,20 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QGridLayout, QLabel, QWidget
 
-_DEFAULT_BG = "#536070"
-_DEFAULT_FG = "#F1F3F7"
-_LABEL_FG = "#8896A8"
+from arayuz.theme import COLORS
+
+
+# Aktif paletten canlı okunur (tema değişiminde yeni açılan matrisler doğru renkte).
+def _default_bg() -> str:
+    return COLORS["bg_card"]
+
+
+def _default_fg() -> str:
+    return COLORS["text_primary"]
+
+
+def _label_fg() -> str:
+    return COLORS["text_muted"]
 
 
 class MatrixWidget(QWidget):
@@ -61,7 +72,7 @@ class MatrixWidget(QWidget):
                 col_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 col_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
                 col_lbl.setStyleSheet(
-                    f"color: {_LABEL_FG}; background: transparent;"
+                    f"color: {_label_fg()}; background: transparent;"
                 )
                 # Grid satır 0 etikete ayrılır, hücreler satır 1'den başlar
                 layout.addWidget(col_lbl, 0, c + 1)
@@ -78,7 +89,7 @@ class MatrixWidget(QWidget):
                 row_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 row_lbl.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
                 row_lbl.setStyleSheet(
-                    f"color: {_LABEL_FG}; background: transparent;"
+                    f"color: {_label_fg()}; background: transparent;"
                 )
                 layout.addWidget(row_lbl, r + row_offset, 0)
 
@@ -88,26 +99,32 @@ class MatrixWidget(QWidget):
                 cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 cell.setFont(QFont("Courier New", self._cell_font_pt, QFont.Weight.Bold))
                 cell.setMinimumSize(cell_w, cell_h)
-                cell.setStyleSheet(self._cell_style(_DEFAULT_BG))
+                cell.setStyleSheet(self._cell_style(_default_bg()))
                 layout.addWidget(cell, r + row_offset, c + col_offset)
                 row.append(cell)
             self._cells.append(row)
 
     @staticmethod
-    def _cell_style(bg: str, fg: str = _DEFAULT_FG) -> str:
+    def _cell_style(bg: str, fg: str | None = None) -> str:
+        if fg is None:
+            fg = _default_fg()
         return (
             f"background-color: {bg}; color: {fg}; "
             "border-radius: 4px; padding: 4px;"
         )
 
-    def update_cell(self, row: int, col: int, value: str, bg: str = _DEFAULT_BG) -> None:
+    def update_cell(self, row: int, col: int, value: str, bg: str | None = None) -> None:
         """Tek bir hücreyi günceller."""
+        if bg is None:
+            bg = _default_bg()
         cell = self._cells[row][col]
         cell.setText(value)
         cell.setStyleSheet(self._cell_style(bg))
 
-    def set_matrix(self, matrix: list[list[str]], bg: str = _DEFAULT_BG) -> None:
+    def set_matrix(self, matrix: list[list[str]], bg: str | None = None) -> None:
         """Tüm matrisi tek seferde günceller."""
+        if bg is None:
+            bg = _default_bg()
         for r in range(self._rows):
             for c in range(self._cols):
                 self.update_cell(r, c, matrix[r][c], bg)
@@ -117,7 +134,7 @@ class MatrixWidget(QWidget):
         for r in range(self._rows):
             for c in range(self._cols):
                 cell = self._cells[r][c]
-                cell.setStyleSheet(self._cell_style(_DEFAULT_BG))
+                cell.setStyleSheet(self._cell_style(_default_bg()))
 
     def highlight_cells_sequential(
         self,
@@ -153,8 +170,10 @@ class MatrixWidget(QWidget):
         self._sub_timer.timeout.connect(_tick)
         self._sub_timer.start(interval_ms)
 
-    def animate_row_shift(self, row: int, shift: int, color: str = "#3B6FA0") -> None:
+    def animate_row_shift(self, row: int, shift: int, color: str | None = None) -> None:
         """Bir satırı shift kadar sola kaydırır ve renklendirir."""
+        if color is None:
+            color = COLORS["accent_blue"]
         texts = [self._cells[row][c].text() for c in range(self._cols)]
         shifted = texts[shift:] + texts[:shift]
         for c in range(self._cols):

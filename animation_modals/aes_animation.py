@@ -69,10 +69,11 @@ class _MatrixDemoWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._step)
         self._timer.start(110)
-        # 220×220 → 180×180: kompakt left_frame'e (max 200 px) sığacak
-        # şekilde; matris hücreleri paintEvent'te adaptive cell_size ile
-        # ölçeklendiği için içerik korunur (daha küçük ama yine okunaklı).
-        self.setMinimumSize(180, 180)
+        # Kompakt intro ekranına (gömülü dar görünümde) sol animasyon + sağ
+        # adım şeması BİRLİKTE sığsın diye matris küçük tutulur ve genişliği
+        # sınırlanır; hücreler paintEvent'te adaptive ölçeklendiği için okunaklı kalır.
+        self.setMinimumSize(120, 120)
+        self.setMaximumWidth(210)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def _step(self) -> None:
@@ -218,7 +219,8 @@ class _AESIntroWidget(QWidget):
         left_lay.addWidget(self._demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
-        left_frame.setMinimumWidth(220)
+        left_frame.setMinimumWidth(150)
+        left_frame.setMaximumWidth(240)
         h_row.addWidget(left_frame, stretch=2)
 
         # Sağ: başlık + akış şeması — max width kaldırıldı, stretch ile
@@ -230,7 +232,7 @@ class _AESIntroWidget(QWidget):
         right_lay.setContentsMargins(0, 0, 0, 0)
         right_lay.setSpacing(0)
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
-        right_w.setMinimumWidth(300)
+        right_w.setMinimumWidth(230)
         h_row.addWidget(right_w, stretch=3)
 
         # ── Sağ taraf: önce BAŞLIK, sonra akış şeması widget'ları ──
@@ -2041,15 +2043,16 @@ class AESAnimationWindow(CryptoAnimationWindow):
         if active:
             return (
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-                f"color: {ANIM_COLORS['bg_main']}; border: none; "
+                f"color: #FFFFFF; border: 2px solid {ANIM_COLORS['accent_blue']}; "
                 f"border-radius: 3px; padding: 2px; font-weight: bold; }}"
             )
         return (
             f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
-            f"color: {ANIM_COLORS['text_muted']}; border: none; "
-            f"border-radius: 3px; padding: 2px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['border']}; "
-            f"color: {ANIM_COLORS['text_primary']}; }}"
+            f"color: {ANIM_COLORS['text_secondary']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 3px; padding: 2px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border-color: {ANIM_COLORS['accent_blue']}; }}"
         )
 
     @staticmethod

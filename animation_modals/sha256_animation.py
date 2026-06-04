@@ -1315,7 +1315,7 @@ class _SHAMessagePrepWidget(QWidget):
     Boş mesaj: faz 1-2-3 atlanır, doğrudan faz 4'e geçilir.
     """
 
-    _TICK_MS = 60
+    _TICK_MS = 45
 
     def __init__(
         self,
@@ -1467,20 +1467,20 @@ class _SHAMessagePrepWidget(QWidget):
     def _on_tick(self) -> None:
         self._tick += 1
         if self._is_empty:
-            # Boş mesaj: faz 0 (~1.2s) sonra doğrudan faz 4'e
-            if self._tick >= 25:
+            # Boş mesaj: kısa bir bekleme sonrası doğrudan faz 4'e
+            if self._tick >= 12:
                 self._jump_to_final()
             return
 
-        # Normal akış — fazlar
-        if self._tick == 21:
+        # Normal akış — fazlar (hızlandırıldı)
+        if self._tick == 8:
             self._phase = 1
-        elif self._tick == 61:
+        elif self._tick == 26:
             self._phase = 2
-        elif self._tick == 96:
+        elif self._tick == 40:
             self._phase = 3
             self._strip.setVisible(True)
-        elif self._tick >= 116:
+        elif self._tick >= 52:
             self._jump_to_final()
 
     def _jump_to_final(self) -> None:
@@ -2172,15 +2172,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         if active:
             return (
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-                f"color: {ANIM_COLORS['bg_main']}; border: none; "
+                f"color: #FFFFFF; border: 2px solid {ANIM_COLORS['accent_blue']}; "
                 f"border-radius: 4px; font-weight: bold; }}"
             )
         return (
             f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
-            f"color: {ANIM_COLORS['text_muted']}; border: none; "
-            f"border-radius: 4px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['border']}; "
-            f"color: {ANIM_COLORS['text_primary']}; }}"
+            f"color: {ANIM_COLORS['text_secondary']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 4px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: #FFFFFF; border-color: {ANIM_COLORS['accent_blue']}; }}"
         )
 
     def _diag_jump_round(self, round_idx_in_block: int) -> None:

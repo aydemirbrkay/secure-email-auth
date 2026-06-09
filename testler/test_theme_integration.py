@@ -64,8 +64,8 @@ class TestThemeIntegration(unittest.TestCase):
 
     def test_main_window_accessibility(self) -> None:
         """C8: interaktif butonlar Türkçe accessibleName taşır; "Hareketi
-        Azalt" menü eylemi tercihi kalıcılaştırır. (MainWindow burada güvenle
-        kurulur; bkz. test_accessibility.py notu.)"""
+        Azalt" tercihi (artık menüsüz, REDUCE_MOTION üzerinden) kalıcılaşır.
+        (MainWindow burada güvenle kurulur; bkz. test_accessibility.py notu.)"""
         from arayuz.accessibility import REDUCE_MOTION, ReduceMotionSettings
         from main_gui import MainWindow
 
@@ -75,11 +75,12 @@ class TestThemeIntegration(unittest.TestCase):
             self.assertTrue(btn.accessibleName().strip())
         self.assertTrue(win._alice_panel.accessibleName().strip())
 
-        win._reduce_motion_action.setChecked(True)
+        # "Ayarlar" menüsü kaldırıldı; tercih doğrudan REDUCE_MOTION ile
+        # kalıcılaşmaya devam eder (get_animation_tick_ms bunu okur).
+        REDUCE_MOTION.set_enabled(True)
         self.assertTrue(ReduceMotionSettings().load())
-        win._reduce_motion_action.setChecked(False)
-        self.assertFalse(ReduceMotionSettings().load())
         REDUCE_MOTION.set_enabled(False)
+        self.assertFalse(ReduceMotionSettings().load())
 
         win.deleteLater()
 

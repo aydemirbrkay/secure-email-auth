@@ -16,7 +16,7 @@ import sys
 from typing import Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QColor, QFont, QPalette
+from PyQt6.QtGui import QColor, QFont, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -35,7 +35,7 @@ from kriptografi.crypto_core import CryptoCore, EncryptedPacket, StepType
 from kriptografi.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
 from kriptografi.utils import constant_time_equal
 from arayuz.error_dialog import CryptoErrorDialog
-from arayuz.accessibility import REDUCE_MOTION, build_tab_order, set_accessible
+from arayuz.accessibility import build_tab_order, set_accessible
 from arayuz.widget_utils import png_icon_pixmap, svg_pixmap
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
 from animation_modals.base import CryptoAnimationWindow
@@ -349,33 +349,12 @@ class MainWindow(QMainWindow):
         self._update_toggle_label()
         MANAGER.themeChanged.connect(self._on_theme_changed)
 
-        # Erişilebilirlik: menü, ekran-okuyucu adları ve Tab gezinme sırası.
-        self._init_menu()
+        # Erişilebilirlik: ekran-okuyucu adları ve Tab gezinme sırası.
         self._apply_accessibility()
 
     # ------------------------------------------------------------------
     # Erişilebilirlik (a11y)
     # ------------------------------------------------------------------
-
-    def _init_menu(self) -> None:
-        """Menü çubuğu + "Hareketi Azalt" kalıcı seçeneği (fotosensitif uyarısı)."""
-        menu_bar = self.menuBar()
-        # Headless/offscreen ve platform tutarlılığı için native menü kapalı.
-        menu_bar.setNativeMenuBar(False)
-        settings_menu = menu_bar.addMenu("Ayarlar")
-        self._reduce_motion_action = QAction("Hareketi Azalt", self)
-        self._reduce_motion_action.setCheckable(True)
-        self._reduce_motion_action.setChecked(REDUCE_MOTION.is_enabled())
-        self._reduce_motion_action.setToolTip(
-            "Hızlı/titreşimli animasyonları yavaşlatır. Fotosensitif "
-            "(ışığa duyarlı) kullanıcılar için önerilir."
-        )
-        self._reduce_motion_action.toggled.connect(self._on_reduce_motion_toggled)
-        settings_menu.addAction(self._reduce_motion_action)
-
-    def _on_reduce_motion_toggled(self, enabled: bool) -> None:
-        """Tercihi kalıcılaştırır; sonraki açılan animasyonlar yavaş tick alır."""
-        REDUCE_MOTION.set_enabled(enabled)
 
     def _apply_accessibility(self) -> None:
         """İnteraktif öğelere Türkçe erişilebilir ad/açıklama + Tab sırası."""

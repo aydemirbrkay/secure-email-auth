@@ -78,12 +78,11 @@ class _AESMatrixView(QWidget):
 
         # Boyut
         title_h = self._TITLE_H if label_title else 0
-        # AddRoundKey overlay için round_key (yarı-boyutlu 4×4 grid) sağda
-        # gösterilir: 4*28 + 3*2 = 118 + 14 gap + 12 right margin = 144 px ek alan
-        rk_extra = 4 * (self._CELL_W // 2) + 3 * 2 + 14 + 12  # 144
-        total_w = (
-            self._LABEL_W + 4 * self._CELL_W + 3 * self._CELL_GAP + 12 + rk_extra
-        )
+        # round_key artık ayrı, kalıcı bir matris olarak (bkz.
+        # _AESStateCompareWidget._rk_view) gösterildiği için eski sağdaki
+        # "round_key overlay" ölü alanı (rk_extra) kaldırıldı; matris yalnızca
+        # kendi 4×4 gridini kaplar — boşa giden geniş sağ boşluk artık yok.
+        total_w = self._LABEL_W + 4 * self._CELL_W + 3 * self._CELL_GAP + 12
         total_h = (
             title_h + self._LABEL_H + 4 * self._CELL_H + 3 * self._CELL_GAP + 12
         )
@@ -253,95 +252,39 @@ class _AESMatrixView(QWidget):
 
     # Operasyon başına koreografi metodları.
     def _draw_overlay_addroundkey(self, p: QPainter, ox: int, oy: int) -> None:
-        """AddRoundKey koreografisi — round_key sağdan kayarak gelir,
-        16 hücreye sırayla ⊕ sembolü ve sonuç değeri yerleşir.
+        """AddRoundKey koreografisi — sonuç hücrelerini sırayla 'state ⊕ key'
+        sonucuna yükseltir.
 
-        Faz haritası (toplam 60 tick):
-          0–15 : KEY_REVEAL    — round_key sağdan kayarak gelir
-          16–55: XOR_PER_ROW   — 4 satır × 10 tick, her satırda 4 hücre yanar
-          56–59: FADEOUT       — round_key fade-out
+        round_key ARTIK ayrı, kalıcı bir matris olarak (bkz.
+        ``_AESStateCompareWidget._rk_view``) gösterildiğinden burada eski
+        sağdan-kayan/sönen round_key grid'i çizilmez. Yalnızca aktif matriste
+        16 hücre row-major sırayla ⊕ rozetiyle sonuç değerine geçer; böylece
+        "ÖNCEKİ ⊕ round_key = ŞİMDİKİ" akışının sonuç tarafı canlanır.
 
-        round_key, yan widget'a sığması için yarı boyutlu hücrelerle
-        gösterilir (28×22 yerine main matrix'in 56×44'üne).
+        Faz haritası (toplam 60 tick): her 2 tick'te bir yeni hücre yanar,
+        ~32 tick'te 16 hücre tamamlanır; kalan tick'lerde matris son state'te
+        sabit kalır (kullanıcı değerleri rahatça okuyabilsin diye).
         """
-        if self._round_key is None:
-            return
-
         t = self._tick
         accent = QColor(ANIM_COLORS["accent_peach"])
 
-        # round_key hücre boyutu — main matrix'in YARISI
-        rk_cw = self._CELL_W // 2     # 28
-        rk_ch = self._CELL_H // 2     # 22
-        rk_gap = 2
-        rk_w = 4 * rk_cw + 3 * rk_gap  # 118
-
-        # round_key overlay'in başlangıç ve son x pozisyonu
-        # Hedef: main matrix'in sağında, 14 px boşlukla
-        matrix_right = ox + 4 * self._CELL_W + 3 * self._CELL_GAP
-        rk_target_x = matrix_right + 14
-        rk_start_x = self.width() + 10
-        if t <= 15:
-            progress = t / 15.0
-            rk_x = int(rk_start_x + (rk_target_x - rk_start_x) * progress)
-            rk_alpha = progress
-        elif t < 56:
-            rk_x = rk_target_x
-            rk_alpha = 1.0
-        else:
-            # Fadeout
-            progress = (t - 55) / 5.0
-            rk_x = rk_target_x
-            rk_alpha = max(0.0, 1.0 - progress)
-
-        # "rk" başlığı
-        title_col = QColor(ANIM_COLORS["accent_peach"])
-        title_col.setAlphaF(rk_alpha)
-        p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
-        p.setPen(title_col)
-        p.drawText(QRect(rk_x, oy - 14, rk_w, 12),
-                   Qt.AlignmentFlag.AlignCenter, "round_key")
-
-        # round_key 4×4 grid çiz (yarı boyutta)
-        for r in range(4):
-            for c in range(4):
-                cx = rk_x + c * (rk_cw + rk_gap)
-                cy = oy + r * (rk_ch + rk_gap)
-                # Yarı-boyutlu hücre — _draw_cell kullanma, inline çiz
-                bg_color = QColor(ANIM_COLORS["accent_peach"])
-                bg_color.setAlphaF(rk_alpha * 0.35)
-                border_color = QColor(ANIM_COLORS["accent_peach"])
-                border_color.setAlphaF(rk_alpha)
-                p.setBrush(QBrush(bg_color))
-                p.setPen(QPen(border_color, 1))
-                p.drawRoundedRect(cx, cy, rk_cw, rk_ch, 3, 3)
-                text_col = QColor(ANIM_COLORS["text_primary"])
-                text_col.setAlphaF(rk_alpha)
-                p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
-                p.setPen(text_col)
-                p.drawText(QRect(cx, cy, rk_cw, rk_ch),
-                           Qt.AlignmentFlag.AlignCenter, self._round_key[r][c])
-
-        # Faz 2: sırayla hücreleri XOR (main matrix'te)
-        if 16 <= t < 56:
-            phase_t = t - 16  # 0..39
-            cells_active = min(16, phase_t // 2 + 1)  # her 2 tick'te 1 yeni hücre
-            for idx in range(cells_active):
-                r = idx // 4
-                c = idx % 4
-                cx, cy = self._cell_xy(ox, oy, r, c)
-                # Vurgu çerçevesi
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.setPen(QPen(accent, 2))
-                p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
-                # Mini ⊕ rozeti
-                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
-                p.setPen(accent)
-                p.drawText(QRect(cx + self._CELL_W - 14, cy + 2, 12, 12),
-                           Qt.AlignmentFlag.AlignCenter, "⊕")
-                # _state'i bu hücre için after değerine yükselt
-                if (self._state[r][c] != self._after[r][c]):
-                    self._state[r][c] = self._after[r][c]
+        cells_active = min(16, t // 2 + 1)  # her 2 tick'te 1 yeni hücre
+        for idx in range(cells_active):
+            r = idx // 4
+            c = idx % 4
+            cx, cy = self._cell_xy(ox, oy, r, c)
+            # Vurgu çerçevesi
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(accent, 2))
+            p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
+            # Mini ⊕ rozeti
+            p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+            p.setPen(accent)
+            p.drawText(QRect(cx + self._CELL_W - 14, cy + 2, 12, 12),
+                       Qt.AlignmentFlag.AlignCenter, "⊕")
+            # _state'i bu hücre için after değerine yükselt
+            if self._state[r][c] != self._after[r][c]:
+                self._state[r][c] = self._after[r][c]
 
     def _draw_overlay_subbytes(self, p: QPainter, ox: int, oy: int) -> None:
         """SubBytes koreografisi — 16 hücre row-major sırayla S-Box dönüşümü.
@@ -558,7 +501,11 @@ class _AESStateCompareWidget(QWidget):
         top_row.addWidget(self._replay_btn)
         outer.addLayout(top_row)
 
-        # Orta: önceki view → ok → şimdiki view
+        # Orta: önceki view → [operatör] → şimdiki view.
+        # AddRoundKey adımında araya KALICI round_key matrisi ve ⊕ / =
+        # operatörleri girer: "ÖNCEKİ ⊕ round_key = ŞİMDİKİ". Diğer
+        # operasyonlarda round_key matrisi ve ikinci operatör gizlenir,
+        # _arrow_label "→ Op →" gösterir.
         mid_row = QHBoxLayout()
         mid_row.setSpacing(8)
         mid_row.addStretch(1)
@@ -569,14 +516,20 @@ class _AESStateCompareWidget(QWidget):
         )
         mid_row.addWidget(self._prev_view)
 
-        self._arrow_label = QLabel("→")
-        self._arrow_label.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
-        self._arrow_label.setStyleSheet(
-            f"color: {ANIM_COLORS['text_muted']};"
-        )
-        self._arrow_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._arrow_label.setMinimumWidth(120)
+        self._arrow_label = self._make_operator_label("→")
         mid_row.addWidget(self._arrow_label)
+
+        # round_key kalıcı matrisi — yalnızca AddRoundKey adımlarında görünür.
+        self._rk_view = _AESMatrixView(
+            label_title="round_key",
+            label_color=ANIM_COLORS["accent_peach"],
+        )
+        self._rk_view.setVisible(False)
+        mid_row.addWidget(self._rk_view)
+
+        self._op2_label = self._make_operator_label("=")
+        self._op2_label.setVisible(False)
+        mid_row.addWidget(self._op2_label)
 
         self._curr_view = _AESMatrixView(
             label_title="ŞİMDİKİ (canlı)",
@@ -588,6 +541,23 @@ class _AESStateCompareWidget(QWidget):
         outer.addLayout(mid_row)
         outer.addStretch(1)
 
+    @staticmethod
+    def _make_operator_label(text: str) -> QLabel:
+        """İki matris arasındaki operatör etiketini (→ / ⊕ / =) oluşturur.
+
+        Amaç: matrisler arası akışı (ör. "ÖNCEKİ ⊕ round_key = ŞİMDİKİ")
+        görsel olarak bağlamak. Etiket ortalanır, kalın ve matris yüksekliğinde
+        dikey ortalanır; metni/rengi ``start_step``/``show_final`` günceller.
+        Genişlik içeriğe göre büyür (min 34 px), böylece "→ ShiftRows →" gibi
+        uzun metinler de sığar, tek "⊕" ise dar kalır.
+        """
+        lbl = QLabel(text)
+        lbl.setFont(QFont("Georgia", 16, QFont.Weight.Bold))
+        lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setMinimumWidth(34)
+        return lbl
+
     def start_step(
         self,
         operation: str,
@@ -597,24 +567,51 @@ class _AESStateCompareWidget(QWidget):
         *,
         round_key: list[list[str]] | None = None,
     ) -> None:
-        """Adımı başlat: önceki donmuş, şimdiki animasyonlu."""
+        """Adımı başlat: önceki donmuş, şimdiki animasyonlu.
+
+        AddRoundKey ve round_key verildiğinde araya KALICI round_key matrisi
+        (statik) ile ⊕ / = operatörleri yerleştirilir; böylece
+        "ÖNCEKİ ⊕ round_key = ŞİMDİKİ" akışı kullanıcı tekrar oynatmaya gerek
+        kalmadan ekranda sabit kalır. Diğer operasyonlarda round_key matrisi ve
+        ikinci operatör gizlenir, _arrow_label "→ Op →" gösterir.
+        """
         # Önceki çalışan animasyonu durdur
         self._curr_view.stop_animation()
         # Önceki view'a donmuş before state
         self._prev_view.set_state(before)
-        # Ok etiketini güncelle
-        self._arrow_label.setText(f"→  {operation}  →")
-        self._arrow_label.setStyleSheet(
-            f"color: {op_color}; font-weight: bold;"
-        )
+
+        if operation == "AddRoundKey" and round_key is not None:
+            # round_key'i kalıcı matris olarak göster + ⊕ / = operatörleri
+            self._rk_view.set_state(round_key)
+            self._rk_view.setVisible(True)
+            self._arrow_label.setText("⊕")
+            self._arrow_label.setStyleSheet(
+                f"color: {ANIM_COLORS['accent_peach']}; font-weight: bold;"
+            )
+            self._op2_label.setText("=")
+            self._op2_label.setStyleSheet(f"color: {op_color}; font-weight: bold;")
+            self._op2_label.setVisible(True)
+        else:
+            # Diğer operasyonlar: round_key matrisi + 2. operatör gizli
+            self._rk_view.setVisible(False)
+            self._op2_label.setVisible(False)
+            self._arrow_label.setText(f"→  {operation}  →")
+            self._arrow_label.setStyleSheet(f"color: {op_color}; font-weight: bold;")
+
         # Şimdiki view'a animasyon
         self._curr_view.play_animation(
             operation, before, after, round_key=round_key,
         )
 
     def show_final(self, final_state: list[list[str]]) -> None:
-        """Round 14 sonrası: iki matris de final state, animasyon yok."""
+        """Round 14 sonrası: iki matris de final state, animasyon yok.
+
+        round_key matrisi ve ikinci operatör gizlenir; yalnızca
+        ÖNCEKİ = ŞİMDİKİ (final) gösterilir.
+        """
         self._curr_view.stop_animation()
+        self._rk_view.setVisible(False)
+        self._op2_label.setVisible(False)
         self._prev_view.set_state(final_state)
         self._curr_view.set_state(final_state)
         self._arrow_label.setText("=  FINAL  =")

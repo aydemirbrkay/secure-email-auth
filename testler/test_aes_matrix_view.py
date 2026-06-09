@@ -349,6 +349,35 @@ class TestAESStateCompareWidget(unittest.TestCase):
         )
         self.assertIn("ShiftRows", w._arrow_label.text())
 
+    def test_addroundkey_shows_persistent_round_key_matrix(self):
+        """Alt tür: BİRİM (round_key kalıcı matris akışı).
+        AddRoundKey adımında round_key verildiğinde araya KALICI round_key
+        matrisi (_rk_view) ve ikinci operatör (_op2_label '=') yerleşir;
+        _arrow_label '⊕' olur. Böylece 'ÖNCEKİ ⊕ round_key = ŞİMDİKİ' akışı
+        sönmeden ekranda kalır (kullanıcı tekrar oynatmak zorunda kalmaz)."""
+        w = self._make_widget()
+        before = [[f"b{r}{c}" for c in range(4)] for r in range(4)]
+        after = [[f"a{r}{c}" for c in range(4)] for r in range(4)]
+        rk = [[f"k{r}{c}" for c in range(4)] for r in range(4)]
+        w.start_step("AddRoundKey", before, after, op_color="#5B8EC2",
+                     round_key=rk)
+        # isHidden(): üst widget gösterilmese de açık görünürlük bayrağını yansıtır
+        self.assertFalse(w._rk_view.isHidden())
+        self.assertEqual(w._rk_view._state, rk)
+        self.assertFalse(w._op2_label.isHidden())
+        self.assertEqual(w._arrow_label.text(), "⊕")
+
+    def test_non_addroundkey_hides_round_key_matrix(self):
+        """Alt tür: BİRİM (negatif/karşıt durum).
+        AddRoundKey dışındaki operasyonlarda (ör. ShiftRows) round_key
+        matrisi ve ikinci operatör GİZLİ kalmalı — yalnızca 'ÖNCEKİ → Op →
+        ŞİMDİKİ' akışı gösterilir."""
+        w = self._make_widget()
+        w.start_step("ShiftRows", [["00"] * 4] * 4, [["FF"] * 4] * 4,
+                     op_color="#5B8EC2")
+        self.assertTrue(w._rk_view.isHidden())
+        self.assertTrue(w._op2_label.isHidden())
+
     def test_show_final_sets_both_to_same_state(self):
         """Alt tür: BİRİM (terminal state).
         show_final() round sonu son durumunu (tüm operasyonlar bitti)

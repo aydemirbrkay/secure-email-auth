@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+import logging
 import os
 
 from PyQt6.QtCore import Qt, QRect, QTimer
@@ -26,10 +27,25 @@ from PyQt6.QtWidgets import (
 # Gerçek görsel: 2752×1536 — ölçek: x/4.418, y/5.430
 # ---------------------------------------------------------------------------
 
-_PROJE_KOKU = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_IMAGE_PATH = os.path.join(_PROJE_KOKU, "görseller", "alice and bob.png")
-_DIAGRAM_W = 623
-_DIAGRAM_H = 283
+logger = logging.getLogger(__name__)
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_IMAGE_PATH = os.path.join(_PROJECT_ROOT, "görseller", "alice and bob.png")
+
+# Alice diyagramı sanal koordinat uzayı (rect'lerin tanımlı olduğu boyut).
+_DIAGRAM_VIRTUAL_WIDTH = 623
+_DIAGRAM_VIRTUAL_HEIGHT = 283
+# alice and bob.png kaynak görselinin gerçek piksel boyutu (kalibrasyon referansı).
+_DIAGRAM_SOURCE_WIDTH = 2752
+_DIAGRAM_SOURCE_HEIGHT = 1536
+# Kaynak → sanal uzay ölçek katsayıları (yalnızca belge/doğrulama amaçlı; ~4.418 / ~5.430).
+_DIAGRAM_SCALE_X = _DIAGRAM_SOURCE_WIDTH / _DIAGRAM_VIRTUAL_WIDTH
+_DIAGRAM_SCALE_Y = _DIAGRAM_SOURCE_HEIGHT / _DIAGRAM_VIRTUAL_HEIGHT
+
+# Geriye dönük kısa adlar (paintEvent ölçeklemesinde kullanılır).
+_DIAGRAM_W = _DIAGRAM_VIRTUAL_WIDTH
+_DIAGRAM_H = _DIAGRAM_VIRTUAL_HEIGHT
+
 _BLINK_MS = 1000
 
 # Alice'in 6 gönderme adımı için vurgulama alanları
@@ -66,7 +82,7 @@ class DiagramWidget(QWidget):
         if os.path.isfile(_IMAGE_PATH):
             self._pixmap = QPixmap(_IMAGE_PATH)
         else:
-            print(f"[DiagramWidget] Uyarı: görsel bulunamadı → {_IMAGE_PATH}")
+            logger.warning("DiagramWidget: görsel bulunamadı → %s", _IMAGE_PATH)
 
         self._active_step: int = -1
         self._completed_steps: set[int] = set()
@@ -176,9 +192,21 @@ class DiagramWidget(QWidget):
 # Gerçek görsel: 2730×1536 — ölçek: x/5, y/5
 # ---------------------------------------------------------------------------
 
-_BOB_IMAGE_PATH = os.path.join(_PROJE_KOKU, "görseller", "bob-tarafi-sifre-cozme.png")
-_BOB_DIAGRAM_W = 546
-_BOB_DIAGRAM_H = 307
+_BOB_IMAGE_PATH = os.path.join(_PROJECT_ROOT, "görseller", "bob-tarafi-sifre-cozme.png")
+
+# Bob deşifreleme diyagramı sanal koordinat uzayı.
+_BOB_DIAGRAM_VIRTUAL_WIDTH = 546
+_BOB_DIAGRAM_VIRTUAL_HEIGHT = 307
+# bob-tarafi-sifre-cozme.png kaynak görselinin gerçek piksel boyutu.
+_BOB_DIAGRAM_SOURCE_WIDTH = 2730
+_BOB_DIAGRAM_SOURCE_HEIGHT = 1536
+# Kaynak → sanal uzay ölçek katsayıları (yalnızca belge/doğrulama amaçlı; ~5 / ~5).
+_BOB_DIAGRAM_SCALE_X = _BOB_DIAGRAM_SOURCE_WIDTH / _BOB_DIAGRAM_VIRTUAL_WIDTH
+_BOB_DIAGRAM_SCALE_Y = _BOB_DIAGRAM_SOURCE_HEIGHT / _BOB_DIAGRAM_VIRTUAL_HEIGHT
+
+# Geriye dönük kısa adlar (paintEvent ölçeklemesinde kullanılır).
+_BOB_DIAGRAM_W = _BOB_DIAGRAM_VIRTUAL_WIDTH
+_BOB_DIAGRAM_H = _BOB_DIAGRAM_VIRTUAL_HEIGHT
 
 # Bob'un 6 deşifreleme + doğrulama adımı için vurgulama alanları
 # Piksel ölçümleri kenar tespitiyle doğrulanmıştır (bkz. bob-tarafi-sifre-cozme.png).
@@ -208,7 +236,7 @@ class BobDecryptDiagramWidget(QWidget):
         if os.path.isfile(_BOB_IMAGE_PATH):
             self._pixmap = QPixmap(_BOB_IMAGE_PATH)
         else:
-            print(f"[BobDecryptDiagramWidget] Uyarı: görsel bulunamadı → {_BOB_IMAGE_PATH}")
+            logger.warning("BobDecryptDiagramWidget: görsel bulunamadı → %s", _BOB_IMAGE_PATH)
 
         self._active_step: int = -1
         self._completed_steps: set[int] = set()
@@ -308,8 +336,8 @@ class BobDecryptDiagramWidget(QWidget):
 
 
 from kriptografi.crypto_core import EncryptedPacket, StepResult
-from kriptografi.utils import _build_step_content, _make_step_box, _style_step_box
-from arayuz.theme import COLORS, STEP_COLORS_BOB
+from arayuz.widget_utils import build_step_content, make_step_box, style_step_box
+from arayuz.theme import COLORS, STEP_COLORS_BOB, label_title_style
 
 
 class BobPanel(QWidget):
@@ -406,7 +434,7 @@ class BobPanel(QWidget):
     def _apply_styles(self) -> None:
         """Renk taşıyan stilleri aktif palete göre (yeniden) uygular."""
         c = COLORS
-        self._title_label.setStyleSheet(f"color: {c['accent_green']};")
+        self._title_label.setStyleSheet(label_title_style("accent_green"))
         _muted = f"color: {c['text_secondary']}; font-size: 12px;"
         self._received_label.setStyleSheet(_muted)
         self.status_label.setStyleSheet(
@@ -422,7 +450,7 @@ class BobPanel(QWidget):
         )
         # Mevcut adım kutularını da aktif temaya göre yeniden stillendir
         for i, box in enumerate(self._step_widgets):
-            _style_step_box(box, STEP_COLORS_BOB[i % len(STEP_COLORS_BOB)])
+            style_step_box(box, STEP_COLORS_BOB[i % len(STEP_COLORS_BOB)])
 
     # ------------------------------------------------------------------
     # Diyagram API
@@ -507,6 +535,25 @@ class BobPanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
+    @property
+    def current_step(self) -> int:
+        """Bir sonraki gösterilecek adımın indeksi (0 tabanlı).
+
+        Dışarıdan akış kararı verirken ``_current_step`` private alanına
+        erişmek yerine bu public property kullanılır.
+        """
+        return self._current_step
+
+    def peek_next_step(self) -> Optional[StepResult]:
+        """Bir sonraki adımı gerçekleştirmeden döndürür; sonda ``None``.
+
+        ``show_next_step()`` çağrılmadan, sırada hangi adımın olduğunu
+        öğrenmek için kullanılır. Durumu değiştirmez.
+        """
+        if self._current_step >= len(self._steps):
+            return None
+        return self._steps[self._current_step]
+
     def show_next_step(self) -> bool:
         """Sonraki adımı içe-sararak kümülatif gösterir.
 
@@ -518,8 +565,8 @@ class BobPanel(QWidget):
 
         step = self._steps[self._current_step]
         color = STEP_COLORS_BOB[self._current_step % len(STEP_COLORS_BOB)]
-        content = _build_step_content(step)
-        box = _make_step_box(
+        content = build_step_content(step)
+        box = make_step_box(
             f"Adım {step.step_number}: {step.step_name}",
             content,
             color,

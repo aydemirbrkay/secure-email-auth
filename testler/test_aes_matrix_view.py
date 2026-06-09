@@ -34,13 +34,11 @@ Strateji:
 Hata durumunda anlamı: AES animasyonunda state takılır, hatalı sıra,
 veya kapatma sonrası timer çalışmaya devam eder (memory leak).
 """
-import sys
 import unittest
 
-from PyQt6.QtWidgets import QApplication
-
-# QWidget alt sınıfları için tek bir QApplication örneği gereklidir.
-_app = QApplication.instance() or QApplication(sys.argv)
+# QWidget alt sınıfları için tek bir QApplication örneği gereklidir; bu örnek
+# artık conftest.py içindeki session kapsamlı autouse `qapp` fixture'ı
+# tarafından sağlanır (headless/offscreen ortam da orada ayarlanır).
 
 
 class TestAESMatrixViewBasics(unittest.TestCase):

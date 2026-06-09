@@ -29,6 +29,7 @@ _DARK: dict[str, str] = {
     "border_highlight": "#7C9CFF",
     "hl_mauve":         "#3D2F56",
     "hl_yellow":        "#3D3119",
+    "text_on_accent":   "#FFFFFF",  # vurgu rengi üstündeki metin (buton vb.)
 }
 
 _LIGHT: dict[str, str] = {
@@ -50,6 +51,7 @@ _LIGHT: dict[str, str] = {
     "border_highlight": "#2563EB",
     "hl_mauve":         "#EADDF7",
     "hl_yellow":        "#F6ECC9",
+    "text_on_accent":   "#FFFFFF",  # vurgu rengi üstündeki metin (buton vb.)
 }
 
 _PALETTES = {"dark": _DARK, "light": _LIGHT}
@@ -140,6 +142,125 @@ QComboBox QAbstractItemView {{
     selection-color: #FFFFFF;
 }}
 """
+
+
+# ----------------------------------------------------------------------------
+# Stil Helper'ları
+# ----------------------------------------------------------------------------
+# Tüm renkler aktif COLORS paletinden okunur (hardcoded hex yok). Her çağrıda
+# yeniden üretildikleri için tema değişiminde (_apply_styles/refresh_theme tekrar
+# çağrıldığında) doğru paleti verir; satır-içi setStyleSheet kopyalarını tekleştirir.
+
+
+def card_style(selector: str = "QFrame",
+               background_key: str = "bg_card",
+               radius: int = 8) -> str:
+    """Kart/çerçeve stili. ``selector`` ile QFrame veya ``#objectName`` hedeflenir."""
+    c = COLORS
+    return (
+        f"{selector} {{ background-color: {c[background_key]}; "
+        f"border: 1px solid {c['border']}; border-radius: {radius}px; }}"
+    )
+
+
+def step_box_style(active: bool = False,
+                   completed: bool = False,
+                   *,
+                   border_color: str | None = None) -> str:
+    """Adım kutusu (QGroupBox) stili. ``border_color`` verilirse onu kullanır
+    (panellerin adım-bazlı renk şeması); yoksa duruma göre seçer:
+    tamamlandı→yeşil, aktif→vurgu kenarlığı, aksi halde→nötr kenarlık."""
+    c = COLORS
+    if border_color is None:
+        if completed:
+            border_color = c["accent_green"]
+        elif active:
+            border_color = c["border_highlight"]
+        else:
+            border_color = c["border"]
+    return (
+        f"QGroupBox {{ border: 2px solid {border_color}; border-radius: 8px; "
+        f"margin-top: 14px; padding: 14px 8px 8px 8px; }}"
+        f"QGroupBox::title {{ color: {border_color}; "
+        f"font-family: 'Georgia', 'Palatino Linotype', serif; "
+        f"font-weight: bold; font-size: 15px; }}"
+    )
+
+
+def button_primary_style() -> str:
+    """Birincil eylem butonu (dolu, vurgu mavisi)."""
+    c = COLORS
+    return (
+        f"QPushButton {{ background: {c['accent_blue']}; "
+        f"color: {c['text_on_accent']}; border: none; "
+        f"border-radius: 6px; padding: 8px 22px; font-weight: bold; font-size: 13px; "
+        f"min-height: 34px; min-width: 96px; }}"
+        f"QPushButton:hover {{ background: {c['accent_mauve']}; }}"
+        f"QPushButton:disabled {{ background: {c['bg_card']}; "
+        f"color: {c['text_muted']}; }}"
+    )
+
+
+def button_secondary_style() -> str:
+    """İkincil buton (içi boş, nötr; hover'da şeftali vurgu)."""
+    c = COLORS
+    return (
+        f"QPushButton {{ background: {c['bg_card']}; "
+        f"color: {c['text_secondary']}; border: 1px solid {c['border']}; "
+        f"border-radius: 6px; padding: 8px 18px; font-size: 13px; "
+        f"min-height: 34px; }}"
+        f"QPushButton:hover {{ background: {c['accent_peach']}; "
+        f"color: {c['text_on_accent']}; }}"
+    )
+
+
+def label_title_style(accent_key: str = "accent_blue") -> str:
+    """Başlık etiketi rengi. ``accent_key`` palet vurgu anahtarıdır
+    (örn. Alice=accent_mauve, Bob=accent_green)."""
+    return f"color: {COLORS[accent_key]};"
+
+
+def progress_bar_style() -> str:
+    """İlerleme çubuğu (oluk + dolum)."""
+    c = COLORS
+    return (
+        f"QProgressBar {{ border: 1px solid {c['border']}; "
+        f"border-radius: 4px; background: {c['bg_card']}; "
+        f"color: {c['text_primary']}; text-align: center; height: 18px; }}"
+        f"QProgressBar::chunk {{ background-color: {c['accent_blue']}; "
+        f"border-radius: 3px; }}"
+    )
+
+
+# Toast seviyesi → palet vurgu anahtarı.
+_TOAST_LEVELS: dict[str, str] = {
+    "success": "accent_green",
+    "error":   "accent_red",
+    "warning": "accent_yellow",
+    "info":    "accent_blue",
+}
+
+
+def toast_style(level: str) -> str:
+    """Toast üst şerit stili. ``level`` ∈ {success, error, warning, info}."""
+    accent_key = _TOAST_LEVELS.get(level)
+    if accent_key is None:
+        raise ValueError(f"Geçersiz toast seviyesi: {level}")
+    return (
+        f"background: {COLORS[accent_key]}; "
+        f"border-top-left-radius: 10px; "
+        f"border-top-right-radius: 10px; "
+        f"border: none;"
+    )
+
+
+def get_animation_tick_ms(base: int) -> int:
+    """Animasyon timer aralığını (ms) döndürür; "Hareketi Azalt" açıksa
+    tick'i 3× yavaşlatır. Fotosensitif kullanıcılar için hızlı/titreşimli
+    geçişler yumuşatılır. Lazy import ile döngüsel bağımlılık önlenir."""
+    from arayuz.accessibility import REDUCE_MOTION
+
+    return base * 3 if REDUCE_MOTION.is_enabled() else base
 
 
 GLOBAL_STYLESHEET: str = ""

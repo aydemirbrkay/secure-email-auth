@@ -9,6 +9,7 @@ manual_mode=False: QTimer otomatik oynatır (AES intro).
 """
 from __future__ import annotations
 from collections.abc import Callable
+from enum import Enum
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -24,32 +25,51 @@ from PyQt6.QtWidgets import (
 
 # Paylaşılan tek renk kaynağı (arayuz.theme). Tema değişiminde yerinde güncellenir,
 # bu yüzden animasyon pencereleri açıldıkları anda aktif temayı alır.
-from arayuz.theme import ANIM_COLORS
+from arayuz.theme import (
+    ANIM_COLORS,
+    button_primary_style,
+    button_secondary_style,
+    progress_bar_style,
+)
 
-_SPEED_MAP: dict[str, int] = {"Yavaş": 2000, "Normal": 1500, "Hızlı": 800}
+
+class AnimationSpeed(Enum):
+    """Otomatik oynatma adım gecikmesi (ms). İç mantık bu Enum'u kullanır;
+    UI'da gösterilen Türkçe etiketler ``SPEED_LABELS_TR`` üzerinden çözülür."""
+
+    SLOW = 2000
+    NORMAL = 1500
+    FAST = 800
+
+
+# Enum → kullanıcıya görünen Türkçe etiket. UI etiketleri Türkçe kalır,
+# kod tarafı identifier'ları (Enum üyeleri) İngilizce'dir.
+SPEED_LABELS_TR: dict[AnimationSpeed, str] = {
+    AnimationSpeed.SLOW: "Yavaş",
+    AnimationSpeed.NORMAL: "Normal",
+    AnimationSpeed.FAST: "Hızlı",
+}
+
+# Türkçe etiket → Enum (ComboBox seçimini geri çözmek için ters harita).
+_LABEL_TO_SPEED: dict[str, AnimationSpeed] = {
+    label: speed for speed, label in SPEED_LABELS_TR.items()
+}
+
+
+# Navigasyon butonları (Geri/İleri/Kapat) yüksekliği. Birincil buton stili
+# min-height:34 + padding ile ~50 px'e çıkar; gömülü panelde dikey yer
+# kazanmak ve nav butonlarının kaydırmasız sığması için üst sınır koyulur.
+_NAV_BTN_HEIGHT = 36
 
 
 def _btn_style() -> str:
-    return (
-        f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-        f"color: #FFFFFF; border: none; "
-        f"border-radius: 6px; padding: 8px 22px; font-weight: bold; font-size: 13px; "
-        f"min-height: 34px; min-width: 96px; }}"
-        f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-        f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
-        f"color: {ANIM_COLORS['text_muted']}; }}"
-    )
+    # Birincil buton stili tek kaynaktan (arayuz.theme) gelir.
+    return button_primary_style()
 
 
 def _close_style() -> str:
-    return (
-        f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
-        f"color: {ANIM_COLORS['text_secondary']}; border: 1px solid {ANIM_COLORS['border']}; "
-        f"border-radius: 6px; padding: 8px 18px; font-size: 13px; "
-        f"min-height: 34px; }}"
-        f"QPushButton:hover {{ background: {ANIM_COLORS['accent_peach']}; "
-        f"color: #FFFFFF; }}"
-    )
+    # İkincil/kapat butonu stili tek kaynaktan (arayuz.theme) gelir.
+    return button_secondary_style()
 
 
 class CryptoAnimationWindow(QWidget):
@@ -99,7 +119,7 @@ class CryptoAnimationWindow(QWidget):
         self.manual_mode: bool = manual_mode
         self.current_step: int = 0
         self.total_steps: int = total_steps
-        self.speed_ms: int = 1500
+        self.speed_ms: int = AnimationSpeed.NORMAL.value
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._advance_step)
@@ -138,10 +158,12 @@ class CryptoAnimationWindow(QWidget):
         if self.manual_mode:
             self._btn_prev = QPushButton("◀  Geri")
             self._btn_prev.setEnabled(False)
+            self._btn_prev.setFixedHeight(_NAV_BTN_HEIGHT)
             self._btn_prev.clicked.connect(self._go_back)
             controls.addWidget(self._btn_prev)
 
             self._btn_next = QPushButton("İleri  ▶")
+            self._btn_next.setFixedHeight(_NAV_BTN_HEIGHT)
             self._btn_next.clicked.connect(self._advance_step)
             controls.addWidget(self._btn_next)
         else:
@@ -149,14 +171,15 @@ class CryptoAnimationWindow(QWidget):
             controls.addWidget(self._speed_lbl)
 
             self._speed_combo = QComboBox()
-            self._speed_combo.addItems(list(_SPEED_MAP.keys()))
-            self._speed_combo.setCurrentText("Normal")
+            self._speed_combo.addItems(list(SPEED_LABELS_TR.values()))
+            self._speed_combo.setCurrentText(SPEED_LABELS_TR[AnimationSpeed.NORMAL])
             self._speed_combo.currentTextChanged.connect(self._on_speed_changed)
             controls.addWidget(self._speed_combo)
 
         controls.addStretch()
 
         self._btn_close = QPushButton("✕  Kapat")
+        self._btn_close.setFixedHeight(_NAV_BTN_HEIGHT)
         if self._on_close is not None:
             self._btn_close.clicked.connect(self._on_close)
         else:
@@ -174,13 +197,7 @@ class CryptoAnimationWindow(QWidget):
             f"color: {ANIM_COLORS['text_primary']};"
         )
         self._header_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        self._progress.setStyleSheet(
-            f"QProgressBar {{ border: 1px solid {ANIM_COLORS['border']}; "
-            f"border-radius: 4px; background: {ANIM_COLORS['bg_card']}; "
-            f"color: {ANIM_COLORS['text_primary']}; text-align: center; height: 18px; }}"
-            f"QProgressBar::chunk {{ background-color: {ANIM_COLORS['accent_blue']}; "
-            f"border-radius: 3px; }}"
-        )
+        self._progress.setStyleSheet(progress_bar_style())
         if hasattr(self, "_btn_prev"):
             self._btn_prev.setStyleSheet(_btn_style())
         if hasattr(self, "_btn_next"):
@@ -236,7 +253,8 @@ class CryptoAnimationWindow(QWidget):
     # ------------------------------------------------------------------
 
     def _on_speed_changed(self, text: str) -> None:
-        self.speed_ms = _SPEED_MAP[text]
+        # Türkçe etiket → Enum → ms süresi. UI etiketi Türkçe, iç mantık Enum.
+        self.speed_ms = _LABEL_TO_SPEED[text].value
         if self._timer.isActive():
             self._timer.setInterval(self.speed_ms)
 

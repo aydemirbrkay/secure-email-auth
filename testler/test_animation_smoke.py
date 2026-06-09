@@ -105,21 +105,21 @@ class TestAnimationModulesImport(unittest.TestCase):
 
     def test_aes_animation_module_imports(self) -> None:
         """Alt tür: SMOKE (AES penceresi sınıfı).
-        AESAnimationWindow sınıfı aes_animation modülünde tanımlı."""
-        from animation_modals import aes_animation
-        self.assertTrue(hasattr(aes_animation, "AESAnimationWindow"))
+        AESAnimationWindow sınıfı aes alt-paketinde tanımlı."""
+        from animation_modals import aes
+        self.assertTrue(hasattr(aes, "AESAnimationWindow"))
 
     def test_rsa_animation_module_imports(self) -> None:
         """Alt tür: SMOKE (RSA penceresi sınıfı).
-        RSAAnimationWindow sınıfı rsa_animation modülünde tanımlı."""
-        from animation_modals import rsa_animation
-        self.assertTrue(hasattr(rsa_animation, "RSAAnimationWindow"))
+        RSAAnimationWindow sınıfı rsa alt-paketinde tanımlı."""
+        from animation_modals import rsa
+        self.assertTrue(hasattr(rsa, "RSAAnimationWindow"))
 
     def test_sha256_animation_module_imports(self) -> None:
         """Alt tür: SMOKE (SHA penceresi sınıfı).
-        SHA256AnimationWindow sınıfı sha256_animation modülünde tanımlı."""
-        from animation_modals import sha256_animation
-        self.assertTrue(hasattr(sha256_animation, "SHA256AnimationWindow"))
+        SHA256AnimationWindow sınıfı sha256 alt-paketinde tanımlı."""
+        from animation_modals import sha256
+        self.assertTrue(hasattr(sha256, "SHA256AnimationWindow"))
 
     def test_matrix_widget_module_imports(self) -> None:
         """Alt tür: SMOKE (yardımcı modül).
@@ -148,7 +148,7 @@ class TestAnimationWindowsSubclassBase(unittest.TestCase):
         """Alt tür: SMOKE (sınıf hiyerarşi).
         AESAnimationWindow → CryptoAnimationWindow alt sınıfı. Taban
         sınıfın navigasyon/progress bar/timer altyapısını miras alır."""
-        from animation_modals.aes_animation import AESAnimationWindow
+        from animation_modals import AESAnimationWindow
         from animation_modals.base import CryptoAnimationWindow
         self.assertTrue(
             issubclass(AESAnimationWindow, CryptoAnimationWindow),
@@ -158,7 +158,7 @@ class TestAnimationWindowsSubclassBase(unittest.TestCase):
     def test_rsa_window_subclasses_base(self) -> None:
         """Alt tür: SMOKE (sınıf hiyerarşi).
         RSAAnimationWindow → CryptoAnimationWindow alt sınıfı."""
-        from animation_modals.rsa_animation import RSAAnimationWindow
+        from animation_modals import RSAAnimationWindow
         from animation_modals.base import CryptoAnimationWindow
         self.assertTrue(
             issubclass(RSAAnimationWindow, CryptoAnimationWindow),
@@ -167,7 +167,7 @@ class TestAnimationWindowsSubclassBase(unittest.TestCase):
     def test_sha256_window_subclasses_base(self) -> None:
         """Alt tür: SMOKE (sınıf hiyerarşi).
         SHA256AnimationWindow → CryptoAnimationWindow alt sınıfı."""
-        from animation_modals.sha256_animation import SHA256AnimationWindow
+        from animation_modals import SHA256AnimationWindow
         from animation_modals.base import CryptoAnimationWindow
         self.assertTrue(
             issubclass(SHA256AnimationWindow, CryptoAnimationWindow),
@@ -319,7 +319,7 @@ class TestRSAConstantsInvariants(unittest.TestCase):
         """Alt tür: INVARIANT (RSA modülüs ve totient).
         n = p · q  VE  ϕ(n) = (p-1)(q-1). Random demo değerleriyle
         her açılışta bu temel RSA bağıtları sağlanmalı."""
-        from animation_modals.rsa_animation import _P, _Q, _N, _PHI
+        from animation_modals.rsa.helpers import _P, _Q, _N, _PHI
         self.assertEqual(_N, _P * _Q)
         self.assertEqual(_PHI, (_P - 1) * (_Q - 1))
 
@@ -327,7 +327,7 @@ class TestRSAConstantsInvariants(unittest.TestCase):
         """Alt tür: INVARIANT (RSA anahtar üretim ilkesi).
         e · d ≡ 1 (mod ϕ) — RSA özel üs (d) tanımının matematiksel
         temeli. Bu bozulursa şifreleme/deşifreleme tutarsız olur."""
-        from animation_modals.rsa_animation import _E, _D, _PHI
+        from animation_modals.rsa.helpers import _E, _D, _PHI
         self.assertEqual((_E * _D) % _PHI, 1)
 
 
@@ -344,14 +344,14 @@ class TestAESMatrixViewIntegration(unittest.TestCase):
 
     def test_aes_window_imports_compare_widget(self):
         """Alt tür: SMOKE (modüller arası bağlantı — kaynak grep).
-        aes_animation.py kaynak kodunda '_AESStateCompareWidget'
+        aes window.py kaynak kodunda '_AESStateCompareWidget'
         referansı geçmeli. AST analizi yerine basit string arama
         (regex değil) — refactor'da unutulan import veya yanlış
         widget kullanımını yakalar."""
-        from animation_modals import aes_animation
+        from animation_modals.aes import window as aes_window
         # _AESStateCompareWidget veya aes_matrix_view referansı olmalı
         import inspect
-        source = inspect.getsource(aes_animation)
+        source = inspect.getsource(aes_window)
         self.assertIn("_AESStateCompareWidget", source)
 
     def test_aes_matrix_view_total_ticks_are_positive(self):
@@ -374,6 +374,53 @@ class TestAESMatrixViewIntegration(unittest.TestCase):
         for op in ("AddRoundKey", "SubBytes", "ShiftRows", "MixColumns"):
             with self.subTest(op=op):
                 self.assertIn(op, _AESMatrixView._TICKS_BY_OP)
+
+
+class TestAnimationSpeedEnum(unittest.TestCase):
+    """base.AnimationSpeed Enum + Türkçe etiket haritası sözleşmesi.
+
+    Magic number hız haritası ``{"Yavaş":2000,...}`` yerine isimli Enum
+    kullanılır; UI'da gösterilen etiketler Türkçe kalır."""
+
+    def test_enum_durations_unchanged(self) -> None:
+        """Alt tür: INVARIANT (süre değerleri korunur).
+        Enum üyelerinin ms değerleri eski sözlükle birebir aynı olmalı —
+        davranış (otomatik oynatma hızı) değişmedi."""
+        from animation_modals.base import AnimationSpeed
+        self.assertEqual(AnimationSpeed.SLOW.value, 2000)
+        self.assertEqual(AnimationSpeed.NORMAL.value, 1500)
+        self.assertEqual(AnimationSpeed.FAST.value, 800)
+
+    def test_turkish_labels_preserved(self) -> None:
+        """Alt tür: INVARIANT (kullanıcıya görünen Türkçe etiketler).
+        SPEED_LABELS_TR her Enum üyesini doğru Türkçe etikete eşler;
+        UI etiketleri Türkçe kalmalı."""
+        from animation_modals.base import AnimationSpeed, SPEED_LABELS_TR
+        self.assertEqual(SPEED_LABELS_TR[AnimationSpeed.SLOW], "Yavaş")
+        self.assertEqual(SPEED_LABELS_TR[AnimationSpeed.NORMAL], "Normal")
+        self.assertEqual(SPEED_LABELS_TR[AnimationSpeed.FAST], "Hızlı")
+        # Negatif/kapsam: her üye için bir etiket tanımlı (eksik eşleme yok).
+        self.assertEqual(set(SPEED_LABELS_TR.keys()), set(AnimationSpeed))
+
+
+class TestFipsRoundConstants(unittest.TestCase):
+    """AES/SHA round sayısı sabitleri FIPS referans değerlerini taşır."""
+
+    def test_aes_num_rounds(self) -> None:
+        """Alt tür: INVARIANT (FIPS 197 §5.1).
+        AES-256 round sayısı 14; final round indeksi de 14 olmalı."""
+        from animation_modals.aes.constants import (
+            AES_NUM_ROUNDS,
+            AES_FINAL_ROUND_INDEX,
+        )
+        self.assertEqual(AES_NUM_ROUNDS, 14)
+        self.assertEqual(AES_FINAL_ROUND_INDEX, 14)
+
+    def test_sha256_num_rounds(self) -> None:
+        """Alt tür: INVARIANT (FIPS 180-4 §6.2.2).
+        SHA-256 sıkıştırma round sayısı 64 olmalı."""
+        from animation_modals.sha256.constants import SHA256_NUM_ROUNDS
+        self.assertEqual(SHA256_NUM_ROUNDS, 64)
 
 
 if __name__ == "__main__":

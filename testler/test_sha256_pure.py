@@ -140,7 +140,7 @@ class TestSHA256AnimationStructure(unittest.TestCase):
         """Alt tür: SMOKE (import sözleşmesi).
         _WExpansionWidget (Adım 3 — Mesaj Genişletme sayfası ana widget'ı)
         modülde tanımlı olmalı. Yeniden adlandırma/silme bozulmasını yakalar."""
-        from animation_modals import sha256_animation as sha
+        from animation_modals.sha256 import window as sha
         self.assertTrue(hasattr(sha, "_WExpansionWidget"))
 
     def test_match_assembly_widget_exists(self):
@@ -148,7 +148,7 @@ class TestSHA256AnimationStructure(unittest.TestCase):
         _MatchAssemblyWidget (Adım 5 — Hash Eşleşmesi sayfası widget'ı)
         modülde tanımlı olmalı. Final H[0..7] birleştirme animasyonu
         bu sınıfa bağlı."""
-        from animation_modals import sha256_animation as sha
+        from animation_modals.sha256 import window as sha
         self.assertTrue(hasattr(sha, "_MatchAssemblyWidget"))
 
 if __name__ == "__main__":

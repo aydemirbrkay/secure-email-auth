@@ -94,8 +94,8 @@ def _add_round_key(state: list[list[int]], rk: list[list[int]]) -> list[list[int
 
 
 def _key_expansion(key: bytes) -> list[list[list[int]]]:
-    Nk = 8
-    Nr = 14
+    Nk = 8   # AES-256: 8 adet 32-bit anahtar kelimesi (FIPS 197 §5.2)
+    Nr = 14  # AES-256 round sayısı (FIPS 197 §5.1)
     w: list[list[int]] = []
     for i in range(Nk):
         w.append(list(key[4 * i: 4 * i + 4]))

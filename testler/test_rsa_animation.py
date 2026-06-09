@@ -43,7 +43,7 @@ class TestRSAAnimationConstants(unittest.TestCase):
           3. e · d ≡ 1 (mod ϕ)            (RSA anahtar bağıtı)
         Modül import edildiği anda _reseed_demo() çağrılır; bu test
         ilk çağrının çıktısının doğru olduğunu garanti eder."""
-        from animation_modals import rsa_animation as rsa
+        import animation_modals.rsa.helpers as rsa
         self.assertEqual(rsa._N, rsa._P * rsa._Q)
         self.assertEqual(rsa._PHI, (rsa._P - 1) * (rsa._Q - 1))
         self.assertEqual((rsa._E * rsa._D) % rsa._PHI, 1)
@@ -53,7 +53,7 @@ class TestRSAAnimationConstants(unittest.TestCase):
         Seçilen p ve q değerleri _PRIME_POOL listesinde bulunmalı VE
         birbirinden farklı olmalı. Aynı asal seçilirse RSA çökecek
         (ϕ = (p-1)² olur, güvenlik bozulur)."""
-        from animation_modals import rsa_animation as rsa
+        import animation_modals.rsa.helpers as rsa
         self.assertIn(rsa._P, rsa._PRIME_POOL)
         self.assertIn(rsa._Q, rsa._PRIME_POOL)
         self.assertNotEqual(rsa._P, rsa._Q)
@@ -66,7 +66,7 @@ class TestRSAAnimationConstants(unittest.TestCase):
              için gerekli; aksi halde 65^e mod n çalışmaz)
         Kullanıcı pencereyi defalarca açtığında her seferde MATEMATIK
         doğru kalır."""
-        from animation_modals import rsa_animation as rsa
+        import animation_modals.rsa.helpers as rsa
         for _ in range(5):
             rsa._reseed_demo()
             self.assertEqual(rsa._N, rsa._P * rsa._Q)
@@ -80,7 +80,7 @@ class TestRSAAnimationConstants(unittest.TestCase):
         _reseed_demo ve _PRIME_POOL modülde tanımlı. _PRIME_POOL >10
         eleman içermeli — yetersiz çeşitlilikte aynı (p,q) çiftleri
         sık tekrarlanır ve kullanıcı 'rastgele' deneyimi yaşamaz."""
-        from animation_modals import rsa_animation as rsa
+        import animation_modals.rsa.helpers as rsa
         self.assertTrue(hasattr(rsa, "_reseed_demo"))
         self.assertTrue(hasattr(rsa, "_PRIME_POOL"))
         self.assertGreater(len(rsa._PRIME_POOL), 10)  # yeterli çeşitlilik
@@ -94,7 +94,7 @@ class TestRSAAnimationConstants(unittest.TestCase):
           - GCD=1 olduğu satırda t değeri: t mod ϕ = d (RSA özel üs)
         Bu test EEA fonksiyonunun gerçekten doğru RSA d'sini ürettiğini
         cebirsel olarak kanıtlar."""
-        from animation_modals.rsa_animation import _eea_steps, _PHI, _E, _D
+        from animation_modals.rsa.helpers import _eea_steps, _PHI, _E, _D
         rows = _eea_steps(_PHI, _E)
         # Seed satırları (her zaman aynı yapıda)
         self.assertEqual(rows[0], (0, 0, _PHI, 1, 0))
@@ -113,21 +113,21 @@ class TestRSAAnimationStructure(unittest.TestCase):
         """Alt tür: SMOKE (yapısal sözleşme).
         _TITLES sınıf niteliği tam 8 girdi. Adım sayısı değişirse
         progress bar veya _render_step kayar."""
-        from animation_modals.rsa_animation import RSAAnimationWindow
+        from animation_modals import RSAAnimationWindow
         self.assertEqual(len(RSAAnimationWindow._TITLES), 8)
 
     def test_captions_have_eight_entries(self):
         """Alt tür: SMOKE (eşleşen alt başlık).
         _CAPTIONS (her adımın açıklayıcı alt başlığı) da 8 girdi —
         _TITLES'la eşleşmeli. Eşleşmezse zip(titles, captions) kayar."""
-        from animation_modals.rsa_animation import RSAAnimationWindow
+        from animation_modals import RSAAnimationWindow
         self.assertEqual(len(RSAAnimationWindow._CAPTIONS), 8)
 
     def test_titles_use_eight_format(self):
         """Alt tür: SMOKE (format tutarlılığı).
         Her başlıkta 'Adım N / 8' (N: 1..8) ifadesi geçmeli. Format
         yanlış olursa kullanıcı yanlış toplam görür."""
-        from animation_modals.rsa_animation import RSAAnimationWindow
+        from animation_modals import RSAAnimationWindow
         for i, title in enumerate(RSAAnimationWindow._TITLES):
             self.assertIn(f"Adım {i+1} / 8", title,
                           f"index {i}: '{title}'")
@@ -136,14 +136,14 @@ class TestRSAAnimationStructure(unittest.TestCase):
         """Alt tür: SMOKE (sıralama doğrulaması).
         Son adım (index 7) 'Şifreleme' içerir — m → c → m' turu sayfası.
         Bu sıra docstring + tez içeriğiyle eşleşmek zorunda."""
-        from animation_modals.rsa_animation import RSAAnimationWindow
+        from animation_modals import RSAAnimationWindow
         self.assertIn("Şifreleme", RSAAnimationWindow._TITLES[7])
 
     def test_encrypt_decrypt_widget_exists(self):
         """Alt tür: SMOKE (sınıf varlığı).
         _RSAEncryptDecryptWidget — Adım 8 sayfasının ana widget'ı —
         modülde tanımlı. Yeniden adlandırılırsa Adım 8 boş çıkar."""
-        from animation_modals import rsa_animation as rsa
+        import animation_modals.rsa.key_match as rsa
         self.assertTrue(hasattr(rsa, "_RSAEncryptDecryptWidget"))
 
 

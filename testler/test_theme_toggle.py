@@ -1,10 +1,7 @@
-import os
 import unittest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PyQt6.QtWidgets import QApplication
-
-_app = QApplication.instance() or QApplication([])
+# Headless/offscreen ortam ve tek QApplication örneği conftest.py'deki
+# session kapsamlı autouse `qapp` fixture'ı tarafından sağlanır.
 
 
 class TestThemeToggle(unittest.TestCase):

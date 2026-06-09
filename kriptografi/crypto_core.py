@@ -14,8 +14,10 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from enum import Enum, auto
+from typing import Callable, Optional, Tuple
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -25,7 +27,28 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (
 )
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, InvalidTag
+
+from kriptografi.errors import (
+    DecryptError,
+    IntegrityError,
+    KeygenError,
+    PacketFormatError,
+    ReplayDetectedError,
+    StaleTimestampError,
+)
+
+
+# Tazelik penceresi: paketin zaman damgası ile alıcının "şimdi"si
+# arasındaki kabul edilebilir mutlak fark (±5 dakika). Bu pencerenin
+# dışındaki paketler bayatlamış (stale) sayılır ve reddedilir; böylece
+# saatleri makul ölçüde senkron taraflar arasında geç tekrar oynatımlar
+# (delayed replay) daraltılır.
+REPLAY_WINDOW_SECONDS = 300
+
+# Nonce cache'in tutacağı en fazla (gönderen, nonce) girişi. LRU mantığı
+# ile bellek sınırlı kalır; en eski giriş düşürülür.
+_NONCE_CACHE_MAX = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +98,32 @@ class EncryptedPacket:
     associated_data: bytes         # AES-GCM AAD — şifrelenmez, ama tag ile bütünlüğü korunur
 
 
+class StepType(Enum):
+    """Her kriptografik adımın makineye-okunur tipi.
+
+    ``step_name`` (Türkçe görünen ad) sunum içindir ve değişebilir;
+    UI akış kararları (örn. hangi animasyonun açılacağı) bu insan
+    metnine değil bu sabit enum değerine bakar. Böylece görünen ad
+    değişse bile akış sessizce bozulmaz.
+
+    Alice (gönderim) tipleri: HASH, SIGN, COMBINE, AES_ENCRYPT,
+    KEY_WRAP, SEND. Bob (alım) tipleri: KEY_UNWRAP, AES_DECRYPT,
+    SPLIT, REHASH, VERIFY.
+    """
+
+    HASH = auto()          # SHA-256 özet hesaplama
+    SIGN = auto()          # RSA-PSS dijital imza
+    COMBINE = auto()       # Mesaj ∥ imza birleştirme
+    AES_ENCRYPT = auto()   # AES-256-GCM şifreleme
+    KEY_WRAP = auto()      # RSA-OAEP oturum anahtarı şifreleme
+    SEND = auto()          # Paket gönderimi
+    KEY_UNWRAP = auto()    # RSA-OAEP oturum anahtarı çözme
+    AES_DECRYPT = auto()   # AES-256-GCM deşifreleme
+    SPLIT = auto()         # Mesaj ve imza ayrıştırma
+    REHASH = auto()        # SHA-256 yeniden hesaplama
+    VERIFY = auto()        # RSA-PSS imza doğrulama
+
+
 @dataclass
 class StepResult:
     """Her kriptografik adımın ara sonuçlarını tutar."""
@@ -82,6 +131,7 @@ class StepResult:
     step_number: int
     step_name: str
     description: str
+    step_type: StepType
     data: dict = field(default_factory=dict)
 
 
@@ -108,17 +158,33 @@ class CryptoCore:
     def __init__(self) -> None:
         self.alice_keys: Optional[RSAKeyPair] = None
         self.bob_keys: Optional[RSAKeyPair] = None
-        self._session_key: Optional[bytes] = None
+        # Replay koruması için görülen (gönderen parmak izi, nonce)
+        # ikililerinin LRU cache'i. OrderedDict ekleme sırasını korur;
+        # _NONCE_CACHE_MAX aşılınca en eski giriş (last=False) düşürülür.
+        # Değerler önemsizdir (set gibi kullanılır); anahtar tekilliği
+        # yeter. Bu cache çekirdek algoritmaya dokunmaz, yalnızca
+        # bob_receive üstüne eklenen bir tazelik/tekrar katmanıdır.
+        self._seen_nonces: "OrderedDict[Tuple[str, bytes], None]" = OrderedDict()
 
     # ------------------------------------------------------------------
     # Anahtar Üretimi
     # ------------------------------------------------------------------
 
     def generate_rsa_keypair(self) -> RSAKeyPair:
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=self.RSA_KEY_SIZE,
-        )
+        # Anahtar üretimi düşük olasılıklı da olsa başarısız olabilir;
+        # ham istisna sızdırmak yerine tipli KeygenError ile sarılır.
+        try:
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=self.RSA_KEY_SIZE,
+            )
+        except Exception as exc:
+            raise KeygenError(
+                "RSA-2048 anahtar çifti üretilemedi. Beklenen: cryptography "
+                "kütüphanesinin geçerli bir özel/açık anahtar çifti döndürmesi. "
+                "Olası neden: sistemdeki kriptografi sağlayıcısı/entropi kaynağı "
+                f"erişilemez durumda olabilir. Çözüm: ortamı kontrol edip yeniden deneyin. (Detay: {exc})"
+            ) from exc
         return RSAKeyPair(
             private_key=private_key,
             public_key=private_key.public_key(),
@@ -151,7 +217,14 @@ class CryptoCore:
     @staticmethod
     def rsa_sign(private_key: RSAPrivateKey, message_hash: bytes) -> bytes:
         if len(message_hash) != 32:
-            raise ValueError("message_hash 32 byte (SHA-256) olmalı.")
+            # H(m) beklenen 32 byte değilse bu bir bütünlük/format ihlalidir.
+            raise IntegrityError(
+                "İmzalanacak özet beklenen boyutta değil. "
+                f"Beklenen: 32 byte (SHA-256 çıktısı). Alınan: {len(message_hash)} byte. "
+                "Olası neden: rsa_sign'a mesajın kendisi verilmiş olabilir; bu "
+                "fonksiyon önceden hesaplanmış H(m)'i (Prehashed) bekler. "
+                "Çözüm: önce sha256_hash(mesaj) ile 32 byte özet üretip onu imzalayın."
+            )
         return private_key.sign(
             message_hash,
             padding.PSS(
@@ -186,8 +259,9 @@ class CryptoCore:
     # ------------------------------------------------------------------
 
     def generate_session_key(self) -> bytes:
-        self._session_key = os.urandom(self.AES_KEY_SIZE)
-        return self._session_key
+        # Oturum anahtarı yalnızca döndürülür; instance'a yazılmaz. Böylece
+        # paylaşılan atıl state olmaz ve eşzamanlı çağrılarda yarış riski doğmaz.
+        return os.urandom(self.AES_KEY_SIZE)
 
     def aes_gcm_encrypt(
         self,
@@ -221,7 +295,20 @@ class CryptoCore:
         fırlatır.
         """
         aesgcm = AESGCM(key)
-        return aesgcm.decrypt(nonce, ciphertext, associated_data)
+        try:
+            return aesgcm.decrypt(nonce, ciphertext, associated_data)
+        except InvalidTag as exc:
+            # GCM tag uyuşmazlığı: ciphertext/nonce/AAD bozulmuş ya da
+            # anahtar yanlış. Ham InvalidTag sızdırmak yerine tipli hata.
+            raise IntegrityError(
+                "AES-256-GCM kimlik doğrulama etiketi (tag) doğrulanamadı. "
+                "Beklenen: gönderilen ciphertext, nonce ve AAD'nin GCM tag'iyle "
+                "tutarlı olması. Alınan: tutarsız bir tag. "
+                "Olası neden: şifreli mesaj, nonce veya AAD iletimde değişmiş ya da "
+                "çözen taraftaki oturum anahtarı (K_S) farklı. "
+                "Çözüm: bu tasarlanmış bir güvenlik davranışıdır; bozulmuş paket "
+                "güvenle çözülemez, paketin doğru/değiştirilmemiş olduğundan emin olun."
+            ) from exc
 
     # ------------------------------------------------------------------
     # AAD İnşası — protokol sürümü + gönderen parmak izi + zaman damgası
@@ -260,6 +347,67 @@ class CryptoCore:
             + str(timestamp).encode("ascii")
         )
 
+    @staticmethod
+    def _parse_aad_fields(aad: bytes) -> Tuple[str, int]:
+        """AAD'den gönderen parmak izini ve zaman damgasını çıkarır.
+
+        Biçim: ``secure-email-auth/v1|from=<fp16hex>|ts=<unix>``.
+        AAD zaten GCM tag ile doğrulanmış olduğundan (bu yardımcı yalnızca
+        başarılı deşifre sonrası çağrılır) içerik güvenilir kabul edilir;
+        yine de beklenmeyen biçim ``PacketFormatError`` ile raporlanır.
+
+        Dönüş: ``(fingerprint_hex, timestamp)``.
+        """
+        try:
+            text = aad.decode("ascii")
+            parts = dict(
+                field.split("=", 1) for field in text.split("|") if "=" in field
+            )
+            return parts["from"], int(parts["ts"])
+        except (ValueError, KeyError, UnicodeDecodeError) as exc:
+            raise PacketFormatError(
+                "AAD'nin tazelik/replay alanları (gönderen parmak izi + zaman "
+                "damgası) ayrıştırılamadı. Beklenen: "
+                "'secure-email-auth/v1|from=<fp>|ts=<unix>' biçimi. "
+                "Olası neden: AAD iletimde bozulmuş ya da farklı bir protokol "
+                f"sürümüyle üretilmiş olabilir. (Detay: {exc})"
+            ) from exc
+
+    def _check_freshness_and_replay(
+        self, aad: bytes, nonce: bytes, now: float
+    ) -> None:
+        """Deşifre sonrası tazelik + tekrar (replay) kontrolü.
+
+        Neden burada: AAD ancak AES-GCM deşifresi başarılı olduktan sonra
+        (tag doğrulandıktan sonra) güvenilirdir; bu nedenle kontrol
+        deşifrenin ardından yapılır ve sahte/bozuk paketler cache'i
+        kirletmez. Çekirdek akışı değiştirmez; yalnızca ek bir kapıdır.
+        """
+        fingerprint, ts = self._parse_aad_fields(aad)
+
+        # Tazelik: zaman damgası pencerenin dışındaysa (çok eski veya
+        # gelecekte) paket bayatlamış sayılır.
+        if abs(now - ts) > REPLAY_WINDOW_SECONDS:
+            raise StaleTimestampError(
+                "Paketin zaman damgası kabul edilebilir tazelik "
+                f"penceresinin (±{REPLAY_WINDOW_SECONDS} sn) dışında."
+            )
+
+        # Tekrar: aynı (gönderen parmak izi, nonce) daha önce görüldüyse
+        # replay. Nonce her şifrelemede rastgele üretildiği için aynı
+        # ikilinin yeniden görülmesi paketin tekrar oynatıldığını gösterir.
+        key = (fingerprint, nonce)
+        if key in self._seen_nonces:
+            raise ReplayDetectedError(
+                "Bu paket daha önce alınmış (aynı gönderen + nonce); "
+                "replay saldırısı tespit edildi."
+            )
+
+        # İlk kez görülüyor: cache'e ekle ve LRU sınırını uygula.
+        self._seen_nonces[key] = None
+        if len(self._seen_nonces) > _NONCE_CACHE_MAX:
+            self._seen_nonces.popitem(last=False)
+
     # ------------------------------------------------------------------
     # RSA ile Oturum Anahtarı Şifreleme
     # ------------------------------------------------------------------
@@ -277,14 +425,26 @@ class CryptoCore:
 
     @staticmethod
     def rsa_decrypt_key(private_key: RSAPrivateKey, encrypted_key: bytes) -> bytes:
-        return private_key.decrypt(
-            encrypted_key,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None,
-            ),
-        )
+        # OAEP çözme hatası (bozuk/yanlış anahtarla sarılmış veri) ham
+        # ValueError olarak gelir; tipli DecryptError ile sarılır.
+        try:
+            return private_key.decrypt(
+                encrypted_key,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None,
+                ),
+            )
+        except ValueError as exc:
+            raise DecryptError(
+                "RSA-OAEP ile sarılmış oturum anahtarı (K_S) çözülemedi. "
+                "Beklenen: ek alanının Bob'un gizli anahtarıyla çözülebilir, "
+                "geçerli bir OAEP bloğu olması. Alınan: çözülemeyen bir blok. "
+                "Olası neden: ek değeri iletimde bozulmuş ya da yanlış gizli "
+                "anahtarla çözülmeye çalışılmış olabilir. "
+                f"Çözüm: doğru anahtar çifti ve değişmemiş paket kullanın. (Detay: {exc})"
+            ) from exc
 
     # ------------------------------------------------------------------
     # Tam İş Akışı — Gönderici (Alice) Tarafı
@@ -308,6 +468,7 @@ class CryptoCore:
             step_number=1,
             step_name="SHA-256 Özet Hesaplama",
             description="Mesaj içeriğinden 256-bit özet değeri H(m) üretildi.",
+            step_type=StepType.HASH,
             data={
                 "message": message,
                 "hash_hex": msg_hash.hex(),
@@ -327,6 +488,7 @@ class CryptoCore:
                 "Özet değeri H(m), Alice'in RSA gizli anahtarı (K⁻_A) ile "
                 "imzalanarak dijital imza oluşturuldu."
             ),
+            step_type=StepType.SIGN,
             data={
                 "signature_hex": signature.hex(),
                 "signature_bytes": signature,
@@ -340,9 +502,13 @@ class CryptoCore:
         # gerekmez; Bob ayrıştırmada son 256 byte'ı imza olarak alır.
         t0 = time.perf_counter()
         if len(signature) != self.SIGNATURE_LEN:
-            raise ValueError(
-                f"Beklenmedik imza uzunluğu: {len(signature)} byte "
-                f"(beklenen: {self.SIGNATURE_LEN} byte)."
+            raise PacketFormatError(
+                "İmza alanı beklenen boyutta değil. "
+                f"Beklenen: {self.SIGNATURE_LEN} byte (RSA-2048 imzası). "
+                f"Alınan: {len(signature)} byte. "
+                "Olası neden: imza üretiminde farklı bir anahtar boyutu "
+                "kullanılmış ya da payload (mesaj ‖ imza) yanlış birleştirilmiş. "
+                "Çözüm: imzanın 2048-bit anahtarla üretildiğinden emin olun."
             )
         combined = msg_bytes + signature
         elapsed_3 = (time.perf_counter() - t0) * 1000
@@ -356,6 +522,7 @@ class CryptoCore:
                 "ayıraç (delimiter) kullanılmaz; Bob deşifre ettikten "
                 "sonra son 256 byte'ı imza olarak alır."
             ),
+            step_type=StepType.COMBINE,
             data={
                 "combined_size": f"{len(combined)} byte",
                 "message_size": f"{len(msg_bytes)} byte",
@@ -384,6 +551,7 @@ class CryptoCore:
                 "damgası pakete bağlandı; bu alan şifrelenmez ama "
                 "GCM kimlik doğrulama etiketi ile bütünlüğü korunur."
             ),
+            step_type=StepType.AES_ENCRYPT,
             data={
                 "session_key_hex": session_key.hex(),
                 "nonce_hex": nonce.hex(),
@@ -408,6 +576,7 @@ class CryptoCore:
                 "Oturum anahtarı (K_S), Bob'un RSA açık anahtarı (K⁺_B) "
                 "ile şifrelenerek güvenli biçimde iletilmeye hazırlandı."
             ),
+            step_type=StepType.KEY_WRAP,
             data={
                 "encrypted_key_hex": encrypted_session_key.hex(),
                 "encrypted_key_size": f"{len(encrypted_session_key)} byte",
@@ -437,6 +606,7 @@ class CryptoCore:
                 "anahtarı K⁺_B(K_S), rastgele nonce ve AAD (bağlamsal "
                 "metadata) birlikte Bob'a iletildi."
             ),
+            step_type=StepType.SEND,
             data={
                 "total_packet_size": f"{total_size} byte",
                 "nonce_hex": nonce.hex(),
@@ -451,9 +621,16 @@ class CryptoCore:
     # ------------------------------------------------------------------
 
     def bob_receive(
-        self, packet: EncryptedPacket
+        self,
+        packet: EncryptedPacket,
+        now_fn: Callable[[], float] = time.time,
     ) -> Tuple[str, bool, list[StepResult]]:
-        """Bob'un tam alım ve doğrulama iş akışını gerçekleştirir (zamanlama ile)."""
+        """Bob'un tam alım ve doğrulama iş akışını gerçekleştirir (zamanlama ile).
+
+        ``now_fn``: "şimdi"yi (Unix saniye) döndüren çağrılabilir; tazelik
+        kontrolünün test edilebilmesi için enjekte edilebilir. Varsayılan
+        ``time.time`` olduğundan davranış geriye uyumludur.
+        """
         if not self.alice_keys or not self.bob_keys:
             raise RuntimeError(
                 "Anahtarlar oluşturulmadı. Önce setup_keys() çağrılmalı."
@@ -474,6 +651,7 @@ class CryptoCore:
                 "Bob, kendi RSA gizli anahtarı (K⁻_B) ile şifreli oturum "
                 "anahtarını çözerek K_S değerini elde etti."
             ),
+            step_type=StepType.KEY_UNWRAP,
             data={
                 "session_key_hex": session_key.hex(),
                 "key_info": "Bob RSA-2048 Gizli Anahtar (K⁻_B)",
@@ -503,6 +681,7 @@ class CryptoCore:
                 "edildi; AAD üzerinde en ufak bir değişiklik olsaydı "
                 "deşifreleme InvalidTag hatası verirdi."
             ),
+            step_type=StepType.AES_DECRYPT,
             data={
                 "combined_size": f"{len(combined)} byte",
                 "associated_data": packet.associated_data.decode(
@@ -512,14 +691,27 @@ class CryptoCore:
             },
         ))
 
+        # Tazelik + replay kontrolü (eklenen koruma katmanı):
+        # AAD ancak GCM tag doğrulandıktan SONRA güvenilir olduğu için bu
+        # kontrol deşifrenin hemen ardından yapılır. Mevcut adım sırasını
+        # ve numaralandırmasını bozmamak için ayrı bir StepResult
+        # EKLENMEZ; geçerli/taze/ilk paket akışı eskisi gibi devam eder.
+        self._check_freshness_and_replay(
+            packet.associated_data, packet.nonce, now_fn()
+        )
+
         # Adım 3: Mesaj ve imzayı ayır
         # Sabit-uzunluk kuralı: son SIGNATURE_LEN byte imza, kalanı mesajdır.
         # Bu yaklaşım ayraç (delimiter) çarpışmalarına karşı bağışıktır:
         # kullanıcı mesajı herhangi bir bayt dizisi içerebilir.
         if len(combined) < self.SIGNATURE_LEN:
-            raise ValueError(
-                f"Deşifre edilen paket çok kısa ({len(combined)} byte); "
-                f"en az {self.SIGNATURE_LEN} byte imza bekleniyor."
+            raise PacketFormatError(
+                "Deşifre edilen payload (mesaj ‖ imza) imza alanını taşıyamayacak "
+                f"kadar kısa. Beklenen: en az {self.SIGNATURE_LEN} byte (yalnızca "
+                f"imza için). Alınan: {len(combined)} byte. "
+                "Olası neden: paket bozulmuş ya da AES-GCM çözümü beklenenden az "
+                "veri üretmiş olabilir. "
+                "Çözüm: paketin eksiksiz ve değiştirilmemiş olduğundan emin olun."
             )
         msg_bytes = combined[:-self.SIGNATURE_LEN]
         signature = combined[-self.SIGNATURE_LEN:]
@@ -532,6 +724,7 @@ class CryptoCore:
                 f"İmza sabit {self.SIGNATURE_LEN} byte olduğu için ayıraç "
                 "aranmadı; son 256 byte imza, kalanı mesajdır."
             ),
+            step_type=StepType.SPLIT,
             data={
                 "message": message,
                 "signature_hex": signature.hex(),
@@ -551,6 +744,7 @@ class CryptoCore:
                 "Bob, aldığı mesajdan bağımsız olarak SHA-256 özetini "
                 "yeniden hesapladı: H(m)."
             ),
+            step_type=StepType.REHASH,
             data={
                 "hash_hex": msg_hash.hex(),
                 "hash_bytes": msg_hash,
@@ -574,6 +768,7 @@ class CryptoCore:
                    if is_valid
                    else "❌ İmza GEÇERSİZ — Kimlik veya bütünlük ihlali!")
             ),
+            step_type=StepType.VERIFY,
             data={
                 "message": message,
                 "hash_hex": msg_hash.hex(),

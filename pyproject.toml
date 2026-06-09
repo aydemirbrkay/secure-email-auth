@@ -1,0 +1,26 @@
+# Proje meta verisi ve geliştirme araçları yapılandırması.
+# Çekirdek kripto mantığı burada değişmez; yalnızca araç/altyapı ayarları.
+
+[project]
+name = "secure-email-auth"
+version = "1.0.0"
+description = "Güvenli e-posta kimlik doğrulama ve mesaj bütünlüğü eğitim uygulaması (PyQt6)."
+requires-python = ">=3.11"
+authors = [{ name = "Berkay Aydemir" }]
+license = { text = "MIT" }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["testler"]
+python_files = ["test_*.py"]
+addopts = "-ra --strict-markers"

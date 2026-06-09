@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from arayuz.theme import COLORS
+from arayuz.theme import COLORS, card_style, toast_style
 
 
 class VerificationToast(QWidget):
@@ -35,6 +35,7 @@ class VerificationToast(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._secs = self._LIFE_SECS
 
+        level = "success" if is_valid else "error"
         accent = COLORS["accent_green"] if is_valid else COLORS["accent_red"]
         title_text = "Doğrulama Başarılı" if is_valid else "Doğrulama Başarısız"
 
@@ -45,11 +46,7 @@ class VerificationToast(QWidget):
         card = QFrame(self)
         card.setObjectName("toastCard")
         card.setStyleSheet(
-            "#toastCard {"
-            f" background: {COLORS['bg_panel']};"
-            f" border: 1px solid {COLORS['border']};"
-            " border-radius: 10px;"
-            "}"
+            card_style("#toastCard", background_key="bg_panel", radius=10)
         )
         card.setFixedWidth(self._CARD_WIDTH)
 
@@ -66,12 +63,7 @@ class VerificationToast(QWidget):
 
         strip = QFrame(card)
         strip.setFixedHeight(3)
-        strip.setStyleSheet(
-            f"background: {accent};"
-            " border-top-left-radius: 10px;"
-            " border-top-right-radius: 10px;"
-            " border: none;"
-        )
+        strip.setStyleSheet(toast_style(level))
         card_lay.addWidget(strip)
 
         header_w = QWidget(card)

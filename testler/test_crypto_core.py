@@ -34,7 +34,23 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
-from kriptografi.crypto_core import CryptoCore, EncryptedPacket, RSAKeyPair, StepResult
+from kriptografi.crypto_core import (
+    CryptoCore,
+    EncryptedPacket,
+    RSAKeyPair,
+    StepResult,
+    StepType,
+)
+from kriptografi.errors import (
+    CryptoError,
+    DecryptError,
+    IntegrityError,
+    KeygenError,
+    PacketFormatError,
+    ReplayDetectedError,
+    StaleTimestampError,
+    VerifyError,
+)
 
 
 class TestSHA256(unittest.TestCase):
@@ -220,7 +236,7 @@ class TestAESGCM(unittest.TestCase):
         key2 = os.urandom(32)
         plaintext = b"Secret"
         nonce, ct = self.crypto.aes_gcm_encrypt(key1, plaintext)
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             self.crypto.aes_gcm_decrypt(key2, nonce, ct)
 
     def test_tampered_ciphertext_fails(self) -> None:
@@ -233,7 +249,7 @@ class TestAESGCM(unittest.TestCase):
         nonce, ct = self.crypto.aes_gcm_encrypt(key, plaintext)
         tampered = bytearray(ct)
         tampered[0] ^= 0xFF
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             self.crypto.aes_gcm_decrypt(key, nonce, bytes(tampered))
 
     def test_session_key_generation(self) -> None:
@@ -265,13 +281,14 @@ class TestAESGCM(unittest.TestCase):
         self.assertEqual(pt, b"hello")
 
     def test_aad_mismatch_fails(self) -> None:
-        """Alt tür: HATA YOLU — farklı AAD → InvalidTag.
+        """Alt tür: HATA YOLU — farklı AAD → IntegrityError.
 
-        Farklı AAD ile deşifre InvalidTag fırlatmalı.
+        Farklı AAD ile deşifre tipli IntegrityError fırlatmalı (ham
+        InvalidTag artık dışarı sızmaz, CryptoError altına sarılır).
         """
         key = os.urandom(32)
         nonce, ct = self.crypto.aes_gcm_encrypt(key, b"hello", b"aad-A")
-        with self.assertRaises(InvalidTag):
+        with self.assertRaises(IntegrityError):
             self.crypto.aes_gcm_decrypt(key, nonce, ct, b"aad-B")
 
     def test_aad_none_vs_empty_compatible(self) -> None:
@@ -316,7 +333,7 @@ class TestRSAKeyEncryption(unittest.TestCase):
         enc = self.crypto.rsa_encrypt_key(
             self.crypto.bob_keys.public_key, session_key
         )
-        with self.assertRaises(Exception):
+        with self.assertRaises(DecryptError):
             self.crypto.rsa_decrypt_key(
                 self.crypto.alice_keys.private_key, enc
             )
@@ -403,7 +420,38 @@ class TestFullWorkflow(unittest.TestCase):
             self.assertIsInstance(step.step_number, int)
             self.assertIsInstance(step.step_name, str)
             self.assertIsInstance(step.description, str)
+            self.assertIsInstance(step.step_type, StepType)
             self.assertIsInstance(step.data, dict)
+
+    def test_alice_step_types(self) -> None:
+        """Alt tür: BİRİM — alice_send 6 adımının step_type sırası.
+
+        Animasyon/akış kararları string yerine bu makineye-okunur tipe
+        dayandığı için her adımın doğru StepType taşıması zorunludur.
+        """
+        _, alice_steps = self.crypto.alice_send("Test")
+        expected = [
+            StepType.HASH,
+            StepType.SIGN,
+            StepType.COMBINE,
+            StepType.AES_ENCRYPT,
+            StepType.KEY_WRAP,
+            StepType.SEND,
+        ]
+        self.assertEqual([s.step_type for s in alice_steps], expected)
+
+    def test_bob_step_types(self) -> None:
+        """Alt tür: BİRİM — bob_receive 5 adımının step_type sırası."""
+        packet, _ = self.crypto.alice_send("Test")
+        _, _, bob_steps = self.crypto.bob_receive(packet)
+        expected = [
+            StepType.KEY_UNWRAP,
+            StepType.AES_DECRYPT,
+            StepType.SPLIT,
+            StepType.REHASH,
+            StepType.VERIFY,
+        ]
+        self.assertEqual([s.step_type for s in bob_steps], expected)
 
 
 class TestSignatureSemantics(unittest.TestCase):
@@ -418,8 +466,8 @@ class TestSignatureSemantics(unittest.TestCase):
 
         rsa_sign yalnızca 32 byte (SHA-256 özeti) kabul etmeli.
         """
-        # 32 byte olmayan bir girdi ValueError üretmeli
-        with self.assertRaises(ValueError):
+        # 32 byte olmayan bir girdi tipli IntegrityError üretmeli
+        with self.assertRaises(IntegrityError):
             self.crypto.rsa_sign(
                 self.crypto.alice_keys.private_key, b"too short"
             )
@@ -567,7 +615,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             nonce=self.packet.nonce,
             associated_data=self.packet.associated_data,
         )
-        with self.assertRaises(InvalidTag):
+        with self.assertRaises(IntegrityError):
             self.crypto.bob_receive(bad)
 
     def test_tamper_auth_tag_byte_raises_invalid_tag(self) -> None:
@@ -585,7 +633,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             nonce=self.packet.nonce,
             associated_data=self.packet.associated_data,
         )
-        with self.assertRaises(InvalidTag):
+        with self.assertRaises(IntegrityError):
             self.crypto.bob_receive(bad)
 
     # --- Tamper: nonce --------------------------------------------------------
@@ -603,7 +651,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             nonce=bytes(tampered_nonce),
             associated_data=self.packet.associated_data,
         )
-        with self.assertRaises(InvalidTag):
+        with self.assertRaises(IntegrityError):
             self.crypto.bob_receive(bad)
 
     # --- Tamper: şifreli oturum anahtarı --------------------------------------
@@ -612,7 +660,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
         """Alt tür: HATA YOLU / GÜVENLİK — OAEP-sarılı anahtar tamper → exception.
 
         RSA-OAEP şifreli oturum anahtarının değiştirilmesi OAEP çözme
-        aşamasında istisna üretmeli (ValueError tabanlı).
+        aşamasında tipli DecryptError üretmeli.
         """
         tampered_key = bytearray(self.packet.encrypted_session_key)
         tampered_key[0] ^= 0x01
@@ -622,8 +670,8 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             nonce=self.packet.nonce,
             associated_data=self.packet.associated_data,
         )
-        # OAEP çözme başarısız olursa bir istisna (genelde ValueError) oluşur
-        with self.assertRaises(Exception):
+        # OAEP çözme başarısız olursa tipli DecryptError fırlatılmalı
+        with self.assertRaises(DecryptError):
             self.crypto.bob_receive(bad)
 
     # --- Tamper: AAD (AES-GCM bütünlük bağı) ----------------------------------
@@ -644,7 +692,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             nonce=self.packet.nonce,
             associated_data=bytes(tampered_aad),
         )
-        with self.assertRaises(InvalidTag):
+        with self.assertRaises(IntegrityError):
             self.crypto.bob_receive(bad)
 
     def test_strip_associated_data_raises_invalid_tag(self) -> None:
@@ -658,7 +706,7 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             nonce=self.packet.nonce,
             associated_data=b"",
         )
-        with self.assertRaises(InvalidTag):
+        with self.assertRaises(IntegrityError):
             self.crypto.bob_receive(bad)
 
     # --- Tamper: imza (AES altında bile) --------------------------------------
@@ -696,21 +744,129 @@ class TestNegativeSecurityScenarios(unittest.TestCase):
             self.crypto.alice_keys.public_key, signature, forged_hash
         ))
 
-    # --- Replay: tasarımın sınırı ---------------------------------------------
+    # --- Replay: koruma katmanı -----------------------------------------------
 
-    def test_replay_is_not_blocked_by_design(self) -> None:
-        """Alt tür: BELGELEME — replay engellenmiyor (tasarım sınırı kanıtı).
+    def test_replay_same_packet_raises(self) -> None:
+        """Alt tür: GÜVENLİK — aynı paketin 2. alımı → ReplayDetectedError.
 
-        BELGELEME: Mevcut tasarımda durum/timestamp tutulmadığı için
-        aynı paketin tekrar iletilmesi (replay) Bob tarafında yine
-        başarıyla çözülür. Bu koruma için ayrıca bir replay cache /
-        sıra numarası mekanizması eklenmelidir.
+        Pencere içinde ilk alım başarılı; aynı (gönderen, nonce) ikilisi
+        cache'te olduğundan ikinci alım replay olarak reddedilir.
         """
         msg1, valid1, _ = self.crypto.bob_receive(self.packet)
-        msg2, valid2, _ = self.crypto.bob_receive(copy.copy(self.packet))
-        self.assertEqual(msg1, msg2)
+        self.assertEqual(msg1, "gizli mesaj")
         self.assertTrue(valid1)
-        self.assertTrue(valid2)
+        with self.assertRaises(ReplayDetectedError):
+            self.crypto.bob_receive(copy.copy(self.packet))
+
+
+class TestReplayProtection(unittest.TestCase):
+    """Eklenen tazelik + replay koruma katmanını doğrular.
+
+    Çekirdek kripto akışı değişmeden, ``bob_receive`` üstüne eklenen
+    tazelik (zaman penceresi) ve tekrar (nonce cache) kontrolleri sınanır.
+    Zaman ``now_fn`` ile enjekte edilerek deterministik test yapılır.
+    """
+
+    def setUp(self) -> None:
+        self.crypto = CryptoCore()
+        self.crypto.setup_keys()
+
+    def _packet_ts(self, packet: EncryptedPacket) -> int:
+        """Paketin AAD'sindeki ts alanını okur (test yardımcısı)."""
+        text = packet.associated_data.decode("ascii")
+        parts = dict(f.split("=", 1) for f in text.split("|") if "=" in f)
+        return int(parts["ts"])
+
+    def test_fresh_first_packet_accepted(self) -> None:
+        """Alt tür: MUTLU YOL — geçerli/taze/ilk paket eskisi gibi kabul."""
+        packet, _ = self.crypto.alice_send("merhaba")
+        ts = self._packet_ts(packet)
+        msg, valid, _ = self.crypto.bob_receive(packet, now_fn=lambda: float(ts))
+        self.assertEqual(msg, "merhaba")
+        self.assertTrue(valid)
+
+    def test_replay_within_window_raises(self) -> None:
+        """Alt tür: GÜVENLİK — pencere içinde 2. alım → ReplayDetectedError."""
+        packet, _ = self.crypto.alice_send("merhaba")
+        ts = self._packet_ts(packet)
+        now = lambda: float(ts)
+        self.crypto.bob_receive(packet, now_fn=now)
+        with self.assertRaises(ReplayDetectedError):
+            self.crypto.bob_receive(copy.copy(packet), now_fn=now)
+
+    def test_stale_past_timestamp_raises(self) -> None:
+        """Alt tür: GÜVENLİK — ts 10 dk eski → StaleTimestampError.
+
+        now_fn ile zamanı ileri vererek paketi bayatlatır.
+        """
+        packet, _ = self.crypto.alice_send("merhaba")
+        ts = self._packet_ts(packet)
+        future_now = lambda: float(ts + 600)  # 10 dk sonra
+        with self.assertRaises(StaleTimestampError):
+            self.crypto.bob_receive(packet, now_fn=future_now)
+
+    def test_future_timestamp_raises(self) -> None:
+        """Alt tür: GÜVENLİK — ts 10 dk ileri → StaleTimestampError.
+
+        now_fn ile zamanı geri vererek paketin geleceğe ait görünmesini sağlar.
+        """
+        packet, _ = self.crypto.alice_send("merhaba")
+        ts = self._packet_ts(packet)
+        past_now = lambda: float(ts - 600)  # paket 10 dk gelecekte
+        with self.assertRaises(StaleTimestampError):
+            self.crypto.bob_receive(packet, now_fn=past_now)
+
+    def test_window_boundary_accepted(self) -> None:
+        """Alt tür: KENAR — tam pencere sınırı (±300 sn) kabul edilir."""
+        packet, _ = self.crypto.alice_send("merhaba")
+        ts = self._packet_ts(packet)
+        edge_now = lambda: float(ts + 300)  # tam sınır, > değil
+        msg, valid, _ = self.crypto.bob_receive(packet, now_fn=edge_now)
+        self.assertEqual(msg, "merhaba")
+        self.assertTrue(valid)
+
+    def test_distinct_nonces_not_treated_as_replay(self) -> None:
+        """Alt tür: MUTLU YOL — farklı nonce'lu peş peşe paketler kabul.
+
+        Her alice_send yeni rastgele nonce ürettiği için aynı gönderenden
+        gelen farklı paketler replay sayılmamalı.
+        """
+        for i in range(5):
+            packet, _ = self.crypto.alice_send(f"mesaj {i}")
+            ts = self._packet_ts(packet)
+            msg, valid, _ = self.crypto.bob_receive(
+                packet, now_fn=lambda ts=ts: float(ts)
+            )
+            self.assertEqual(msg, f"mesaj {i}")
+            self.assertTrue(valid)
+
+    def test_cache_eviction_drops_oldest_entry(self) -> None:
+        """Alt tür: KENAR — 1001 farklı nonce sonrası en eski giriş düşer.
+
+        Cache 1000 ile sınırlı; 1001. taze paket eklenince ilk görülen
+        (gönderen, nonce) düşürülür. Bu nedenle ilk paketin tekrarı artık
+        ReplayDetectedError vermez — yeniden taze gibi kabul edilir.
+        now_fn sabit tutulur ki tazelik penceresi araya girmesin.
+        """
+        crypto = self.crypto
+        # Tüm paketleri tek bir gönderenden (Alice) farklı nonce'larla üret.
+        # Sabit bir "şimdi" kullan; tüm paketler taze penceresinde kalsın.
+        first_packet, _ = crypto.alice_send("ilk")
+        ts0 = self._packet_ts(first_packet)
+        now = lambda: float(ts0)
+
+        crypto.bob_receive(first_packet, now_fn=now)
+
+        # 1000 ek farklı paket daha al → ilk girişi cache'ten taşırır.
+        # (toplam görülen = 1 + 1000 = 1001 > _NONCE_CACHE_MAX)
+        for i in range(1000):
+            pkt, _ = crypto.alice_send(f"doldur {i}")
+            crypto.bob_receive(pkt, now_fn=now)
+
+        # İlk paket cache'ten düştüğü için tekrarı artık replay sayılmaz.
+        msg, valid, _ = crypto.bob_receive(copy.copy(first_packet), now_fn=now)
+        self.assertEqual(msg, "ilk")
+        self.assertTrue(valid)
 
 
 class TestEncryptedPacketShape(unittest.TestCase):
@@ -817,10 +973,10 @@ class TestMessageSignatureFraming(unittest.TestCase):
         self.assertTrue(valid)
 
     def test_short_combined_raises_readable_error(self) -> None:
-        """Alt tür: HATA YOLU — SIGNATURE_LEN'den kısa combined → ValueError.
+        """Alt tür: HATA YOLU — SIGNATURE_LEN'den kısa combined → PacketFormatError.
 
-        İmzadan daha kısa bir paket geldiğinde okunabilir bir ValueError
-        fırlatılmalı — sessizce yanlış yere bölmemeli.
+        İmzadan daha kısa bir paket geldiğinde okunabilir bir tipli
+        PacketFormatError fırlatılmalı — sessizce yanlış yere bölmemeli.
 
         Bu durumu, çözülen birleşim 256 byte'tan kısa olacak şekilde
         direkt olarak simüle ediyoruz (alt-seviye çerçeveleme kontrolü).
@@ -846,7 +1002,7 @@ class TestMessageSignatureFraming(unittest.TestCase):
             nonce=nonce,
             associated_data=aad,
         )
-        with self.assertRaises(ValueError):
+        with self.assertRaises(PacketFormatError):
             self.crypto.bob_receive(bad)
 
     def test_signature_is_always_256_bytes(self) -> None:
@@ -861,6 +1017,66 @@ class TestMessageSignatureFraming(unittest.TestCase):
                 self.crypto.alice_keys.private_key, h
             )
             self.assertEqual(len(sig), self.crypto.SIGNATURE_LEN)
+
+
+class TestTypedExceptionHierarchy(unittest.TestCase):
+    """Tipli istisna hiyerarşisi — her tip CryptoError altında olmalı ve
+    ham InvalidTag/InvalidSignature dışarı sızmamalı."""
+
+    def setUp(self) -> None:
+        self.crypto = CryptoCore()
+        self.crypto.setup_keys()
+
+    def test_all_typed_errors_subclass_crypto_error(self) -> None:
+        """Alt tür: BİRİM — tüm tipli hatalar CryptoError alt sınıfı.
+
+        errors.py'deki her özel istisna kök CryptoError'dan türemeli;
+        böylece UI tek bir except CryptoError ile hepsini yakalayabilir.
+        """
+        for cls in (
+            KeygenError,
+            DecryptError,
+            IntegrityError,
+            PacketFormatError,
+            VerifyError,
+            ReplayDetectedError,
+            StaleTimestampError,
+        ):
+            with self.subTest(cls=cls.__name__):
+                self.assertTrue(issubclass(cls, CryptoError))
+
+    def test_integrity_error_is_not_raw_invalid_tag(self) -> None:
+        """Alt tür: GÜVENLİK — IntegrityError ham InvalidTag DEĞİL.
+
+        AES-GCM tag uyuşmazlığında dışarı ham InvalidTag sızmamalı;
+        yakalanan tip CryptoError ailesinden ve InvalidTag'den bağımsız
+        olmalı (zincir __cause__ ile korunur).
+        """
+        key = os.urandom(32)
+        nonce, ct = self.crypto.aes_gcm_encrypt(key, b"hello", b"aad-A")
+        with self.assertRaises(IntegrityError) as ctx:
+            self.crypto.aes_gcm_decrypt(key, nonce, ct, b"aad-B")
+        self.assertNotIsInstance(ctx.exception, InvalidTag)
+        # Orijinal istisna __cause__ ile zincirlenmiş olmalı (from exc).
+        self.assertIsInstance(ctx.exception.__cause__, InvalidTag)
+
+    def test_bob_receive_tamper_raises_only_crypto_error(self) -> None:
+        """Alt tür: GÜVENLİK — bob_receive tamper → yalnızca CryptoError.
+
+        Bozuk pakette bob_receive yalnızca CryptoError ailesi fırlatmalı;
+        ham InvalidTag/InvalidSignature kullanıcı katmanına ulaşmamalı.
+        """
+        packet, _ = self.crypto.alice_send("gizli")
+        tampered_ct = bytearray(packet.encrypted_message)
+        tampered_ct[0] ^= 0x01
+        bad = EncryptedPacket(
+            encrypted_message=bytes(tampered_ct),
+            encrypted_session_key=packet.encrypted_session_key,
+            nonce=packet.nonce,
+            associated_data=packet.associated_data,
+        )
+        with self.assertRaises(CryptoError):
+            self.crypto.bob_receive(bad)
 
 
 if __name__ == "__main__":

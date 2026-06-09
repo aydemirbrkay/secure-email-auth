@@ -71,23 +71,23 @@ class TestNewWidgetsImport(unittest.TestCase):
 
     def test_sha_message_prep_widget_exists(self):
         """Alt tür: SMOKE (import sözleşmesi).
-        _SHAMessagePrepWidget sha256_animation modülünde tanımlı —
+        _SHAMessagePrepWidget sha256.prep_widget modülünde tanımlı —
         SHA penceresinin Adım 1/5 sayfasının ana widget'ı."""
-        from animation_modals.sha256_animation import _SHAMessagePrepWidget
+        from animation_modals.sha256.prep_widget import _SHAMessagePrepWidget
         self.assertTrue(callable(_SHAMessagePrepWidget))
 
     def test_sha_padding_widget_exists(self):
         """Alt tür: SMOKE (import sözleşmesi).
-        _SHA256PaddingWidget sha256_animation modülünde tanımlı —
+        _SHA256PaddingWidget sha256.prep_widget modülünde tanımlı —
         SHA penceresinin Adım 2/5 padding sayfasının ana widget'ı."""
-        from animation_modals.sha256_animation import _SHA256PaddingWidget
+        from animation_modals.sha256.prep_widget import _SHA256PaddingWidget
         self.assertTrue(callable(_SHA256PaddingWidget))
 
     def test_aes_plaintext_prep_widget_exists(self):
         """Alt tür: SMOKE (import sözleşmesi).
-        _AESPlaintextPrepWidget aes_animation modülünde tanımlı —
+        _AESPlaintextPrepWidget aes.prep_widget modülünde tanımlı —
         AES intro ile Round 0 arasındaki Plaintext Hazırlığı sayfası."""
-        from animation_modals.aes_animation import _AESPlaintextPrepWidget
+        from animation_modals.aes.prep_widget import _AESPlaintextPrepWidget
         self.assertTrue(callable(_AESPlaintextPrepWidget))
 
 
@@ -146,14 +146,14 @@ class TestSHAStepCount(unittest.TestCase):
         _TITLES sınıf niteliği TAM 5 girdi içermeli. Mesaj Hazırlığı eklenmesi
         önceki 4-adım yapısını 5'e çıkardı; girdi sayısı değişirse
         progress bar veya _render_step kayar."""
-        from animation_modals.sha256_animation import SHA256AnimationWindow
+        from animation_modals import SHA256AnimationWindow
         self.assertEqual(len(SHA256AnimationWindow._TITLES), 5)
 
     def test_first_step_is_message_prep(self):
         """Alt tür: SMOKE (sıralama doğrulaması).
         İlk adım "Mesaj Hazırlığı" olmalı (UTF-8 byte dönüşümü).
         Sıralama bozulursa kullanıcı önce Padding görür → kafa karışıklığı."""
-        from animation_modals.sha256_animation import SHA256AnimationWindow
+        from animation_modals import SHA256AnimationWindow
         self.assertIn("Mesaj", SHA256AnimationWindow._TITLES[0])
 
     def test_titles_use_five_format(self):
@@ -161,7 +161,7 @@ class TestSHAStepCount(unittest.TestCase):
         Her başlık "Adım N / 5" formatında olmalı (N: 1..5). Eski
         "Adım N / 4" formatı kalmış olursa kullanıcı yanlış toplam
         görür."""
-        from animation_modals.sha256_animation import SHA256AnimationWindow
+        from animation_modals import SHA256AnimationWindow
         for i, title in enumerate(SHA256AnimationWindow._TITLES):
             self.assertIn(f"Adım {i+1} / 5", title)
 

@@ -1,2 +1,2 @@
-PyQt6>=6.6.0
-cryptography>=44.0.0
+PyQt6>=6.6.0,<7.0.0
+cryptography>=44.0.0,<46.0.0

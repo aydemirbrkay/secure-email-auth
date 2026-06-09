@@ -1,45 +1,33 @@
 """
 utils.py – Yardımcı Fonksiyonlar ve Sabitler
+
+Yalnızca Qt-bağımsız kripto yardımcılarını barındırır: kripto istisna
+çevirisi (``format_crypto_exception``), kullanıcı dostu alan adları
+(``FRIENDLY_NAMES``) ve sabit-zamanlı karşılaştırma (``constant_time_equal``).
+
+GUI'ye (PyQt6) bağımlı yardımcılar ``arayuz/widget_utils.py`` modülüne
+taşınmıştır; bu sayede ``kriptografi`` paketi Qt yüklü olmayan saf Python
+ortamında da içe aktarılabilir.
 """
 from __future__ import annotations
 
-import os
+from hmac import compare_digest
+from typing import NamedTuple
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 
-from PyQt6.QtCore import Qt, QByteArray
-from PyQt6.QtGui import QColor, QImage, QPainter, QPixmap
-from PyQt6.QtSvg import QSvgRenderer
-from PyQt6.QtWidgets import QGroupBox, QLabel, QVBoxLayout
-
-from kriptografi.crypto_core import StepResult
-from arayuz.theme import COLORS
-
-# Görseller (SVG ikonlar + PNG akış diyagramları) — tek klasörde toplu erişim.
-# Eski 'icons/' klasörü 'görseller/' olarak yeniden adlandırıldı; alice/bob
-# akış PNG'leri de buraya taşındı. Bu dosya 'kriptografi/' alt-paketinde
-# olduğu için path bir üst dizine (proje köküne) çıkar.
-_PROJE_KOKU = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_GORSELLER_DIR = os.path.join(_PROJE_KOKU, "görseller")
-
-
-def _svg_pixmap(filename: str, color: str, size: int = 20) -> QPixmap:
-    """SVG simge dosyasını verilen renk ve boyutta QPixmap'e dönüştürür.
-    SVG içindeki 'currentColor' değeri çalışma zamanında verilen renge çevrilir.
-    """
-    path = os.path.join(_GORSELLER_DIR, filename)
-    pix = QPixmap(size, size)
-    pix.fill(Qt.GlobalColor.transparent)
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = f.read().replace("currentColor", color)
-        renderer = QSvgRenderer(QByteArray(data.encode()))
-        painter = QPainter(pix)
-        renderer.render(painter)
-        painter.end()
-    except Exception as exc:
-        print(f"[icon] Yüklenemedi: {filename} — {exc}")
-    return pix
+from kriptografi.errors import (
+    CryptoError,
+    DecryptError,
+    EncryptError,
+    IntegrityError,
+    KeygenError,
+    PacketFormatError,
+    ReplayDetectedError,
+    SignError,
+    StaleTimestampError,
+    VerifyError,
+)
 
 FRIENDLY_NAMES: dict[str, str] = {
     "nonce_hex":              "Rastgele Sayı (Nonce)",
@@ -63,6 +51,16 @@ FRIENDLY_NAMES: dict[str, str] = {
 }
 
 
+def constant_time_equal(a, b) -> bool:
+    """Sabit-zamanlı eşitlik kontrolü. Zamanlama yan-kanalı (timing
+    side-channel) saldırılarına karşı koruma sağlar. str → utf-8 bytes."""
+    if isinstance(a, str):
+        a = a.encode("utf-8")
+    if isinstance(b, str):
+        b = b.encode("utf-8")
+    return compare_digest(a, b)
+
+
 def format_crypto_exception(exc: BaseException) -> tuple[str, str]:
     """Kriptografik istisnayı kullanıcıya gösterilecek (başlık, gövde) metnine çevirir.
 
@@ -77,6 +75,102 @@ def format_crypto_exception(exc: BaseException) -> tuple[str, str]:
     doğrudan kullanılabilir.
     """
     exc_name = type(exc).__name__
+
+    # --- Tipli kripto hiyerarşisi (CryptoError) — ham kütüphane
+    # istisnalarından önce kontrol edilir, çünkü artık çekirdek bunları
+    # fırlatıyor. ---
+
+    if isinstance(exc, ReplayDetectedError):
+        return (
+            "Replay Saldırısı Tespit Edildi",
+            "Bu paket daha önce alınmış (replay saldırısı tespit edildi).\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, StaleTimestampError):
+        return (
+            "Zaman Damgası Geçersiz",
+            "Paketin zaman damgası kabul edilebilir aralığın dışında.\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, IntegrityError):
+        return (
+            "Bütünlük Doğrulanamadı",
+            "Paketin bütünlüğü/kimlik doğrulaması başarısız oldu. "
+            "AES-256-GCM etiketi (tag) uyuşmadı ya da özet (H(m)) "
+            "beklenen formatta değil.\n\n"
+            "  • Şifreli mesaj, nonce veya AAD iletim sırasında "
+            "değiştirilmiş olabilir.\n"
+            "  • Oturum anahtarı uyuşmuyor olabilir.\n\n"
+            "Bu tasarlanmış bir güvenlik davranışıdır.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, VerifyError):
+        return (
+            "İmza Doğrulanamadı",
+            "Dijital imza, Alice'in açık anahtarıyla doğrulanamadı. "
+            "Mesaj imzalandıktan sonra değiştirilmiş veya imza farklı "
+            "bir anahtarla üretilmiş olabilir.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, DecryptError):
+        return (
+            "Çözme Başarısız",
+            "Şifreli veri çözülemedi. RSA-OAEP ile sarılmış oturum "
+            "anahtarı bozulmuş ya da yanlış gizli anahtarla çözülmeye "
+            "çalışılmış olabilir.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, EncryptError):
+        return (
+            "Şifreleme Başarısız",
+            "Şifreleme işlemi tamamlanamadı.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, SignError):
+        return (
+            "İmzalama Başarısız",
+            "Dijital imza üretilemedi.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, KeygenError):
+        return (
+            "Anahtar Üretimi Başarısız",
+            "RSA anahtar çifti üretilemedi.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    if isinstance(exc, PacketFormatError):
+        return (
+            "Paket Formatı Hatası",
+            "Şifreli paketteki bir alan beklenen formatta değil. "
+            "Birleşik veri (mesaj ‖ imza) beklenen 256 byte'lık imza "
+            "alanını taşıyamayacak kadar kısa ya da sürüm/uzunluk "
+            "beklentisi ihlal edilmiş olabilir.\n\n"
+            f"Detay: {exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
+
+    # Yeni tanımlanmamış bir CryptoError alt tipi gelirse yine de
+    # kök sınıfa düşülerek anlamlı bir mesaj verilir.
+    if isinstance(exc, CryptoError):
+        return (
+            "Kriptografik Hata",
+            f"Kriptografik işlem sırasında bir hata oluştu:\n\n{exc}\n\n"
+            f"(Teknik: {exc_name})"
+        )
 
     if isinstance(exc, InvalidTag):
         return (
@@ -135,91 +229,127 @@ def format_crypto_exception(exc: BaseException) -> tuple[str, str]:
     )
 
 
-def _png_icon_pixmap(filename: str, color: str, size: int, thickness: float = 1.0) -> QPixmap:
-    """PNG dosyasını yükler; beyaz/açık pikselleri şeffafa, koyu pikselleri
-    verilen renge dönüştürerek QPixmap döndürür.
-    thickness > 1.0 → çizgiler daha kalın görünür (kenar pikselleri daha opak).
+class CryptoExplanation(NamedTuple):
+    """Bir kripto istisnasının öğrenci diline çevrilmiş, 3 bölümlü açıklaması.
+
+    UI diyaloğu (``CryptoErrorDialog``) bu yapıyı doğrudan render eder:
+      * ``title``     → kısa özet (başlık)
+      * ``meaning``   → "Bu ne demek?" (pedagojik açıklama)
+      * ``action``    → "Ne yapabilirim?" (öneri)
+      * ``technical`` → açılır teknik detay (istisna adı + ham mesaj)
     """
-    path = os.path.join(_GORSELLER_DIR, filename)
-    img = QImage(path)
-    if img.isNull():
-        print(f"[icon] Yüklenemedi: {filename}")
-        return QPixmap(size, size)
 
-    img = img.scaled(
-        size, size,
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    ).convertToFormat(QImage.Format.Format_ARGB32)
-
-    icon_c = QColor(color)
-    ir, ig, ib = icon_c.red(), icon_c.green(), icon_c.blue()
-
-    for y in range(img.height()):
-        for x in range(img.width()):
-            px = img.pixel(x, y)
-            r = (px >> 16) & 0xFF
-            g = (px >> 8) & 0xFF
-            b = px & 0xFF
-            brightness = (r + g + b) / 3
-            # thickness ile alpha'yı güçlendirerek çizgileri kalınlaştır
-            alpha = max(0, min(255, int((255 - brightness) * thickness)))
-            img.setPixel(x, y, (alpha << 24) | (ir << 16) | (ig << 8) | ib)
-
-    return QPixmap.fromImage(img)
+    title: str
+    meaning: str
+    action: str
+    technical: str
 
 
-def _style_step_box(box: QGroupBox, border_color: str) -> None:
-    """Adım kutusunun kenarlık/başlık ve içerik metni rengini aktif palete göre
-    (yeniden) uygular. Tema değişiminde panellerden tekrar çağrılır."""
-    box.setStyleSheet(
-        f"QGroupBox {{ border: 2px solid {border_color}; border-radius: 8px; "
-        f"margin-top: 14px; padding: 14px 8px 8px 8px; }}"
-        f"QGroupBox::title {{ color: {border_color}; font-family: 'Georgia', 'Palatino Linotype', serif; "
-        f"font-weight: bold; font-size: 15px; }}"
+# İstisna tipi → (başlık, "bu ne demek", "ne yapabilirim"). isinstance
+# sırasıyla en özelden genele kontrol edilir. Teknik detay ayrıca eklenir.
+def explain_crypto_exception(exc: BaseException) -> CryptoExplanation:
+    """Kripto istisnasını 3 bölümlü pedagojik açıklamaya çevirir.
+
+    ``format_crypto_exception`` tek bir (başlık, gövde) verir; bu fonksiyon
+    aynı bilgiyi öğrenciye yönelik üç ayrı bölüme ayırır ve teknik detayı
+    açılır gösterim için ayrı tutar.
+    """
+    technical = f"{type(exc).__name__}: {exc}"
+
+    if isinstance(exc, ReplayDetectedError):
+        return CryptoExplanation(
+            "Replay Saldırısı Tespit Edildi",
+            "Bu paket daha önce alınmıştı. Sistem, aynı (gönderen parmak izi, "
+            "nonce) çiftini ikinci kez görünce bunu bir tekrar (replay) "
+            "saldırısı olarak işaretler; saldırgan, daha önce yakaladığı "
+            "geçerli bir paketi olduğu gibi yeniden gönderebilir.",
+            "Bu, tasarlanmış bir güvenlik davranışıdır. Taze bir paket (yeni "
+            "nonce ve zaman damgası) üretmek için yeni bir mesaj gönderin.",
+            technical,
+        )
+
+    if isinstance(exc, StaleTimestampError):
+        return CryptoExplanation(
+            "Zaman Damgası Geçersiz",
+            "Paketin AAD'sindeki Unix zaman damgası, kabul edilebilir tazelik "
+            "penceresinin dışında. Çok eski (ya da geleceğe ait) paketler, "
+            "tekrar/oynatma riskini azaltmak için reddedilir.",
+            "Sistem saatinin doğru olduğundan emin olun ve mesajı yeniden "
+            "gönderin.",
+            technical,
+        )
+
+    if isinstance(exc, IntegrityError):
+        return CryptoExplanation(
+            "Bütünlük Doğrulanamadı",
+            "AES-256-GCM kimlik doğrulama etiketi (tag) uyuşmadı veya özet "
+            "beklenen biçimde değil. Bu, şifreli mesajın, nonce'ın ya da "
+            "AAD'nin iletim sırasında değiştirildiği veya çözen taraftaki "
+            "oturum anahtarının (K_S) farklı olduğu anlamına gelir.",
+            "Bu tasarlanmış bir güvenlik davranışıdır; bütünlüğü bozulmuş bir "
+            "paket güvenle çözülemez. Paketin değiştirilmediğinden emin olun.",
+            technical,
+        )
+
+    if isinstance(exc, VerifyError):
+        return CryptoExplanation(
+            "İmza Doğrulanamadı",
+            "Dijital imza, Alice'in açık anahtarıyla doğrulanamadı. Üç olası "
+            "neden vardır: (1) mesaj imzalandıktan sonra değiştirilmiş; "
+            "(2) imza farklı bir gizli anahtarla üretilmiş; (3) imzanın bağlı "
+            "olduğu özet H(m), başka bir mesaja ait olabilir (Prehashed "
+            "semantiği — imza mesajın kendisi üzerinde değil, H(m) üzerinde "
+            "yapılır).",
+            "Kimlik ve bütünlük doğrulanamadığı için bu mesaj kabul "
+            "edilmemelidir.",
+            technical,
+        )
+
+    if isinstance(exc, DecryptError):
+        return CryptoExplanation(
+            "Çözme Başarısız",
+            "RSA-OAEP ile sarılmış oturum anahtarı (K_S) çözülemedi. Bu "
+            "genellikle ek alanının iletimde bozulduğu ya da yanlış gizli "
+            "anahtarla çözülmeye çalışıldığı durumlarda olur.",
+            "Doğru anahtar çiftini ve değiştirilmemiş bir paket kullandığınızdan "
+            "emin olun, sonra yeniden deneyin.",
+            technical,
+        )
+
+    if isinstance(exc, PacketFormatError):
+        return CryptoExplanation(
+            "Paket Formatı Hatası",
+            "Şifreli paketteki bir alan beklenen formatta değil. Örneğin "
+            "birleşik veri (mesaj ‖ imza), 256 byte'lık imza alanını "
+            "taşıyamayacak kadar kısa olabilir ya da AAD'nin sürüm/uzunluk "
+            "beklentisi ihlal edilmiş olabilir.",
+            "Paketin eksiksiz ve değiştirilmemiş olduğundan emin olun; gerekirse "
+            "mesajı yeniden oluşturup gönderin.",
+            technical,
+        )
+
+    if isinstance(exc, (SignError, EncryptError, KeygenError)):
+        op = {
+            "SignError": "Dijital imza üretimi",
+            "EncryptError": "Şifreleme işlemi",
+            "KeygenError": "RSA anahtar çifti üretimi",
+        }[type(exc).__name__]
+        return CryptoExplanation(
+            f"{op} Başarısız",
+            f"{op} tamamlanamadı. Bu adım, çekirdek kripto kütüphanesinin "
+            "(cryptography) beklenen çıktıyı üretememesi durumunda oluşur.",
+            "İşlemi yeniden deneyin; sorun sürerse Python/cryptography kurulumunu "
+            "ve sistem ortamını kontrol edin.",
+            technical,
+        )
+
+    # Bilinmeyen CryptoError alt tipi ya da ham istisnalar: mevcut tek-parça
+    # çevirmenin gövdesini "bu ne demek" bölümüne koy, genel öneri ver.
+    title, body = format_crypto_exception(exc)
+    return CryptoExplanation(
+        title,
+        body,
+        "İşlemi yeniden deneyin; sorun sürerse paketin ve anahtarların "
+        "doğruluğunu kontrol edin.",
+        technical,
     )
-    lbl = getattr(box, "_content_lbl", None)
-    if lbl is not None:
-        lbl.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 14px;")
-
-
-def _make_step_box(title: str, content: str, border_color: str) -> QGroupBox:
-    """Kümülatif görselleştirme için renkli çerçeveli kutucuk oluşturur."""
-    box = QGroupBox(title)
-    layout = QVBoxLayout(box)
-    layout.setContentsMargins(8, 18, 8, 8)
-
-    lbl = QLabel(content)
-    lbl.setWordWrap(True)
-    lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    layout.addWidget(lbl)
-
-    # Tema değişiminde yeniden stillendirilebilmesi için içerik etiketini sakla.
-    box._content_lbl = lbl  # type: ignore[attr-defined]
-    _style_step_box(box, border_color)
-
-    return box
-
-
-def _truncate_hex(hex_str: str, max_len: int = 48) -> str:
-    """Uzun hex değerlerini görüntüleme için kısaltır."""
-    if len(hex_str) > max_len:
-        return hex_str[:max_len] + "…"
-    return hex_str
-
-
-def _build_step_content(step: StepResult) -> str:
-    """Adım verilerini kullanıcı dostu Türkçe etiketlerle formatlar."""
-    lines = [step.description, ""]
-    for key, value in step.data.items():
-        if key.endswith("_bytes"):
-            continue
-        display_key = FRIENDLY_NAMES.get(key, key)
-        if key == "verification_result":
-            display_val = "✅ DOĞRULANDI" if value else "❌ DOĞRULANAMADI"
-        elif isinstance(value, str) and len(value) > 64:
-            display_val = _truncate_hex(value)
-        else:
-            display_val = value
-        lines.append(f"  • {display_key}: {display_val}")
-    return "\n".join(lines)

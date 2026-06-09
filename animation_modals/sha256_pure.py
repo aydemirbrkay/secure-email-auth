@@ -99,7 +99,7 @@ def sha256_steps(message: bytes) -> dict:
 
         a, b, c, d, e, f, g, hh = h
 
-        for i in range(64):
+        for i in range(64):  # 64 sıkıştırma round'u (FIPS 180-4 §6.2.2)
             s1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
             ch = ((e & f) ^ (~e & g)) & 0xFFFFFFFF
             temp1 = (hh + s1 + ch + K[i] + w[i]) & 0xFFFFFFFF

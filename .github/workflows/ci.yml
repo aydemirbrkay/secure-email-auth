@@ -1,0 +1,81 @@
+name: CI
+
+# Tetikleyiciler: main ve claude/** dallarına push + main'e açılan PR'lar.
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: ${{ matrix.os }} • Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+
+    env:
+      # GUI testleri görüntü sunucusu olmadan (headless) koşar.
+      QT_QPA_PLATFORM: offscreen
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Qt'nin offscreen platform eklentisi Linux'ta bu sistem
+      # kütüphanelerine ihtiyaç duyar; Windows runner'da gerekmez.
+      - name: Install Qt system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xfixes0 \
+            libxcb-xkb1 \
+            libdbus-1-3
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type check (mypy)
+        continue-on-error: true
+        run: mypy kriptografi arayuz animation_modals --ignore-missing-imports
+
+      # Coverage yalnızca tek matris hücresinde toplanır (ubuntu + 3.12).
+      - name: Install coverage tool
+        if: runner.os == 'Linux' && matrix.python-version == '3.12'
+        run: pip install pytest-cov
+
+      - name: Run tests (with coverage)
+        if: runner.os == 'Linux' && matrix.python-version == '3.12'
+        run: pytest -q --cov=kriptografi --cov=arayuz --cov=animation_modals --cov-report=xml --cov-report=term-missing
+
+      - name: Run tests
+        if: ${{ !(runner.os == 'Linux' && matrix.python-version == '3.12') }}
+        run: pytest -q

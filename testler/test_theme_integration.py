@@ -11,10 +11,8 @@ doğrular.
 import os
 import unittest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PyQt6.QtWidgets import QApplication
-
-_app = QApplication.instance() or QApplication([])
+# Headless/offscreen ortam ve tek QApplication örneği conftest.py'deki
+# session kapsamlı autouse `qapp` fixture'ı tarafından sağlanır.
 
 
 class TestThemeIntegration(unittest.TestCase):
@@ -62,6 +60,27 @@ class TestThemeIntegration(unittest.TestCase):
         win._alice_panel._apply_styles()
         win._bob_panel._apply_styles()
         win._apply_styles()
+        win.deleteLater()
+
+    def test_main_window_accessibility(self) -> None:
+        """C8: interaktif butonlar Türkçe accessibleName taşır; "Hareketi
+        Azalt" menü eylemi tercihi kalıcılaştırır. (MainWindow burada güvenle
+        kurulur; bkz. test_accessibility.py notu.)"""
+        from arayuz.accessibility import REDUCE_MOTION, ReduceMotionSettings
+        from main_gui import MainWindow
+
+        win = MainWindow()
+        for btn in (win._btn_keygen, win._btn_start, win._btn_next,
+                    win._btn_reset):
+            self.assertTrue(btn.accessibleName().strip())
+        self.assertTrue(win._alice_panel.accessibleName().strip())
+
+        win._reduce_motion_action.setChecked(True)
+        self.assertTrue(ReduceMotionSettings().load())
+        win._reduce_motion_action.setChecked(False)
+        self.assertFalse(ReduceMotionSettings().load())
+        REDUCE_MOTION.set_enabled(False)
+
         win.deleteLater()
 
     def test_animation_window_builds_in_both_themes(self) -> None:

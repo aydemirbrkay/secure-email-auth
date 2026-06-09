@@ -2,9 +2,12 @@
 
 # Güvenli E-posta Kimlik Doğrulama ve Mesaj Bütünlüğü Sistemi
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/s%C3%BCr%C3%BCm-1.0.0-blueviolet?style=for-the-badge)](docs/CHANGELOG.md)
+[![License](https://img.shields.io/badge/lisans-MIT-yellow?style=for-the-badge)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.6%2B-green?style=for-the-badge&logo=qt&logoColor=white)](https://riverbankcomputing.com/software/pyqt/)
 [![Cryptography](https://img.shields.io/badge/cryptography-44.0%2B-red?style=for-the-badge&logo=letsencrypt&logoColor=white)](https://cryptography.io/)
+[![CI](https://github.com/aydemirbrkay/secure-email-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/aydemirbrkay/secure-email-auth/actions/workflows/ci.yml)
 
 **Erciyes Üniversitesi — Bilgisayar Mühendisliği Bölümü**
 **Bitirme Projesi • 2025**
@@ -81,33 +84,35 @@ secure-email-auth/
 ├── arayuz/                         # Kullanıcı arayüzü paneller ve görsel bileşenler
 │   ├── alice_panel.py              # Alice (gönderici) paneli ve animasyon konteyneri
 │   ├── bob_panel.py                # Bob (alıcı) paneli ve deşifre diyagram bileşeni
-│   ├── theme.py                    # Renk paleti ve tema sabitleri
-│   └── toast.py                    # Doğrulama bildirimi bileşeni (VerificationToast)
-├── kriptografi/                    # Kriptografik iş mantığı (backend)
+│   ├── theme.py                    # Renk paleti, tema motoru + stil helper'ları
+│   ├── theme_toggle.py             # Ay/güneş tema geçiş butonu
+│   ├── toast.py                    # Doğrulama bildirimi bileşeni (VerificationToast)
+│   ├── widget_utils.py             # Qt'ye bağımlı arayüz yardımcıları (adım kutusu, ikon)
+│   └── constants.py                # Pencere boyutu/margin/spacing sabitleri
+├── kriptografi/                    # Kriptografik iş mantığı (backend, Qt'den bağımsız)
 │   ├── crypto_core.py              # Hibrit şifreleme/imzalama API'ı (cryptography lib)
 │   ├── crypto_workers.py           # QThread tabanlı asenkron worker'lar (UI donmasın)
-│   └── utils.py                    # Yardımcı fonksiyonlar (adım kutusu, renk hesaplama)
-├── animation_modals/               # Pedagojik animasyon pencereleri
+│   ├── errors.py                   # Tipli istisna hiyerarşisi (CryptoError ailesi)
+│   └── utils.py                    # Saf yardımcılar (hata formatı, FRIENDLY_NAMES)
+├── animation_modals/               # Pedagojik animasyon pencereleri (alt-paketler)
 │   ├── base.py                     # CryptoAnimationWindow temel sınıfı
 │   ├── matrix_widget.py            # AES durum matrisi görselleştirme bileşeni
 │   ├── byte_widgets.py             # Paylaşılan byte ızgara/strip widget'ları (UTF-8 aware)
-│   ├── aes_animation.py            # AES-256 animasyon penceresi (tıklanabilir round bar)
+│   ├── aes/                        # AES-256 animasyonu (window, steps, round_flow, …)
 │   ├── aes_pure.py                 # Saf Python AES-256 (14 turlu durum verisi)
-│   ├── rsa_animation.py            # RSA-2048 animasyon penceresi (8 eğitim adımı)
-│   ├── sha256_animation.py         # SHA-256 animasyon penceresi (padding, W_i, sıkıştırma)
+│   ├── rsa/                        # RSA-2048 animasyonu (window, key_builder, der_widget, …)
+│   ├── sha256/                     # SHA-256 animasyonu (window, prep, w_expansion, …)
 │   └── sha256_pure.py              # Saf Python SHA-256 (adım ve W_i verisi)
-├── testler/                        # Birim ve smoke testleri (200+ test senaryosu)
-│   ├── test_crypto_core.py         # Kriptografik API testleri
+├── testler/                        # Birim ve smoke testleri (272 test senaryosu)
+│   ├── conftest.py                 # Headless/offscreen Qt fixture'ları
+│   ├── test_crypto_core.py         # Kriptografik API + replay/tazelik testleri
 │   ├── test_crypto_workers.py      # Worker thread testleri
 │   ├── test_aes_pure.py            # Saf AES implementasyonu testleri
 │   ├── test_sha256_pure.py         # Saf SHA-256 implementasyonu testleri
-│   ├── test_diagram_rects.py       # Diyagram dikdörtgen sınır testleri
 │   ├── test_aes_matrix_view.py     # AES matris görünüm testleri
 │   ├── test_animation_smoke.py     # Animasyon penceresi smoke testleri
-│   ├── test_animation_widgets_smoke.py  # Widget instantiation testleri
-│   ├── test_message_prep_animation.py   # Mesaj hazırlığı animasyon testleri
-│   ├── test_rsa_animation.py       # RSA animasyon adım testleri
-│   └── test_utils.py               # Yardımcı fonksiyon testleri
+│   ├── test_theme_*.py             # Tema motoru/stil/entegrasyon testleri
+│   └── …                           # (tam liste için "Test Kapsamı" tablosuna bakın)
 ├── görseller/                      # Tüm görsel kaynaklar (SVG ikonlar + PNG akış diyagramları)
 │   ├── alice and bob.png           # Alice tarafı şifreleme akış diyagramı
 │   ├── bob-tarafi-sifre-cozme.png  # Bob tarafı deşifre akış diyagramı
@@ -124,7 +129,7 @@ secure-email-auth/
 
 Proje, her kriptografik algoritmanın iç işleyişini adım adım görselleştiren bağımsız animasyon pencereleri içerir. Bu pencereler Alice panelinin içine gömülü olarak çalışır ve her pencere **kriptografik standartlara uygun, pedagojik olarak doğru** gösterimler sunar.
 
-### AES-256-GCM Animasyonu (`animation_modals/aes_animation.py`)
+### AES-256-GCM Animasyonu (`animation_modals/aes/`)
 - Giriş animasyonu ve **tıklanabilir tur çubuğu** (Round 0 – Round 14, R0–R14 butonları)
 - Sayfa düzeni viewport'a oranlı genişler (matris ~%40 / akış şeması ~%60), yatay scroll çıkmaz
 - 14 tura ait durum matrisi görselleştirmesi (`MatrixWidget`)
@@ -134,7 +139,7 @@ Proje, her kriptografik algoritmanın iç işleyişini adım adım görselleşti
 - **AddRoundKey**: XOR ile tur anahtarı karıştırma
 - Eşleşme ekranı: ECB blok çıktısı ile GCM şifreli metninin neden farklı olduğunu açıklar (CTR sayacı + keystream ⊕ plaintext)
 
-### RSA-2048 Animasyonu (`animation_modals/rsa_animation.py`)
+### RSA-2048 Animasyonu (`animation_modals/rsa/`)
 - **8 adımlı** manuel eğitim akışı: asal sayılar → n → φ(n) → e → d (EEA) → DER/Base64 → gerçek anahtar eşleşmesi → şifreleme/deşifreleme turu
 - Her adımda matematiksel formül gösterimi
 - **Adım 5 — Genişletilmiş Öklid Algoritması**: İleri Öklid ve geri iz adımları kaynak satır referansları ile açıklanır
@@ -143,7 +148,7 @@ Proje, her kriptografik algoritmanın iç işleyişini adım adım görselleşti
 - **Adım 8 — Şifreleme / Deşifreleme**: Demo değerler üzerinde `m=65 → c = 65¹⁷ mod 3233 = 2790 → m = 2790²⁷⁵³ mod 3233 = 65`; `m'` kutusu efektsiz açılır (pulse/renk geçişi yok), diğer kutularla tutarlı
 - Gerçek DER→Base64 dönüşümü demo değerleriyle, demo ve gerçek 2048-bit anahtar farkı vurgulanır
 
-### SHA-256 Animasyonu (`animation_modals/sha256_animation.py`)
+### SHA-256 Animasyonu (`animation_modals/sha256/`)
 - **Adım 1 — Mesaj Hazırlığı**: Kullanıcının tam metni (uzun mesajlarda word-wrap ile alt satıra inerek) gösterilir; byte detay tablosu **tüm baytları** içerir (16-byte kapasitesi kaldırıldı), uzun mesajda yatay scroll ile gezilir
 - **UTF-8 / Türkçe karakter desteği**: Karakter satırı `ş, ğ, ü, ö, ç, ı` gibi çok-baytlı UTF-8 karakterleri her iki bayt hücresinde de doğru gösterir; padding-aware decoding ile padding baytları (0x80, 0x00, length) decode'u kırmaz
 - **Adım 2 — Padding Görselleştirmesi**: Aynı mesaj etiketi simetrik olarak gösterilir; 0x80 biti + 0 bitleri + 64-bit uzunluk; çok-bloklu mesajlarda kompakt blok navigasyonu (◀ Önceki / Sonraki ▶) yatay scrollbar'ın hemen altında
@@ -281,11 +286,13 @@ Maske Üretim Fonksiyonu  : MGF1(SHA-256) (RFC 8017 §B.2.1)
 
 ### Gereksinimler
 
-- Python 3.9 – 3.12 (PyQt6 6.6+ ile uyumlu)
+- Python 3.11 (geliştirme ve doğrulama sürümü)
 - pip
 - Masaüstü ortamı (GUI için)
 
-> **Not:** Proje yerel olarak Python 3.11 üzerinde geliştirilmiş ve doğrulanmıştır.
+> **Not:** Proje **Python 3.11** üzerinde geliştirilmiş ve doğrulanmıştır.
+> PyQt6 ile Anaconda/Miniconda ortamlarında DLL çakışması yaşanabildiğinden
+> resmi python.org dağıtımıyla oluşturulmuş bir `venv` önerilir.
 
 ### Kurulum
 
@@ -330,17 +337,20 @@ python main_gui.py
 
 ### Testleri Çalıştırma
 
-Tüm test dosyalarını tek seferde çalıştırmak için:
+Repo kökünden tüm test paketini çalıştırmak için:
 
 ```bash
-python -m pytest -v
+python -m pytest testler -q
 ```
 
-Yalnızca belirli test dosyalarını çalıştırmak için:
+Yalnızca belirli test dosyalarını çalıştırmak için (yol `testler/` ile verilir):
 
 ```bash
-python -m pytest test_crypto_core.py test_aes_pure.py test_sha256_pure.py test_diagram_rects.py -v
+python -m pytest testler/test_crypto_core.py testler/test_aes_pure.py testler/test_sha256_pure.py -q
 ```
+
+> **Sürekli Entegrasyon (CI):** Her push/PR'da GitHub Actions tüm test
+> paketini Python 3.11 ile otomatik çalıştırır (`.github/workflows/ci.yml`).
 
 ### Olası Sorunlar
 
@@ -351,12 +361,28 @@ python -m pytest test_crypto_core.py test_aes_pure.py test_sha256_pure.py test_d
 
 ## Test Kapsamı
 
+Toplam **272 test** — son doğrulama: **272 passed (Python 3.11)**.
+
 | Test Dosyası | Test Sayısı | Kapsam |
 |---|---|---|
-| `test_crypto_core.py` | 26 | SHA-256, RSA, AES-GCM, uçtan uca iş akışı |
-| `test_aes_pure.py` | — | Saf Python AES-256 implementasyonu |
-| `test_sha256_pure.py` | — | Saf Python SHA-256 implementasyonu |
-| `test_diagram_rects.py` | — | Diyagram dikdörtgen sınır kontrolleri |
+| `test_crypto_core.py` | 61 | SHA-256, RSA, AES-GCM, uçtan uca akış, replay/tazelik |
+| `test_utils.py` | 27 | Kripto yardımcıları (hata formatı, ikon, FRIENDLY_NAMES) |
+| `test_animation_smoke.py` | 32 | Animasyon pencereleri kurulum/render smoke |
+| `test_aes_matrix_view.py` | 22 | AES durum matrisi görünümü |
+| `test_message_prep_animation.py` | 22 | Mesaj hazırlığı animasyonu |
+| `test_widget_utils.py` | 18 | Qt arayüz yardımcıları (adım kutusu, pixmap) |
+| `test_crypto_workers.py` | 16 | QThread worker'ları + operation token |
+| `test_animation_widgets_smoke.py` | 14 | Widget örnekleme smoke |
+| `test_sha256_pure.py` | 11 | Saf Python SHA-256 |
+| `test_panel_step_api.py` | 10 | Panel adım public API |
+| `test_rsa_animation.py` | 10 | RSA animasyon adımları |
+| `test_theme_engine.py` | 8 | Tema motoru (palet, canlı geçiş) |
+| `test_aes_pure.py` | 6 | Saf Python AES-256 |
+| `test_theme_styles.py` | 6 | Tema stil helper'ları |
+| `test_diagram_rects.py` | 4 | Diyagram dikdörtgen sınır kontrolleri |
+| `test_theme_integration.py` | 4 | Canlı tema entegrasyonu (MainWindow) |
+| `test_theme_toggle.py` | 1 | Tema geçiş butonu |
+| **Toplam** | **272** | |
 
 ---
 

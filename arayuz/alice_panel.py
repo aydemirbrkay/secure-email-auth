@@ -19,8 +19,8 @@ from PyQt6.QtWidgets import (
 )
 
 from kriptografi.crypto_core import StepResult
-from kriptografi.utils import _build_step_content, _make_step_box, _style_step_box
-from arayuz.theme import COLORS, STEP_COLORS_ALICE
+from arayuz.widget_utils import build_step_content, make_step_box, style_step_box
+from arayuz.theme import COLORS, STEP_COLORS_ALICE, label_title_style
 from arayuz.bob_panel import BobDecryptDiagramWidget
 
 
@@ -125,7 +125,7 @@ class AlicePanel(QWidget):
     def _apply_styles(self) -> None:
         """Renk taşıyan stilleri aktif palete göre (yeniden) uygular."""
         c = COLORS
-        self._title.setStyleSheet(f"color: {c['accent_mauve']};")
+        self._title.setStyleSheet(label_title_style("accent_mauve"))
         self.status_label.setStyleSheet(
             f"color: {c['text_secondary']}; font-size: 12px; padding: 4px;"
         )
@@ -139,7 +139,7 @@ class AlicePanel(QWidget):
         )
         # Mevcut adım kutularını da aktif temaya göre yeniden stillendir
         for i, box in enumerate(self._step_widgets):
-            _style_step_box(box, STEP_COLORS_ALICE[i % len(STEP_COLORS_ALICE)])
+            style_step_box(box, STEP_COLORS_ALICE[i % len(STEP_COLORS_ALICE)])
 
     def show_animation(self, widget: QWidget) -> None:
         """Normal içeriği gizle, animasyon widget'ını QScrollArea içinde göster."""
@@ -224,6 +224,26 @@ class AlicePanel(QWidget):
         self.reset()
         self._steps = steps
 
+    @property
+    def current_step(self) -> int:
+        """Bir sonraki gösterilecek adımın indeksi (0 tabanlı).
+
+        Dışarıdan akış kararı verirken ``_current_step`` private alanına
+        erişmek yerine bu public property kullanılır.
+        """
+        return self._current_step
+
+    def peek_next_step(self) -> Optional[StepResult]:
+        """Bir sonraki adımı gerçekleştirmeden döndürür; sonda ``None``.
+
+        ``show_next_step()`` çağrılmadan, sırada hangi adımın olduğunu
+        (ve dolayısıyla ``step_type``'ını) öğrenmek için kullanılır.
+        Durumu değiştirmez.
+        """
+        if self._current_step >= len(self._steps):
+            return None
+        return self._steps[self._current_step]
+
     def show_next_step(self) -> bool:
         """Sonraki adımı dışa-sararak kümülatif gösterir.
 
@@ -235,8 +255,8 @@ class AlicePanel(QWidget):
 
         step = self._steps[self._current_step]
         color = STEP_COLORS_ALICE[self._current_step % len(STEP_COLORS_ALICE)]
-        content = _build_step_content(step)
-        box = _make_step_box(
+        content = build_step_content(step)
+        box = make_step_box(
             f"Adım {step.step_number}: {step.step_name}",
             content,
             color,

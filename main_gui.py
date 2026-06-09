@@ -16,7 +16,7 @@ import sys
 from typing import Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtGui import QAction, QColor, QFont, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -31,13 +31,25 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from kriptografi.crypto_core import CryptoCore, EncryptedPacket
+from kriptografi.crypto_core import CryptoCore, EncryptedPacket, StepType
 from kriptografi.crypto_workers import AliceSendWorker, BobReceiveWorker, KeygenWorker
-from kriptografi.utils import _png_icon_pixmap, _svg_pixmap, format_crypto_exception
+from kriptografi.utils import constant_time_equal
+from arayuz.error_dialog import CryptoErrorDialog
+from arayuz.accessibility import REDUCE_MOTION, build_tab_order, set_accessible
+from arayuz.widget_utils import png_icon_pixmap, svg_pixmap
 from animation_modals import RSAAnimationWindow, SHA256AnimationWindow, AESAnimationWindow
 from animation_modals.base import CryptoAnimationWindow
 from arayuz import theme
-from arayuz.theme import COLORS, MANAGER
+from arayuz.theme import COLORS, MANAGER, card_style, label_title_style
+from arayuz.constants import (
+    CONTROLS_SPACING,
+    MAIN_LAYOUT_MARGIN,
+    MAIN_LAYOUT_SPACING,
+    MAIN_WINDOW_MIN_HEIGHT,
+    MAIN_WINDOW_MIN_WIDTH,
+    SPLITTER_HANDLE_WIDTH,
+    SPLITTER_INITIAL_PANEL_WIDTH,
+)
 from arayuz.theme_toggle import ThemeToggle
 from arayuz.alice_panel import AlicePanel
 from arayuz.bob_panel import BobPanel
@@ -56,7 +68,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(
             "Secure Email Authentication and Message Integrity"
         )
-        self.setMinimumSize(1200, 750)
+        self.setMinimumSize(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT)
 
         self._crypto = CryptoCore()
         self._packet: Optional[EncryptedPacket] = None
@@ -77,14 +89,25 @@ class MainWindow(QMainWindow):
         self._send_worker: Optional[AliceSendWorker] = None
         self._receive_worker: Optional[BobReceiveWorker] = None
 
+        # İşlem jetonu (operation token / generation id). Her yeni işlem
+        # (keygen/send/receive) ve her reset bu sayacı artırır. Worker
+        # başlatılırken o anki generation yakalanır; worker bittiğinde
+        # gelen sonucun generation'ı güncel değer ile uyuşmuyorsa sonuç
+        # bayat (stale) sayılıp yok sayılır. Hızlı reset/yeniden-başlatmada
+        # eski worker'ın sonucunun sıfırlanmış UI'ı bozmasını engeller.
+        self._op_generation: int = 0
+
         self._init_ui()
 
     def _init_ui(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(
+            MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN,
+            MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN,
+        )
+        main_layout.setSpacing(MAIN_LAYOUT_SPACING)
 
         header_row = QHBoxLayout()
         header_row.setSpacing(0)
@@ -106,7 +129,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self._subtitle)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setHandleWidth(3)
+        splitter.setHandleWidth(SPLITTER_HANDLE_WIDTH)
 
         self._alice_frame = QFrame()
         alice_inner = QVBoxLayout(self._alice_frame)
@@ -122,11 +145,13 @@ class MainWindow(QMainWindow):
         bob_inner.addWidget(self._bob_panel)
         splitter.addWidget(self._bob_frame)
 
-        splitter.setSizes([600, 600])
+        splitter.setSizes(
+            [SPLITTER_INITIAL_PANEL_WIDTH, SPLITTER_INITIAL_PANEL_WIDTH]
+        )
         main_layout.addWidget(splitter, stretch=1)
 
         controls = QHBoxLayout()
-        controls.setSpacing(12)
+        controls.setSpacing(CONTROLS_SPACING)
 
         self._btn_keygen = QPushButton("Anahtar Üret")
         self._btn_keygen.setToolTip("Alice ve Bob için RSA-2048 anahtar çiftleri üret")
@@ -324,6 +349,56 @@ class MainWindow(QMainWindow):
         self._update_toggle_label()
         MANAGER.themeChanged.connect(self._on_theme_changed)
 
+        # Erişilebilirlik: menü, ekran-okuyucu adları ve Tab gezinme sırası.
+        self._init_menu()
+        self._apply_accessibility()
+
+    # ------------------------------------------------------------------
+    # Erişilebilirlik (a11y)
+    # ------------------------------------------------------------------
+
+    def _init_menu(self) -> None:
+        """Menü çubuğu + "Hareketi Azalt" kalıcı seçeneği (fotosensitif uyarısı)."""
+        menu_bar = self.menuBar()
+        # Headless/offscreen ve platform tutarlılığı için native menü kapalı.
+        menu_bar.setNativeMenuBar(False)
+        settings_menu = menu_bar.addMenu("Ayarlar")
+        self._reduce_motion_action = QAction("Hareketi Azalt", self)
+        self._reduce_motion_action.setCheckable(True)
+        self._reduce_motion_action.setChecked(REDUCE_MOTION.is_enabled())
+        self._reduce_motion_action.setToolTip(
+            "Hızlı/titreşimli animasyonları yavaşlatır. Fotosensitif "
+            "(ışığa duyarlı) kullanıcılar için önerilir."
+        )
+        self._reduce_motion_action.toggled.connect(self._on_reduce_motion_toggled)
+        settings_menu.addAction(self._reduce_motion_action)
+
+    def _on_reduce_motion_toggled(self, enabled: bool) -> None:
+        """Tercihi kalıcılaştırır; sonraki açılan animasyonlar yavaş tick alır."""
+        REDUCE_MOTION.set_enabled(enabled)
+
+    def _apply_accessibility(self) -> None:
+        """İnteraktif öğelere Türkçe erişilebilir ad/açıklama + Tab sırası."""
+        set_accessible(self._btn_keygen, "Anahtar Üret",
+                       "Alice ve Bob için RSA-2048 anahtar çiftleri üretir.")
+        set_accessible(self._btn_start, "Şifreleme Başlat",
+                       "Alice'in mesajı şifreleme sürecini başlatır.")
+        set_accessible(self._btn_next, "Sonraki Adım",
+                       "Bir sonraki kriptografik adımı gösterir.")
+        set_accessible(self._btn_reset, "Sıfırla",
+                       "Tüm adımları sıfırlar ve baştan başlar.")
+        msg_input = getattr(self._alice_panel, "msg_input", None)
+        if msg_input is not None:
+            set_accessible(msg_input, "E-posta Mesajı",
+                           "Gönderilecek e-posta metnini buraya yazın.")
+        set_accessible(self._alice_panel, "Alice Paneli (Gönderici)")
+        set_accessible(self._bob_panel, "Bob Paneli (Alıcı)")
+
+        # Mantıksal Tab sırası: mesaj girişi → eylem butonları.
+        tab_chain = [w for w in (msg_input, self._btn_keygen, self._btn_start,
+                                 self._btn_next, self._btn_reset) if w is not None]
+        build_tab_order(*tab_chain)
+
     # ------------------------------------------------------------------
     # Tema / Stil
     # ------------------------------------------------------------------
@@ -340,7 +415,7 @@ class MainWindow(QMainWindow):
             f"color: {c['accent_blue']}; padding: 8px 0px 8px 8px;"
         )
         self._header_icon.setPixmap(
-            _png_icon_pixmap("secure-email-simge.png", c["text_primary"], 96, thickness=1.25)
+            png_icon_pixmap("secure-email-simge.png", c["text_primary"], 96, thickness=1.25)
         )
         self._subtitle.setStyleSheet(f"color: {c['text_muted']}; font-size: 13px;")
 
@@ -373,14 +448,11 @@ class MainWindow(QMainWindow):
             f"QGroupBox::title {{ color: {c['accent_teal']}; "
             f"font-size: 12px; font-weight: bold; subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
         )
-        _card = (
-            f"QFrame {{ background-color: {c['bg_card']}; "
-            f"border: 1px solid {c['border']}; border-radius: 8px; }}"
-        )
+        _card = card_style()
         for frame in self._card_frames:
             frame.setStyleSheet(_card)
-        self._alice_msg_title.setStyleSheet(f"color: {c['accent_mauve']};")
-        self._bob_msg_title.setStyleSheet(f"color: {c['accent_green']};")
+        self._alice_msg_title.setStyleSheet(label_title_style("accent_mauve"))
+        self._bob_msg_title.setStyleSheet(label_title_style("accent_green"))
         _cmp_val = f"color: {c['text_secondary']}; font-size: 11px;"
         self._alice_msg_cmp.setStyleSheet(_cmp_val)
         self._bob_msg_cmp.setStyleSheet(_cmp_val)
@@ -412,7 +484,7 @@ class MainWindow(QMainWindow):
             f"font-size: 12px; font-weight: bold; "
             f"subcontrol-origin: margin; left: 14px; padding: 0 6px; }}"
         )
-        self._algo_gear.setPixmap(_svg_pixmap("gear.svg", c["accent_blue"], 14))
+        self._algo_gear.setPixmap(svg_pixmap("gear.svg", c["accent_blue"], 14))
         self._algo_info_lbl.setStyleSheet(f"color: {c['text_muted']}; font-size: 10px;")
         self._btn_anim_rsa.setStyleSheet(self._algo_btn_style(c["accent_mauve"]))
         self._btn_anim_sha.setStyleSheet(self._algo_btn_style(c["accent_blue"]))
@@ -434,6 +506,16 @@ class MainWindow(QMainWindow):
             anim.refresh_theme()
         for w in self.findChildren(QWidget):
             w.update()
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        """Kapanışta global tema sinyalinden ayrıl. Aksi halde kapatılmış
+        (ama henüz yok edilmemiş) pencere, sonraki tema değişiminde yarı-yıkık
+        widget ağacına erişip çökmeye yol açabilir."""
+        try:
+            MANAGER.themeChanged.disconnect(self._on_theme_changed)
+        except (TypeError, RuntimeError):
+            pass
+        super().closeEvent(event)
 
     # ------------------------------------------------------------------
     # Algoritma Paneli
@@ -537,6 +619,24 @@ class MainWindow(QMainWindow):
     # Olay İşleyicileri (Event Handlers)
     # ------------------------------------------------------------------
 
+    def _next_generation(self) -> int:
+        """Yeni bir işlem jetonu üretir ve güncel generation'ı döndürür.
+
+        Sayacı artırır; çağıran (worker başlatan slot) dönen değeri yerel
+        bir değişkende/closure'da yakalayıp worker bittiğinde
+        ``_is_current_generation`` ile karşılaştırır.
+        """
+        self._op_generation += 1
+        return self._op_generation
+
+    def _is_current_generation(self, gen: int) -> bool:
+        """Verilen generation'ın hâlâ güncel olup olmadığını söyler.
+
+        Worker tamamlandığında çağrılır; ``False`` dönerse sonuç bayattır
+        (arada reset veya yeni bir işlem başlamıştır) ve UI'a yansıtılmaz.
+        """
+        return gen == self._op_generation
+
     def _on_keygen(self) -> None:
         # RSA-2048 anahtar üretimi ~1-2 sn sürebilir; UI donmaması için
         # arka planda bir QThread worker'ı kullanıyoruz.
@@ -544,17 +644,25 @@ class MainWindow(QMainWindow):
         self._btn_keygen.setText("Anahtar Üretiliyor…")
         self._bob_panel.show_keygen_step()
 
+        gen = self._next_generation()
         self._keygen_worker = KeygenWorker(self._crypto, self)
-        self._keygen_worker.finished_ok.connect(self._on_keygen_done)
+        # Worker'ın o anki generation'ını yakala; sonuç geldiğinde bu
+        # değer güncel değilse (reset/yeni işlem araya girdiyse) yok say.
+        self._keygen_worker.finished_ok.connect(
+            lambda a, b, g=gen: self._on_keygen_done(a, b, g)
+        )
         self._keygen_worker.failed.connect(self._on_crypto_error)
         self._keygen_worker.start()
 
-    def _on_keygen_done(self, alice_keys, bob_keys) -> None:
+    def _on_keygen_done(self, alice_keys, bob_keys, gen: int = 0) -> None:
         """KeygenWorker.finished_ok sinyaline bağlanan sonuç işleyici.
 
         Ana thread'de çalışır; UI'ı anahtarlar üretildikten sonraki
-        duruma getirir.
+        duruma getirir. ``gen`` worker başlatılırken yakalanan işlem
+        jetonudur; güncel değilse sonuç bayattır ve yok sayılır.
         """
+        if not self._is_current_generation(gen):
+            return  # bayat sonuç — araya reset/yeni işlem girdi
         self._btn_keygen.setText("Anahtar Üret")
         self._keygen_worker = None
 
@@ -581,8 +689,14 @@ class MainWindow(QMainWindow):
         )
         self._alice_panel.show_animation(rsa_win)
 
-    def _on_receive_done(self, message: str, is_valid: bool, bob_steps: list) -> None:
-        """BobReceiveWorker tamamlandığında UI'ı bob fazına geçirir."""
+    def _on_receive_done(self, message: str, is_valid: bool, bob_steps: list, gen: int = 0) -> None:
+        """BobReceiveWorker tamamlandığında UI'ı bob fazına geçirir.
+
+        ``gen`` worker başlatılırken yakalanan işlem jetonudur; güncel
+        değilse sonuç bayattır ve yok sayılır.
+        """
+        if not self._is_current_generation(gen):
+            return  # bayat sonuç — araya reset/yeni işlem girdi
         self._receive_worker = None
         self._decoded_message = message
         self._is_valid = is_valid
@@ -599,8 +713,8 @@ class MainWindow(QMainWindow):
         Hatayı kullanıcıya anlaşılır bir mesajla gösterir ve UI'ı
         önceki durumuna döndürür (butonları yeniden etkinleştirir).
         """
-        title, body = format_crypto_exception(exc)
-        QMessageBox.critical(self, title, body)
+        # Öğretici 3 bölümlü hata diyaloğu (özet / "bu ne demek?" / öneri).
+        CryptoErrorDialog(exc, self).exec()
 
         # Worker referansını temizle — hangi worker patladı bilmiyoruz,
         # ama hepsini güvenle None yapabiliriz.
@@ -630,13 +744,22 @@ class MainWindow(QMainWindow):
         self._btn_start.setText("Şifreleniyor…")
         self._alice_panel.msg_input.setReadOnly(True)
 
+        gen = self._next_generation()
         self._send_worker = AliceSendWorker(self._crypto, message, self)
-        self._send_worker.finished_ok.connect(self._on_send_done)
+        self._send_worker.finished_ok.connect(
+            lambda p, s, g=gen: self._on_send_done(p, s, g)
+        )
         self._send_worker.failed.connect(self._on_crypto_error)
         self._send_worker.start()
 
-    def _on_send_done(self, packet: EncryptedPacket, alice_steps: list) -> None:
-        """AliceSendWorker tamamlandığında UI'ı bir sonraki faza hazırlar."""
+    def _on_send_done(self, packet: EncryptedPacket, alice_steps: list, gen: int = 0) -> None:
+        """AliceSendWorker tamamlandığında UI'ı bir sonraki faza hazırlar.
+
+        ``gen`` worker başlatılırken yakalanan işlem jetonudur; güncel
+        değilse sonuç bayattır ve yok sayılır.
+        """
+        if not self._is_current_generation(gen):
+            return  # bayat sonuç — araya reset/yeni işlem girdi
         self._packet = packet
         self._send_worker = None
         self._btn_start.setText("Şifreleme Başlat")
@@ -648,16 +771,18 @@ class MainWindow(QMainWindow):
 
     def _on_next_step(self) -> None:
         if self._phase == "alice":
-            # Read step index BEFORE show_next_step() changes it
-            step_idx = self._alice_panel._current_step  # 0..5
+            # show_next_step() indeksi değiştirmeden ÖNCE oku
+            step_idx = self._alice_panel.current_step  # 0..5
 
             # On first step, show the diagram on Bob's panel
             if step_idx == 0:
                 self._bob_panel.show_diagram()
 
-            if step_idx < len(self._alice_panel._steps):
-                next_step = self._alice_panel._steps[step_idx]
-                if "SHA" in next_step.step_name:
+            # Animasyon açma kararı görünen ada (string) değil, makineye
+            # okunur step_type'a bakar; adı değişse bile akış bozulmaz.
+            next_step = self._alice_panel.peek_next_step()
+            if next_step is not None:
+                if next_step.step_type == StepType.HASH:
                     hash_hex = next_step.data.get("hash_hex", "")
                     self._sha_data = (self._original_message, hash_hex)
                     self._btn_anim_sha.setEnabled(True)
@@ -667,7 +792,7 @@ class MainWindow(QMainWindow):
                         on_close=self._alice_panel.hide_animation,
                     )
                     self._alice_panel.show_animation(sha_win)
-                elif "AES" in next_step.step_name:
+                elif next_step.step_type == StepType.AES_ENCRYPT:
                     key_hex = next_step.data.get("session_key_hex", "")
                     ct_preview = next_step.data.get("ciphertext_hex_preview", "")
                     key_bytes = bytes.fromhex(key_hex) if key_hex else b"\x00" * 32
@@ -702,15 +827,18 @@ class MainWindow(QMainWindow):
                 self._btn_next.setEnabled(False)
                 self._btn_next.setText("Bob Deşifre Ediyor…")
 
+                gen = self._next_generation()
                 self._receive_worker = BobReceiveWorker(
                     self._crypto, self._packet, self
                 )
-                self._receive_worker.finished_ok.connect(self._on_receive_done)
+                self._receive_worker.finished_ok.connect(
+                    lambda m, v, s, g=gen: self._on_receive_done(m, v, s, g)
+                )
                 self._receive_worker.failed.connect(self._on_crypto_error)
                 self._receive_worker.start()
 
         elif self._phase == "bob":
-            step_idx = self._bob_panel._current_step
+            step_idx = self._bob_panel.current_step
             self._bob_has_more = self._bob_panel.show_next_step()
             self._alice_panel.set_bob_diagram_step(step_idx)
             if not self._bob_has_more:
@@ -728,8 +856,10 @@ class MainWindow(QMainWindow):
         orig_hash = hashlib.sha256(orig.encode("utf-8")).hexdigest()
         recv_hash = hashlib.sha256(received.encode("utf-8")).hexdigest()
 
-        messages_match = orig == received
-        hashes_match = orig_hash == recv_hash
+        # Mesaj ve hash karşılaştırması sabit-zamanlı yapılır; düz '=='
+        # içerik uzunluğuna/ortak ön-eke göre zamanlama yan-kanalı sızdırır.
+        messages_match = constant_time_equal(orig, received)
+        hashes_match = constant_time_equal(orig_hash, recv_hash)
 
         msg_preview = orig if len(orig) <= 80 else orig[:80] + "…"
         self._alice_msg_cmp.setText(msg_preview)
@@ -772,6 +902,13 @@ class MainWindow(QMainWindow):
         self._comparison_group.setVisible(True)
 
     def _on_reset(self) -> None:
+        # İşlem jetonunu artır — bu noktadan sonra hâlâ koşan eski
+        # worker'ların sonucu bayat sayılır ve _on_*_done slotlarında
+        # yok sayılır. Sinyal disconnect'i ek bir güvenlik katmanıdır;
+        # generation kontrolü asıl korumadır (disconnect başlatıldıktan
+        # hemen sonra emit edilen sinyalin yarış durumunu da kapatır).
+        self._next_generation()
+
         # Koşan bir worker varsa sinyallerini kopar — geç gelen
         # finished_ok çağrıları sıfırlanmış UI üstüne yazmasın.
         # Worker'ın kendisine interrupt edilemez (kriptografi kütüphanesi

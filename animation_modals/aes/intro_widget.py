@@ -233,19 +233,6 @@ class _AESIntroWidget(QWidget):
         self._intro_title.setAlignment(Qt.AlignmentFlag.AlignLeft)
         right_lay.addWidget(self._intro_title)
 
-        # Köprü notu: animasyon eğitim için AES'in tek-blok "iç mekaniğini"
-        # gösterir; gerçek protokol akışı AES-256-GCM'dir. Öğrenci, gösterilen
-        # blok dönüşümü ile gerçek iletimi karıştırmasın diye baştan belirtilir.
-        self._bridge_note = QLabel(
-            "İç mekanik: tek-blok dönüşümü (ECB) gösterilir. "
-            "Gerçek iletim AES-256-GCM ile yapılır — AAD + 128-bit "
-            "kimlik doğrulama etiketi (auth tag) eklenir."
-        )
-        self._bridge_note.setWordWrap(True)
-        self._bridge_note.setFont(QFont("IBM Plex Sans", 8))
-        self._bridge_note.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self._bridge_note.setStyleSheet(self._bridge_note_style())
-        right_lay.addWidget(self._bridge_note)
         right_lay.addSpacing(4)
 
         self._arrows: list[QLabel] = []
@@ -389,16 +376,6 @@ class _AESIntroWidget(QWidget):
         return f
 
     @staticmethod
-    def _bridge_note_style() -> str:
-        # Tema renginden; sınır+arka plan ile "bilgi notu" vurgusu.
-        return (
-            f"color: {ANIM_COLORS['text_secondary']}; "
-            f"background: {ANIM_COLORS['hl_yellow']}; "
-            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
-            f"border-radius: 6px; padding: 4px 8px;"
-        )
-
-    @staticmethod
     def _make_arrow() -> QLabel:
         lbl = QLabel("⬇")
         lbl.setFont(QFont("Segoe UI", 14))
@@ -429,7 +406,6 @@ class _AESIntroWidget(QWidget):
         )
         self._demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         self._intro_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
-        self._bridge_note.setStyleSheet(self._bridge_note_style())
         for box in (self._intro_plain, self._box_r0, self._box_main,
                     self._box_r14, self._intro_cipher):
             color = ANIM_COLORS[box._accent_key]  # type: ignore[attr-defined]

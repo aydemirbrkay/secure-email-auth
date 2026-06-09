@@ -205,8 +205,10 @@ class _AESIntroWidget(QWidget):
         left_lay.addWidget(self._demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
-        left_frame.setMinimumWidth(150)
-        left_frame.setMaximumWidth(185)
+        # Önizleme paneli eski (okunaklı) boyutuna döndürüldü. Sağ kolon artık
+        # sola yaslı olduğundan bu panel büyüse de ortada boşluk açılmaz.
+        left_frame.setMinimumWidth(200)
+        left_frame.setMaximumWidth(240)
         left_frame.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
         )

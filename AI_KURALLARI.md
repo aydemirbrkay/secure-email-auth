@@ -214,7 +214,26 @@ Kullanıcı "GitHub'a yükle" / "commit at" / "push et" dediğinde AI şu sıray
    — Bu mesajda **hiçbir AI imzası yok**, bu doğru biçimdir.
 4. Sadece kullanıcının istediği dosyaları `git add <yol>` ile ekle. `git add -A` / `git add .` **kullanma** (gizli/hassas dosya kaçışı riski).
 5. Commit sonrası `git status` ile doğrula.
-6. Push, kullanıcı açıkça isterse yapılır: `git push origin main`.
+6. Push, kullanıcı açıkça isterse yapılır. Push **feature dalına** yapılır
+   (`git push -u origin <dal>`); `main`'e push yalnızca kullanıcı açıkça
+   onayladığında olur.
+
+### 6.4 Aşamalı Commit Akışı (Geri Alınabilirlik — ZORUNLU)
+
+> Amaç: Bir proje yıkımında "en son hangi değişiklik bozdu?" sorusunu net
+> cevaplayıp o değişikliği **izole** biçimde geri alabilmek.
+
+- **Her mantıksal değişiklik ayrı bir aşamadır ve kendi commit'i olur.** Büyük,
+  karışık commit'lerden kaçınılır; bir commit = bir amaç.
+- Her görev için ayrı **feature dalı** açılır (`ux/...`, `kripto/...`, `düzelt/...`).
+  `main`'e doğrudan commit/merge yapılmaz; doğrulama sonrası kullanıcı onayıyla
+  merge/PR yapılır.
+- Değişikliğe başlamadan önce kısa bir **aşama planı** sunulur; onay alınınca
+  aşama aşama uygulanır ve her aşama sonunda commit atılır.
+- Bozulma olursa ilgili aşama `git revert <hash>` ile tek başına geri alınır;
+  bu yüzden aşamalar mümkün olduğunca bağımsız tutulur.
+- `git add -A` / `git add .` **yasak** (bkz. §6.3.4); yalnızca o aşamada
+  dokunulan dosyalar `git add <yol>` ile stage'lenir.
 
 ---
 

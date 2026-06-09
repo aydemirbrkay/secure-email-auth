@@ -157,15 +157,22 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._round_btns: list[QPushButton] = []
         for i in range(15):
             btn = QPushButton(f"R{i}")
-            btn.setFixedWidth(38)
+            # Sabit 38px yerine: butonlar satır genişliğini eşit paylaşarak
+            # yatayda genişler (yükseklik değişmez). Böylece round çubuğu tüm
+            # genişliğe yayılır, sağda büyük boş alan kalmaz.
+            btn.setMinimumWidth(32)
+            btn.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+            )
             btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
             btn.setStyleSheet(self._round_btn_style(False))
             btn.clicked.connect(lambda checked, r=i: self._jump_to_round(r))
-            rb_lay.addWidget(btn)
+            rb_lay.addWidget(btn, stretch=1)
             self._round_btns.append(btn)
 
-        # Tüm Roundlar Akışı butonu (FIPS 197 tarzı görünüm)
-        rb_lay.addStretch()
+        # Tüm Roundlar Akışı butonu — sabit boyutta, round butonlarının
+        # sağında; küçük bir boşlukla ayrılır ("Tüm Akış" yazısı kırpılmaz).
+        rb_lay.addSpacing(6)
         self._flow_btn = QPushButton("Tüm Akış")
         flow_btn = self._flow_btn
         flow_btn.setFixedHeight(28)

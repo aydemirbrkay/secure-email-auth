@@ -537,7 +537,7 @@ class _AddRoundKeyAnimWidget(QWidget):
         self._revealed = 0
         self._anim_timer = QTimer(self)
         self._anim_timer.timeout.connect(self._advance)
-        self.setMinimumHeight(340)
+        self.setMinimumHeight(400)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
     def set_data(
@@ -566,29 +566,33 @@ class _AddRoundKeyAnimWidget(QWidget):
         color = ANIM_COLORS["accent_peach"]
 
         # Başlık
-        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         p.setPen(QColor(color))
-        p.drawText(QRect(0, 6, W, 18), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(4, 6, W - 8, 20), Qt.AlignmentFlag.AlignCenter,
                    f"AddRoundKey — Round {self._round_no} anahtarı ile XOR")
 
         # Açıklama
-        p.setFont(QFont("Georgia", 9))
+        p.setFont(QFont("Georgia", 10))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(0, 26, W, 16), Qt.AlignmentFlag.AlignCenter,
+        p.drawText(QRect(0, 28, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "her byte:  state  ⊕  round_key  =  yeni state")
 
-        # round_key kaynak açıklaması — kullanıcı "bu anahtar bayt'ları nereden geldi" sorduğunda anlasın
-        p.setFont(QFont("Georgia", 8))
+        # round_key kaynak açıklaması — uzun olduğu için 2 satıra SARILIR
+        # (eskiden tek satırdı ve panel dar olunca sağdan taşıyordu).
+        p.setFont(QFont("Georgia", 9))
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(0, 42, W, 14), Qt.AlignmentFlag.AlignCenter,
-                   f"(round_key: 256-bit ana anahtardan AES anahtar genişletme algoritmasıyla "
-                   f"türetilen Round {self._round_no} alt anahtarı — 16 bayt)")
+        p.drawText(
+            QRect(8, 48, W - 16, 32),
+            int(Qt.AlignmentFlag.AlignHCenter) | int(Qt.TextFlag.TextWordWrap),
+            f"(round_key: 256-bit ana anahtardan AES anahtar genişletme "
+            f"algoritmasıyla türetilen Round {self._round_no} alt anahtarı — 16 bayt)",
+        )
 
         # 4 satır × 4 sütun XOR hesabı — pencere genişliğine adaptif
-        y_top = 64
-        row_h = 32
-        cell_h = 22
-        sym_w = 11    # ⊕ ve = sembol genişliği
+        y_top = 88
+        row_h = 36
+        cell_h = 26
+        sym_w = 13    # ⊕ ve = sembol genişliği
         slot_gap = 4
         # Kullanılabilir genişlik: pencere - sol etiket alanı (24) - kenar boşluğu (8)
         avail_w = max(280, W - 32)
@@ -596,7 +600,7 @@ class _AddRoundKeyAnimWidget(QWidget):
         # 4*(3*cell_w + 2*sym_w) + 3*slot_gap ≤ avail_w
         # 12*cell_w + 8*sym_w + 12 ≤ avail_w
         cell_w = max(18, (avail_w - 8 * sym_w - 12) // 12)
-        cell_w = min(cell_w, 30)
+        cell_w = min(cell_w, 36)
         slot_w = cell_w * 3 + 2 * sym_w
         total_w = 4 * slot_w + 3 * slot_gap
         # İçerik uzun olabilir, ortala
@@ -624,13 +628,13 @@ class _AddRoundKeyAnimWidget(QWidget):
                     p.setBrush(QBrush(QColor(ANIM_COLORS["accent_blue"] + "55")))
                     p.setPen(QPen(QColor(ANIM_COLORS["accent_blue"]), 1))
                     p.drawRoundedRect(sx, y, cell_w, cell_h, 3, 3)
-                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
                     p.setPen(QColor(ANIM_COLORS["text_primary"]))
                     p.drawText(QRect(sx, y, cell_w, cell_h),
                                Qt.AlignmentFlag.AlignCenter, state_byte)
 
                     # ⊕ sembolü
-                    p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+                    p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
                     p.setPen(QColor(color))
                     p.drawText(QRect(sx + cell_w, y, sym_w, cell_h),
                                Qt.AlignmentFlag.AlignCenter, "⊕")
@@ -640,13 +644,13 @@ class _AddRoundKeyAnimWidget(QWidget):
                     p.setBrush(QBrush(QColor(color + "55")))
                     p.setPen(QPen(QColor(color), 1))
                     p.drawRoundedRect(kx, y, cell_w, cell_h, 3, 3)
-                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
                     p.setPen(QColor(ANIM_COLORS["text_primary"]))
                     p.drawText(QRect(kx, y, cell_w, cell_h),
                                Qt.AlignmentFlag.AlignCenter, key_byte)
 
                     # = sembolü
-                    p.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+                    p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
                     p.setPen(QColor(ANIM_COLORS["text_secondary"]))
                     p.drawText(QRect(kx + cell_w, y, sym_w, cell_h),
                                Qt.AlignmentFlag.AlignCenter, "=")
@@ -656,7 +660,7 @@ class _AddRoundKeyAnimWidget(QWidget):
                     p.setBrush(QBrush(QColor(ANIM_COLORS["accent_green"] + "55")))
                     p.setPen(QPen(QColor(ANIM_COLORS["accent_green"]), 1))
                     p.drawRoundedRect(rx, y, cell_w, cell_h, 3, 3)
-                    p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+                    p.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
                     p.setPen(QColor(ANIM_COLORS["text_primary"]))
                     p.drawText(QRect(rx, y, cell_w, cell_h),
                                Qt.AlignmentFlag.AlignCenter, out_byte)

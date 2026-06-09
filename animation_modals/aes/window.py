@@ -213,12 +213,13 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         content_row.addWidget(mat_frame)
 
-        # Sağ panel — operasyona göre değişir. Min 280 (eski 320) ve
-        # max 430: dar alice viewport'larında round sayfası yatay scroll'a
-        # düşmesin; geniş viewport'larda gerektiği kadar yer alır.
+        # Sağ panel — operasyona göre değişir. Min 300 ve max 470: yan panel
+        # widget'ları (XOR/S-Box/MixColumns) büyütülen hücre ve yazılarına yer
+        # bulsun, yazılar taşmadan sığsın; çok dar viewport'larda yine de
+        # makul kalır (gerektiğinde dış kaydırma devreye girer).
         self._side_stack = QStackedWidget()
-        self._side_stack.setMinimumWidth(280)
-        self._side_stack.setMaximumWidth(430)
+        self._side_stack.setMinimumWidth(300)
+        self._side_stack.setMaximumWidth(470)
 
         empty = QWidget()  # boş panel (yedek)
         self._side_stack.addWidget(empty)                    # index 0

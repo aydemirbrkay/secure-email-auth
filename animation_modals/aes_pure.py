@@ -138,7 +138,10 @@ def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
       rounds_data    : liste (15 eleman, round 0-14)
       final_block_hex: 32 karakterlik hex string
     """
-    assert len(key) == 32, "AES-256 için 32 byte anahtar gerekli"
+    # `assert` değil: python -O (optimize) altında assert atlanır ve hatalı
+    # uzunluktaki anahtar sessizce kabul edilip _key_expansion'da bozulur.
+    if len(key) != 32:
+        raise ValueError("AES-256 için 32 byte anahtar gerekli")
     block = (plaintext + bytes(16))[:16]
 
     round_keys = _key_expansion(key)

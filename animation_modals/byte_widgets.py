@@ -6,7 +6,7 @@ SHA Mesaj Hazırlığı, SHA Padding ve AES Plaintext Hazırlığı sayfalarınd
 from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 from animation_modals.base import ANIM_COLORS
 
@@ -64,11 +64,15 @@ class _ColoredByteGridWidget(QWidget):
         # UTF-8 byte→karakter eşlemesi (önbellek) — her set_data'da yenilenir.
         self._char_map: list[str] = self._compute_char_map()
         self.setMinimumHeight(len(show_rows) * (cell_h + 4) + 30)
-        # Sabit boyut — kutu BOYUTU değil, kutu SAYISI mesajla birlikte
-        # değişir. Mesaj uzunluğu × (cell_w + gap) + etiket alanı kadar
-        # genişlik gerekir; parent QScrollArea bunu yatay olarak kaydırır.
-        n_data = max(1, min(len(data), max_cells))
-        self.setMinimumWidth(80 + 6 + n_data * (cell_w + 3))
+        # Genişlik ADAPTİF: __init__'te dayatılan büyük min-width (16 hücre →
+        # ~1190px) QStackedWidget'in tüm sayfalarına (AES intro dahil) yayılıp
+        # gereksiz yatay scroll açıyordu. Bunun yerine küçük bir taban min-width
+        # bırakılır ve hücre genişliği paintEvent'te mevcut genişliğe göre
+        # ölçeklenir; widget viewport'a sığar, yatay scroll çıkmaz.
+        self.setMinimumWidth(160)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
     def _compute_char_map(self) -> list[str]:
         """Her byte için 'Karakter' satırında gösterilecek karakter.
@@ -136,9 +140,8 @@ class _ColoredByteGridWidget(QWidget):
         self._padding_mask = padding_mask or []
         self._padding_labels = padding_labels or []
         self._char_map = self._compute_char_map()
-        # Veri değiştiğinde min width'i de güncelle — yeni n'e göre.
-        n_data = max(1, min(len(data), self._max_cells))
-        self.setMinimumWidth(80 + 6 + n_data * (self._cell_w + 3))
+        # Genişlik adaptif (bkz. __init__): veri değişse de büyük min-width
+        # dayatılmaz; hücre genişliği paintEvent'te mevcut alana göre ölçeklenir.
         self.update()
 
     def resizeEvent(self, e) -> None:
@@ -167,9 +170,15 @@ class _ColoredByteGridWidget(QWidget):
             "bin": "Binary",
         }
         row_label_w = 80
-        cw, ch = self._cell_w, self._cell_h
         gap = 3
         cell_gap = 3   # hücreler arası yatay boşluk (eski 2 → 3, görsel ayrım)
+        # Hücre genişliği ADAPTİF: mevcut widget genişliğinden etiket alanı ve
+        # hücre aralıkları düşülüp n'e bölünür. Okunabilirlik için 34px tabanla
+        # ve __init__'teki cell_w (varsayılan 66px) tavanıyla sınırlanır; böylece
+        # dar pencerede sığar, geniş pencerede aşırı uzamaz.
+        avail = self.width() - row_label_w - 6 - (n - 1) * cell_gap
+        cw = max(34, min(self._cell_w, avail // n if n else self._cell_w))
+        ch = self._cell_h
 
         for ri, row_key in enumerate(self._show_rows):
             y = 4 + ri * (ch + gap)
@@ -223,10 +232,11 @@ class _ColoredByteGridWidget(QWidget):
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, f"{byte_val:02x}")
                 elif row_key == "bin":
-                    # Dinamik punto — resizeEvent'te cell_w'ye göre 9→6pt
-                    # arasında seçildi. Monospace hint hücreler arası
-                    # yatay tutarlılık sağlar.
-                    bin_font = QFont("Courier New", self._binary_font_pt)
+                    # Dinamik punto — "00000000" (8 hane) hücreye sığsın diye
+                    # adaptif cw'ye göre 6→9pt arasında seçilir. ~7px/karakter
+                    # tahminiyle, dar hücrede küçülür, geniş hücrede 9pt kalır.
+                    bin_pt = max(6, min(9, cw // 7))
+                    bin_font = QFont("Courier New", bin_pt)
                     bin_font.setStyleHint(QFont.StyleHint.Monospace)
                     p.setFont(bin_font)
                     p.drawText(x, y, cw, ch,

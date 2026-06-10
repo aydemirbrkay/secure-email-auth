@@ -137,6 +137,37 @@ class TestPaddingMaskSupport(unittest.TestCase):
         self.assertIn("padding_mask", sig.parameters)
 
 
+class TestColoredByteGridAdaptiveWidth(unittest.TestCase):
+    """_ColoredByteGridWidget adaptif genişlik davranışı (Alt kategori: BİRİM —
+    runtime, conftest.py'nin offscreen QApplication'ı ile koşar).
+
+    Regresyon koruması: Eskiden grid 16 hücre için ~1190px min-width dayatıyor,
+    bu da QStackedWidget üzerinden AES intro sayfasına yatay scroll açıyordu.
+    Artık taban min-width küçük (≤ ~200px) olmalı."""
+
+    def test_grid_minimum_width_is_small(self):
+        """Alt tür: BİRİM (yerleşim regresyonu).
+        16 baytlık (tam blok) grid bile büyük bir min-width DAYATMAMALI;
+        aksi halde AES intro QStackedWidget üzerinden yatay scroll açar.
+        Eşik 300px: eski ~1190px değerinin çok altında, yeni 160px tabanın
+        makul üstünde."""
+        from animation_modals.byte_widgets import _ColoredByteGridWidget
+        w = _ColoredByteGridWidget(bytes(range(16)), max_cells=16)
+        self.assertLessEqual(
+            w.minimumWidth(), 300,
+            "Grid min-width küçük olmalı; aksi halde stack yatay scroll açar",
+        )
+
+    def test_grid_min_width_stable_after_set_data(self):
+        """Alt tür: BİRİM (durum tutarlılığı).
+        set_data ile veri değişince de büyük min-width geri gelmemeli
+        (eski kod set_data'da min-width'i yeniden 16×69px'e çıkarıyordu)."""
+        from animation_modals.byte_widgets import _ColoredByteGridWidget
+        w = _ColoredByteGridWidget(b"abc", max_cells=16)
+        w.set_data(bytes(range(16)))
+        self.assertLessEqual(w.minimumWidth(), 300)
+
+
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
     (Alt kategori: SMOKE — class attribute kontratı)."""

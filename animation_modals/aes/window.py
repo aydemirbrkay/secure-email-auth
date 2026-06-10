@@ -93,9 +93,23 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._stack = QStackedWidget()
         self.content_layout.addWidget(self._stack, stretch=1)
 
-        # Sayfa 0 — Giriş animasyonu
+        # Sayfa 0 — Giriş animasyonu. SHA introsuyla aynı kalıp: intro'yu dikey
+        # QScrollArea'ya sarıyoruz ki içerik adım adım açılırken sayfanın doğal
+        # yüksekliği şişip alt navigasyon butonlarını dışarı itmesin (gerekirse
+        # kullanıcı sayfa içinde dikey kaydırır; yatay kaydırma byte grid
+        # adaptif olduğundan artık çıkmaz).
+        from PyQt6.QtWidgets import QScrollArea
         self._intro = _AESIntroWidget(on_complete=self._switch_to_plaintext_prep)
-        self._stack.addWidget(self._intro)
+        intro_scroll = QScrollArea()
+        intro_scroll.setWidget(self._intro)
+        intro_scroll.setWidgetResizable(True)
+        intro_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        intro_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        intro_scroll.setStyleSheet("background: transparent; border: none;")
+        intro_scroll.setMinimumHeight(260)
+        self._stack.addWidget(intro_scroll)
 
         # Sayfa 1 — Plaintext Hazırlığı (yeni, tek seferlik pre-step)
         self._plaintext_page = self._make_plaintext_prep_page()

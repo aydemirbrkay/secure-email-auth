@@ -459,15 +459,22 @@ class _AESMatrixView(QWidget):
             balloon_y = oy + 4
             p.setFont(QFont("Courier New", 8))
             p.setPen(col_color)
-            p.drawText(QRect(balloon_x, balloon_y, 120, 14),
+            # MixColumns sabit matrisinde HER çıkış baytı FARKLI katsayı satırı
+            # kullanır; tek genel formül ("2·a₀⊕3·a₁⊕a₂⊕a₃ vb.") göstermek
+            # yanıltıcıdır. Dört satırın tamamı GF(2⁸) çarpımıyla gösterilir.
+            p.drawText(QRect(balloon_x, balloon_y, 150, 13),
                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       f"Sütun {col_idx}: GF(2⁸) ×")
-            p.drawText(QRect(balloon_x, balloon_y + 16, 120, 14),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       "2·a₀ ⊕ 3·a₁ ⊕")
-            p.drawText(QRect(balloon_x, balloon_y + 32, 120, 14),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       "a₂ ⊕ a₃  (vb.)")
+                       f"Sütun {col_idx}:  b = M · a  (GF(2⁸))")
+            mix_formulas = (
+                "b₀=2a₀⊕3a₁⊕ a₂⊕ a₃",
+                "b₁= a₀⊕2a₁⊕3a₂⊕ a₃",
+                "b₂= a₀⊕ a₁⊕2a₂⊕3a₃",
+                "b₃=3a₀⊕ a₁⊕ a₂⊕2a₃",
+            )
+            for i, line in enumerate(mix_formulas):
+                p.drawText(QRect(balloon_x, balloon_y + 14 + i * 13, 150, 13),
+                           Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                           line)
 
 
 class _AESStateCompareWidget(QWidget):

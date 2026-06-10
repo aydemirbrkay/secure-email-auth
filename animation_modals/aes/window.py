@@ -174,11 +174,14 @@ class AESAnimationWindow(CryptoAnimationWindow):
             # Sabit 38px yerine: butonlar satır genişliğini eşit paylaşarak
             # yatayda genişler (yükseklik değişmez). Böylece round çubuğu tüm
             # genişliğe yayılır, sağda büyük boş alan kalmaz.
-            btn.setMinimumWidth(32)
+            btn.setMinimumWidth(34)
+            btn.setFixedHeight(30)
             btn.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
             )
-            btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+            # SHA round bar ile tutarlı: Courier New yerine daha okunur
+            # IBM Plex Sans (Görsel 3 okunabilirlik düzeltmesi).
+            btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
             btn.setStyleSheet(self._round_btn_style(False))
             btn.clicked.connect(lambda checked, r=i: self._jump_to_round(r))
             rb_lay.addWidget(btn, stretch=1)
@@ -417,17 +420,20 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
     @staticmethod
     def _round_btn_style(active: bool) -> str:
+        """Round (R0-R14) seçici buton stili. SHA round bar ile tutarlı:
+        aktif/pasif AYNI 2px border kalınlığı (yalnızca renkle ayrılır) →
+        aktif round değişince layout kaymaz; padding ile etiket sıkışmaz."""
         if active:
             return (
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
                 f"color: #FFFFFF; border: 2px solid {ANIM_COLORS['accent_blue']}; "
-                f"border-radius: 3px; padding: 2px; font-weight: bold; }}"
+                f"border-radius: 3px; padding: 2px 4px; font-weight: bold; }}"
             )
         return (
             f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
             f"color: {ANIM_COLORS['text_secondary']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; "
-            f"border-radius: 3px; padding: 2px; font-weight: bold; }}"
+            f"border: 2px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 3px; padding: 2px 4px; font-weight: bold; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: #FFFFFF; border-color: {ANIM_COLORS['accent_blue']}; }}"
         )

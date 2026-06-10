@@ -168,6 +168,25 @@ class TestColoredByteGridAdaptiveWidth(unittest.TestCase):
         self.assertLessEqual(w.minimumWidth(), 300)
 
 
+class TestSHADiagramFitsWithoutScroll(unittest.TestCase):
+    """SHA round diyagramı dikey scroll gerektirmeden sığmalı (Alt kategori:
+    BİRİM — runtime). Regresyon: diyagram max-height, sayfasındaki scroll
+    viewport'unun min-height'inden BÜYÜK olmamalı; aksi halde Görsel 2'deki
+    gibi diyagrama ulaşmak için aşağı kaydırmak gerekir."""
+
+    def test_diagram_max_height_fits_scroll_viewport(self):
+        """Alt tür: BİRİM (yerleşim regresyonu).
+        _SHA256DiagramWidget max yüksekliği, window.py'deki diag_scroll
+        min yüksekliğinden (285px) küçük/eşit olmalı. Diyagram büyürse
+        dikey scroll çıkar ve legend/çıkış kutuları kesilir."""
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+        w = _SHA256DiagramWidget()
+        self.assertLessEqual(
+            w.maximumHeight(), 285,
+            "Diyagram max-height scroll viewport'una (285px) sığmalı",
+        )
+
+
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
     (Alt kategori: SMOKE — class attribute kontratı)."""

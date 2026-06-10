@@ -326,10 +326,12 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         round_labels = ["R1", "R9", "R17", "R25", "R33", "R41", "R49", "R57", "R64"]
         for idx, lbl in enumerate(round_labels):
             btn = QPushButton(lbl)
-            btn.setMinimumWidth(38)
-            btn.setFixedHeight(30)
+            btn.setMinimumWidth(42)
+            btn.setFixedHeight(32)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            btn.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+            # Courier New dar viewport'ta sıkışıp okunmuyordu (Görsel 3).
+            # IBM Plex Sans 10pt Bold daha okunur; etiketler kısa (R1..R64).
+            btn.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
             btn.setStyleSheet(self._diag_round_btn_style(False))
             btn.clicked.connect(lambda checked=False, i=idx: self._diag_jump_round(i))
             rb_lay.addWidget(btn, stretch=1)
@@ -337,8 +339,11 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
 
         lay.addWidget(rb_frame)
 
-        # Diyagramı dikey scroll içine al — sayfa intrinsic yüksekliği 300 px
-        # civarında kalır; diyagramın 460 px min height'i stack'i büyütmez.
+        # Diyagramı dikey scroll içine al — diyagram min yüksekliği 265 px;
+        # scroll viewport'unu buna yetecek kadar (285 px) açıyoruz ki diyagram
+        # (giriş/çıkış kutuları + legend + aşama etiketi) DİKEY scroll
+        # gerektirmeden tek bakışta görünsün. Scroll yalnızca çok kısa
+        # pencerelerde devreye girer (güvenlik ağı).
         self._diag_widget = _SHA256DiagramWidget()
         diag_scroll = QScrollArea()
         diag_scroll.setWidget(self._diag_widget)
@@ -348,7 +353,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         diag_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         diag_scroll.setStyleSheet("background: transparent; border: none;")
-        diag_scroll.setMinimumHeight(230)
+        diag_scroll.setMinimumHeight(285)
         lay.addWidget(diag_scroll, stretch=1)
 
         # Hash zinciri göstergesi (alt)
@@ -362,17 +367,20 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
 
     @staticmethod
     def _diag_round_btn_style(active: bool) -> str:
+        """Round seçici buton stili. Aktif/pasif AYNI 2px border kalınlığını
+        kullanır (yalnızca renkle ayrılır) → aktif buton değişince layout
+        kaymaz. Padding eklenerek etiket sıkışması (Görsel 3) giderilir."""
         if active:
             return (
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
                 f"color: #FFFFFF; border: 2px solid {ANIM_COLORS['accent_blue']}; "
-                f"border-radius: 4px; font-weight: bold; }}"
+                f"border-radius: 4px; padding: 2px 4px; font-weight: bold; }}"
             )
         return (
             f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
             f"color: {ANIM_COLORS['text_secondary']}; "
-            f"border: 1px solid {ANIM_COLORS['border']}; "
-            f"border-radius: 4px; font-weight: bold; }}"
+            f"border: 2px solid {ANIM_COLORS['border']}; "
+            f"border-radius: 4px; padding: 2px 4px; font-weight: bold; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: #FFFFFF; border-color: {ANIM_COLORS['accent_blue']}; }}"
         )

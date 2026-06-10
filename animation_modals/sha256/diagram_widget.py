@@ -39,11 +39,13 @@ class _SHA256DiagramWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        # Içerik ~330 px sığar; min/max sabitleyerek pencere ne kadar büyük
-        # olursa olsun widget büyümez, aşağıdaki ileri/geri butonları
-        # daima ekranda kalır.
-        self.setMinimumHeight(340)
-        self.setMaximumHeight(360)
+        # İçerik gerçekte ~255 px'e sığar (aşama etiketi + giriş kutuları +
+        # T1/T2 + çıkış kutuları + legend). Eski 340 px min, 230 px'lik scroll
+        # alanına sığmayıp gereksiz DİKEY scroll açıyordu. Min/max gerçek
+        # içeriğe yakın tutulur → diyagram tek bakışta görünür, alt navigasyon
+        # butonları daima ekranda kalır.
+        self.setMinimumHeight(265)
+        self.setMaximumHeight(285)
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )

@@ -35,6 +35,23 @@ class TestSBoxReferenceDialog(unittest.TestCase):
         self.assertFalse(flags & Qt.WindowType.WindowMaximizeButtonHint)
         self.assertEqual(dialog.windowModality(), Qt.WindowModality.NonModal)
 
+    def test_has_no_redundant_close_button(self):
+        """Pencerenin X düğmesi varken ayrı 'Kapat' butonu bulunmamalı."""
+        dialog = _SBoxReferenceDialog([("cb", "1f")])
+
+        self.assertFalse(hasattr(dialog, "close_btn"))
+
+    def test_first_mapping_is_not_emphasized_differently(self):
+        """İlk eşleme diğer vurgulu hücrelerle aynı görünmeli (kalın/büyük değil)."""
+        dialog = _SBoxReferenceDialog([("cb", "1f"), ("ec", "ce")])
+        first_item = dialog.table.item(0xC, 0xB)
+        other_item = dialog.table.item(0xE, 0xC)
+
+        self.assertFalse(first_item.font().bold())
+        self.assertEqual(
+            first_item.font().pointSize(), other_item.font().pointSize()
+        )
+
     def test_table_stretches_to_available_space(self):
         dialog = _SBoxReferenceDialog([("cb", "1f")])
 

@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHeaderView,
     QLabel,
-    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -102,11 +101,6 @@ class _SBoxReferenceDialog(QDialog):
         self.table_layout.addWidget(self.table)
         layout.addWidget(self.table_frame, stretch=1)
 
-        self.close_btn = QPushButton("Kapat")
-        self.close_btn.setFixedHeight(32)
-        self.close_btn.clicked.connect(self.close)
-        layout.addWidget(self.close_btn, alignment=Qt.AlignmentFlag.AlignRight)
-
     def _example_text(self) -> str:
         if not self._mappings:
             return "Bu adım için gösterilecek S-Box eşlemesi yok."
@@ -130,17 +124,16 @@ class _SBoxReferenceDialog(QDialog):
                 self.table.setItem(row, col, item)
 
     def _highlight_used_cells(self) -> None:
-        first_source = self._mappings[0][0] if self._mappings else None
+        """Bu adımda kullanılan tüm girdi hücrelerini aynı biçimde vurgular.
+
+        Her vurgulu hücre sarı zemin + koyu metin alır; ilk eşleme dahil
+        hiçbir hücre kalın/büyük yazıyla ayrıcalıklı gösterilmez.
+        """
         for source in self._used_inputs:
             row, col = int(source[0], 16), int(source[1], 16)
             item = self.table.item(row, col)
             item.setBackground(QBrush(QColor(ANIM_COLORS["accent_yellow"])))
             item.setForeground(QBrush(QColor(ANIM_COLORS["bg_main"])))
-            if source == first_source:
-                font = item.font()
-                font.setBold(True)
-                font.setPointSize(font.pointSize() + 1)
-                item.setFont(font)
 
     def _resize_to_available_screen(self) -> None:
         screen = self.screen() or QApplication.primaryScreen()

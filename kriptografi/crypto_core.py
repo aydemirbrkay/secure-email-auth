@@ -724,7 +724,16 @@ class CryptoCore:
             )
         msg_bytes = combined[:-self.SIGNATURE_LEN]
         signature = combined[-self.SIGNATURE_LEN:]
-        message = msg_bytes.decode("utf-8")
+        # GCM tag doğrulandıktan sonra veri Alice'ten gelir; yine de bozuk
+        # payload UTF-8 olmayabilir. Ham UnicodeDecodeError'ı tipli hataya
+        # sararak hata sözleşmesini (CryptoError ailesi) tutarlı tutarız.
+        try:
+            message = msg_bytes.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise PacketFormatError(
+                "Deşifre edilen mesaj geçerli UTF-8 değil; paket bozulmuş ya "
+                "da beklenen biçimde kodlanmamış olabilir."
+            ) from exc
         steps.append(StepResult(
             step_number=3,
             step_name="Mesaj ve İmza Ayrıştırma",

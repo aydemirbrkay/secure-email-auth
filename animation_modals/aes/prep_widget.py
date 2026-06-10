@@ -101,7 +101,23 @@ class _AESPlaintextPrepWidget(QWidget):
             padding_mask=padding_mask,
             padding_labels=padding_labels,
         )
-        lay.addWidget(self._grid)
+        # Grid'i yatay QScrollArea'ya sar: 16 hücre dar pencerede sığmayıp
+        # son hücre(ler) kesiliyordu (Görsel 4). Bu instance'a TAM boyut
+        # min-width verilir (hücreler okunur kalsın); scroll alanı bunu kendi
+        # içinde yatay kaydırır — min-width AES stack'ine SIZMAZ (scroll alanı
+        # kendi küçük min-width'ini bildirir). byte strip ile aynı desen.
+        self._grid.setMinimumWidth(80 + 6 + 16 * (66 + 3))  # tam 16 hücre
+        grid_scroll = QScrollArea()
+        grid_scroll.setWidget(self._grid)
+        grid_scroll.setWidgetResizable(True)
+        grid_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        grid_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        grid_scroll.setStyleSheet("background: transparent; border: none;")
+        # 4 satır (char/ASCII/hex/binary) + padding etiket satırı sığsın.
+        grid_scroll.setMinimumHeight(self._grid.minimumHeight() + 18)
+        lay.addWidget(grid_scroll)
 
         # Byte strip (tüm padded plaintext) — scroll
         self._strip_lbl = QLabel(

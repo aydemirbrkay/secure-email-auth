@@ -149,6 +149,23 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
             "Sol önizleme paneli SHA gibi büyük olmalı (sabit 240px değil)",
         )
 
+    def test_prep_grid_full_width_but_no_stack_leak(self):
+        """Alt tür: BİRİM (padding scroll — D-D).
+        Plaintext prep grid'i TAM 16 hücre genişliğini ister (okunur boyut)
+        ama yatay scroll içinde olduğundan bu min-width AES stack'ine SIZMAZ:
+        prep sayfasının (page 1) min genişliği küçük kalmalı (≤ ~200px)."""
+        from animation_modals import AESAnimationWindow
+        a = AESAnimationWindow(
+            key=bytes(32), plaintext=b"adsad", expected_ct_hex="00" * 16
+        )
+        # Grid tam boyut min-width ister
+        self.assertGreaterEqual(a._plaintext_widget._grid.minimumWidth(), 1000)
+        # Ama prep sayfası (scroll sayesinde) küçük min-width bildirir
+        self.assertLessEqual(
+            a._stack.widget(1).minimumSizeHint().width(), 200,
+            "Grid min-width scroll'da kapsanmali, stack'e sizmamali",
+        )
+
 
 class TestPaddingMaskSupport(unittest.TestCase):
     """Padding renk ayrımı API kontratı (Alt kategori: API SIGNATURE — runtime'sız)."""

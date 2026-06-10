@@ -129,7 +129,10 @@ class _RegisterDemoWidget(QWidget):
         p.setPen(QPen(t2_border, 2 if t2_lit else 1))
         p.drawRoundedRect(t2_x, mid_y, t2_w, mid_h, 4, 4)
         p.setFont(font_mid)
-        p.setPen(t2_border)
+        # Başlık metni HER ZAMAN accent rengiyle (lit/unlit fark etmez); eskiden
+        # unlit iken faint 'border' rengi kullanılıyordu ve başlık hem açık hem
+        # koyu temada okunmuyordu.
+        p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
         p.drawText(QRect(t2_x + 2, mid_y + 2, t2_w - 4, mid_h // 2),
                    Qt.AlignmentFlag.AlignCenter, "Σ0(A) + Maj(A,.." if compact else "T2 = Σ0(A) + Maj(A,B,C)")
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
@@ -141,7 +144,9 @@ class _RegisterDemoWidget(QWidget):
         p.setBrush(QBrush(t1_fill))
         p.setPen(QPen(t1_border, 2 if t1_lit else 1))
         p.drawRoundedRect(t1_x, mid_y, t1_w, mid_h, 4, 4)
-        p.setPen(t1_border)
+        # Başlık her zaman accent rengiyle (unlit faint 'border' yerine) →
+        # her iki temada okunur.
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         p.drawText(QRect(t1_x + 2, mid_y + 2, t1_w - 4, mid_h // 2),
                    Qt.AlignmentFlag.AlignCenter, "Σ1(E) + Ch(E,F,G) + .." if compact else "T1 = Σ1(E) + Ch(E,F,G) + H + K + W")
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))

@@ -91,6 +91,24 @@ class TestNewWidgetsImport(unittest.TestCase):
         self.assertTrue(callable(_AESPlaintextPrepWidget))
 
 
+class TestRegisterDemoRenders(unittest.TestCase):
+    """SHA intro önizleme (_RegisterDemoWidget) render güvenliği (Alt kategori:
+    BİRİM). D-A: T1/T2 başlıkları artık unlit iken faint 'border' yerine accent
+    rengiyle çiziliyor (açık+koyu modda okunur). Bu test tüm fazlarda hatasız
+    render'ı garanti eder (kontrast düzeltmesi paintEvent'i bozmamalı)."""
+
+    def test_renders_all_phases(self):
+        """Alt tür: BİRİM (render smoke).
+        72-tick döngünün üç fazı (giriş / T1-T2 / çıkış) hatasız boyanmalı."""
+        from PyQt6.QtGui import QPixmap
+        from animation_modals.sha256.register_demo import _RegisterDemoWidget
+        w = _RegisterDemoWidget()
+        w.resize(340, 200)
+        for t in (0, 12, 30, 42, 60, 71):
+            w._tick = t
+            w.render(QPixmap(340, 200))  # istisna fırlatırsa fail
+
+
 class TestAESIntroLayoutLikeSHA(unittest.TestCase):
     """AES intro yerleşimi SHA introsuyla aynı olmalı (Alt kategori: BİRİM —
     runtime). Regresyon: AES intro'da sol önizleme sabit-dar (200-240px) ve

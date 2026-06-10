@@ -80,10 +80,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
             on_close=on_close,
         )
 
-        # Intro ekranı kompakt — sadece akış şeması + Başlat butonu sığar.
-        # Intro complete → _switch_to_plaintext_prep ekranı büyütür ve plaintext sayfasını gösterir.
-        if on_close is None:
-            self.resize(820, 620)
+        # Pencere boyutu base sınıftan gelir (standalone modda ekranın %82'si).
+        # SHA introsuyla birebir aynı davranış için AES burada KENDİNİ KÜÇÜLTMEZ;
+        # eskiden resize(820,620) intro'yu kompakt yapıyordu ama bu, stack'in
+        # round/flow sayfa min-genişliklerinin pencereye sığmamasına ve intro
+        # ekranında boşluklu yatay scroll'a yol açıyordu. Büyük açılınca intro
+        # ekranı doldurur, butonlar sabit kalır, yatay scroll çıkmaz.
 
     # ------------------------------------------------------------------
     # İçerik kurulumu
@@ -277,7 +279,22 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._side_stack.addWidget(ark_scroll)               # index 4
 
         content_row.addWidget(self._side_stack)
-        lay.addLayout(content_row, stretch=1)   # stretch=1: content_row fills remaining height
+        # content_row'u (matris 598px + side_stack 300px ≈ 920px) bir konteynere
+        # koyup yatay scroll'a sarıyoruz. Aksi halde bu geniş min-width
+        # QStackedWidget üzerinden TÜM sayfalara (intro dahil) yayılıp pencereyi
+        # 820px'e küçülmekten alıkoyuyor ve intro ekranında gereksiz yatay scroll
+        # bırakıyordu (Görsel 6). Scroll yalnızca dar pencerede devreye girer.
+        content_wrap = QWidget()
+        content_wrap.setLayout(content_row)
+        row_scroll = QScrollArea()
+        row_scroll.setWidget(content_wrap)
+        row_scroll.setWidgetResizable(True)
+        row_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        row_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        row_scroll.setStyleSheet("background: transparent; border: none;")
+        lay.addWidget(row_scroll, stretch=1)
         return w
 
     def _make_flow_page(self) -> QWidget:
@@ -314,6 +331,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._flow_legend.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         self._flow_legend.setWordWrap(True)
         self._flow_legend.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Uzun tek-satır QLabel'ın minimumSizeHint'i ~960px'e çıkıp stack'i
+        # (dolayısıyla intro sayfasını) şişiriyordu. Küçük min-width verilince
+        # word-wrap devreye girer, sayfa dar pencerede de sığar, intro yatay
+        # scroll kalmaz (Y1 sağlamlık).
+        self._flow_legend.setMinimumWidth(240)
         lay.addWidget(self._flow_legend)
 
         # Scroll area içine yeni round flow widget'ı
@@ -377,20 +399,13 @@ class AESAnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _switch_to_plaintext_prep(self) -> None:
-        """Intro complete: pencereyi büyüt + plaintext prep sayfasına geç + animasyon başlat."""
-        # Pencere büyütülür çünkü plaintext prep page'in 16-cell grid'i
-        # intro 820×620 boyutuna sığmaz.
-        if self._on_close is None:
-            from PyQt6.QtWidgets import QApplication
-            screen = QApplication.primaryScreen()
-            if screen:
-                g = screen.availableGeometry()
-                self.resize(int(g.width() * 0.82), int(g.height() * 0.85))
-                # Pencereyi tekrar ekranın merkezine kaydır
-                self.move(
-                    (g.width() - self.width()) // 2,
-                    (g.height() - self.height()) // 2,
-                )
+        """Intro tamamlanınca plaintext prep sayfasına geçer ve animasyonu başlatır.
+
+        Pencere zaten base sınıftan büyük (ekranın %82'si) açıldığı için burada
+        yeniden boyutlandırma YOK; eskiden intro 820×620 küçük açıldığından bu
+        metot pencereyi büyütüyordu. SHA introsuyla aynı davranış: boyut sabit
+        kalır, yalnızca görünen sayfa değişir.
+        """
         self._stack.setCurrentWidget(self._plaintext_page)
         self._plaintext_widget.start()
 

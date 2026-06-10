@@ -137,6 +137,43 @@ class TestPaddingMaskSupport(unittest.TestCase):
         self.assertIn("padding_mask", sig.parameters)
 
 
+class TestAESOpensLikeSHA(unittest.TestCase):
+    """AES animasyon penceresi SHA introsuyla aynı oturmuş yapıda olmalı
+    (Alt kategori: BİRİM — runtime). Regresyon: AES eskiden açılışta
+    resize(820,620) ile kendini küçültüyordu; bu, intro ekranında boşluklu
+    yatay scroll bırakıyordu (Görsel 6). Artık SHA gibi büyük (ekranın ~%82'si)
+    açılmalı ve intro stack genişliğini pencereye sığdırmalı."""
+
+    def test_aes_and_sha_open_same_size(self):
+        """Alt tür: BİRİM (yerleşim regresyonu — pozitif).
+        AES ve SHA pencereleri (standalone, on_close=None) aynı boyutta
+        açılmalı. AES kendini küçültürse (eski resize) bu test kırılır."""
+        import hashlib
+        from animation_modals import SHA256AnimationWindow, AESAnimationWindow
+        s = SHA256AnimationWindow(
+            message="test", expected_hash=hashlib.sha256(b"test").hexdigest()
+        )
+        a = AESAnimationWindow(
+            key=bytes(32), plaintext=b"asdasddsada", expected_ct_hex="00" * 16
+        )
+        self.assertEqual(s.size(), a.size(),
+                         "AES, SHA ile aynı boyutta açılmalı (kendini küçültmemeli)")
+
+    def test_aes_intro_no_horizontal_scroll(self):
+        """Alt tür: BİRİM (yatay scroll regresyonu — negatif).
+        AES büyük açılınca stack'in min genişliği pencere genişliğine
+        sığmalı (intro'da yatay scroll çıkmamalı). stackMinW <= pencereW."""
+        from animation_modals import AESAnimationWindow
+        a = AESAnimationWindow(
+            key=bytes(32), plaintext=b"asdasddsada", expected_ct_hex="00" * 16
+        )
+        a.show()
+        self.assertLessEqual(
+            a._stack.minimumSizeHint().width(), a.width(),
+            "Stack min genişliği pencereye sığmalı; aksi halde intro yatay scroll açar",
+        )
+
+
 class TestColoredByteGridAdaptiveWidth(unittest.TestCase):
     """_ColoredByteGridWidget adaptif genişlik davranışı (Alt kategori: BİRİM —
     runtime, conftest.py'nin offscreen QApplication'ı ile koşar).

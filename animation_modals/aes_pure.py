@@ -47,6 +47,100 @@ SBOX: list[int] = [
 RCON: list[int] = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40]
 
 
+# ---------------------------------------------------------------------------
+# S-Box Türetimi (eğitim amaçlı)
+# ---------------------------------------------------------------------------
+# S-Box değerleri sabit bir tablo değildir; her byte iki adımla üretilir:
+#   1) GF(2^8) gövdesinde çarpımsal ters (indirgenemez polinom 0x11B), 0 → 0
+#   2) Affine dönüşüm: b'_i = b_i ⊕ b_(i+4) ⊕ b_(i+5) ⊕ b_(i+6) ⊕ b_(i+7) ⊕ c_i
+#      (c = 0x63 sabiti). Aşağıdaki fonksiyonlar bu türetimi adım adım açar.
+
+from dataclasses import dataclass
+
+
+def _gf_mul(a: int, b: int) -> int:
+    """GF(2^8) gövdesinde iki byte'ı çarpar (indirgenemez polinom 0x11B).
+
+    AES'in sonlu cisim çarpımıdır: bit bit çarpıp her taşmada 0x1B ile
+    indirger. Çarpımsal tersi doğrulamak ve hesaplamak için kullanılır.
+    """
+    result = 0
+    for _ in range(8):
+        if b & 1:
+            result ^= a
+        carry = a & 0x80
+        a = (a << 1) & 0xFF
+        if carry:
+            a ^= 0x1B
+        b >>= 1
+    return result
+
+
+def _gf_inverse(a: int) -> int:
+    """GF(2^8) gövdesinde bir byte'ın çarpımsal tersini döndürür (0 → 0).
+
+    Brute-force ile a · x = 1 sağlayan x aranır; eğitim amacıyla sade
+    tutulmuştur. 0'ın tersi tanımsızdır, AES sözleşmesi gereği 0 döner.
+    """
+    if a == 0:
+        return 0
+    for x in range(1, 256):
+        if _gf_mul(a, x) == 1:
+            return x
+    return 0  # GF(2^8) bir cisim olduğundan buraya ulaşılmaz
+
+
+def _affine_transform(b: int) -> int:
+    """AES S-Box affine dönüşümünü uygular (girdi: çarpımsal ters byte).
+
+    Her çıktı biti, girdi bitinin 0x1F maskesiyle dönük toplamı (XOR) ve
+    0x63 sabitiyle birleştirilerek üretilir.
+    """
+    result = 0
+    for i in range(8):
+        bit = (
+            ((b >> i) & 1)
+            ^ ((b >> ((i + 4) % 8)) & 1)
+            ^ ((b >> ((i + 5) % 8)) & 1)
+            ^ ((b >> ((i + 6) % 8)) & 1)
+            ^ ((b >> ((i + 7) % 8)) & 1)
+            ^ ((0x63 >> i) & 1)
+        )
+        result |= bit << i
+    return result
+
+
+@dataclass
+class SBoxDerivation:
+    """Bir byte'ın S-Box değerine nasıl dönüştüğünü adım adım taşır.
+
+    Alanlar: ``source`` girdi byte'ı, ``inverse`` GF(2^8) çarpımsal tersi,
+    ``result`` S-Box çıktısı, ``affine_const`` affine sabiti (0x63).
+    Diyalogdaki türetim sayfası bu ara değerleri öğrenciye gösterir.
+    """
+
+    source: int
+    inverse: int
+    result: int
+    affine_const: int = 0x63
+
+
+def derive_sbox_value(byte: int) -> SBoxDerivation:
+    """Verilen byte için S-Box değerini iki adımda canlı türetir.
+
+    Önce GF(2^8) çarpımsal tersini alır, ardından affine dönüşümü uygular;
+    sonuç resmi ``SBOX`` tablosuyla birebir aynıdır. Eğitim amaçlıdır.
+
+    Parametre ``byte``: 0-255 arası tek bir bayt; aksi halde ``ValueError``.
+    Dönüş: ara değerleri taşıyan ``SBoxDerivation``.
+    """
+    if not 0 <= byte <= 255:
+        raise ValueError("S-Box türetimi için 0-255 arası bir byte gerekli")
+    inverse = _gf_inverse(byte)
+    result = _affine_transform(inverse)
+    return SBoxDerivation(source=byte, inverse=inverse, result=result)
+
+
 def _xtime(a: int) -> int:
     return ((a << 1) ^ 0x1b) & 0xff if a & 0x80 else (a << 1) & 0xff
 

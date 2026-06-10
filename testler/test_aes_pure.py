@@ -157,5 +157,38 @@ class TestAESPure(unittest.TestCase):
             self.assertEqual(round_data["after_add_round_key"], expected_add)
             previous = expected_add
 
+class TestSBoxDerivation(unittest.TestCase):
+    """S-Box türetiminin (GF(2⁸) ters + affine) doğruluğunu sınar."""
+
+    def test_derivation_reproduces_every_sbox_entry(self):
+        """Türetim, 256 byte'ın tamamında resmi SBOX ile birebir eşleşmeli."""
+        from animation_modals.aes_pure import derive_sbox_value
+
+        for byte in range(256):
+            self.assertEqual(derive_sbox_value(byte).result, SBOX[byte])
+
+    def test_zero_has_no_inverse_and_maps_to_0x63(self):
+        """0x00'ın çarpımsal tersi yoktur (0 alınır) ve sonucu 0x63'tür."""
+        from animation_modals.aes_pure import derive_sbox_value
+
+        step = derive_sbox_value(0x00)
+        self.assertEqual(step.inverse, 0x00)
+        self.assertEqual(step.result, 0x63)
+
+    def test_inverse_is_true_multiplicative_inverse(self):
+        """Sıfırdan farklı girdi için GF(2⁸)'de girdi · ters = 1 olmalı."""
+        from animation_modals.aes_pure import derive_sbox_value, _gf_mul
+
+        step = derive_sbox_value(0x53)
+        self.assertEqual(_gf_mul(0x53, step.inverse), 1)
+
+    def test_rejects_out_of_range_byte(self):
+        """0-255 dışındaki değer ValueError ile reddedilmeli."""
+        from animation_modals.aes_pure import derive_sbox_value
+
+        with self.assertRaises(ValueError):
+            derive_sbox_value(256)
+
+
 if __name__ == "__main__":
     unittest.main()

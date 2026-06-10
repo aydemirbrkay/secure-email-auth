@@ -11,11 +11,6 @@ from PyQt6.QtWidgets import (
 from ..base import CryptoAnimationWindow, ANIM_COLORS
 from arayuz.theme import get_animation_tick_ms
 
-# Round yapısı/akış kutularının maksimum genişliği. İçerik kısa olduğundan
-# kutular sağ panelin tamamına yayılmaz; bu değerle sınırlanıp ortalanır
-# (yatayda gereksiz uzunluk önlenir, dikey büyüme serbesttir).
-_INTRO_BOX_MAX_W = 360
-
 # ---------------------------------------------------------------------------
 # Canlı matris demo widget'ı — intro için AES operasyonlarını simüle eder
 # ---------------------------------------------------------------------------
@@ -53,11 +48,10 @@ class _MatrixDemoWidget(QWidget):
         self._timer.timeout.connect(self._step)
         # Hareket azaltma açıksa hızlı tick yumuşatılır (110 → 330 ms).
         self._timer.start(get_animation_tick_ms(110))
-        # Kompakt intro ekranına (gömülü dar görünümde) sol animasyon + sağ
-        # adım şeması BİRLİKTE sığsın diye matris küçük tutulur ve genişliği
-        # sınırlanır; hücreler paintEvent'te adaptive ölçeklendiği için okunaklı kalır.
+        # SHA introsuyla aynı: matris genişliği sınırlanmaz; sol panel (stretch=2)
+        # büyüdükçe matris de büyür. Hücreler paintEvent'te adaptif ölçeklendiği
+        # için her boyutta okunaklı kalır.
         self.setMinimumSize(120, 120)
-        self.setMaximumWidth(210)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
     def _step(self) -> None:
@@ -184,10 +178,10 @@ class _AESIntroWidget(QWidget):
         h_row.setSpacing(8)
         main.addLayout(h_row)
 
-        # Sol: canlı matris animasyonu — kompakt, SABİT dar genişlik ve sola/
-        # üste yaslı. Pencere (stack'teki round sayfası yüzünden) geniş bir
-        # minimuma esnetilse bile bu panel büyümez; böylece sağdaki akış şeması
-        # hemen yanında kalır, ortada boşluk açılmaz.
+        # Sol: canlı matris animasyonu. SHA introsuyla BİREBİR aynı yerleşim:
+        # sabit dar genişlik (200-240px) yerine oranlı stretch=2 ile büyük açılır,
+        # ekranın solunu kaplar. Matrix demo paintEvent'te adaptif ölçeklendiği
+        # için büyük panelde de okunaklı kalır.
         self._left_frame = QFrame()
         left_frame = self._left_frame
         left_frame.setStyleSheet(
@@ -198,32 +192,25 @@ class _AESIntroWidget(QWidget):
         left_lay.setContentsMargins(6, 4, 6, 4)
         left_lay.setSpacing(2)
         self._demo_title = QLabel("Canlı Şifreleme Önizlemesi")
-        self._demo_title.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        self._demo_title.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         self._demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         self._demo_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._demo_title.setWordWrap(True)
         left_lay.addWidget(self._demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
-        # Önizleme paneli eski (okunaklı) boyutuna döndürüldü. Sağ kolon artık
-        # sola yaslı olduğundan bu panel büyüse de ortada boşluk açılmaz.
-        left_frame.setMinimumWidth(200)
-        left_frame.setMaximumWidth(240)
-        left_frame.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
-        )
-        h_row.addWidget(left_frame, stretch=0, alignment=Qt.AlignmentFlag.AlignTop)
+        h_row.addWidget(left_frame, stretch=2)
 
-        # Sağ: başlık + akış şeması — kalan tüm alanı alır (stretch=1) ve içeriği
-        # sola yaslıdır; böylece sol önizlemenin HEMEN sağında başlar, geniş
-        # pencerelerde ortaya doğru kayıp boşluk açmaz.
+        # Sağ: başlık + akış şeması — SHA gibi stretch=3 ile kalan alanı alır.
+        # İçerik artık sola yaslı DEĞİL; kutular tam genişlik olduğundan panel
+        # ortasında düzgün dolar (SHA introsundaki düzen).
         right_w = QWidget()
         right_lay = QVBoxLayout(right_w)
         right_lay.setContentsMargins(0, 0, 0, 0)
-        right_lay.setSpacing(0)
+        right_lay.setSpacing(4)
         right_lay.setAlignment(Qt.AlignmentFlag.AlignTop)
         right_w.setMinimumWidth(230)
-        h_row.addWidget(right_w, stretch=1)
+        h_row.addWidget(right_w, stretch=3)
 
         # ── Sağ taraf: önce BAŞLIK, sonra akış şeması widget'ları ──
 
@@ -241,7 +228,7 @@ class _AESIntroWidget(QWidget):
         self._intro_plain = self._make_box(
             "Düz Metin  (Plaintext)", "text_secondary"
         )
-        right_lay.addWidget(self._intro_plain, alignment=Qt.AlignmentFlag.AlignLeft)
+        right_lay.addWidget(self._intro_plain)
         self._intro_plain.setVisible(False)
         self._widgets.append(self._intro_plain)
 
@@ -256,7 +243,7 @@ class _AESIntroWidget(QWidget):
             ["AddRoundKey"],
             "accent_peach",
         )
-        right_lay.addWidget(self._box_r0, alignment=Qt.AlignmentFlag.AlignLeft)
+        right_lay.addWidget(self._box_r0)
         self._box_r0.setVisible(False)
         self._widgets.append(self._box_r0)
 
@@ -271,7 +258,7 @@ class _AESIntroWidget(QWidget):
             ["1-SubBytes", "2-ShiftRows", "3-MixColumns", "4-AddRoundKey"],
             "accent_blue",
         )
-        right_lay.addWidget(self._box_main, alignment=Qt.AlignmentFlag.AlignLeft)
+        right_lay.addWidget(self._box_main)
         self._box_main.setVisible(False)
         self._widgets.append(self._box_main)
 
@@ -286,7 +273,7 @@ class _AESIntroWidget(QWidget):
             ["1-SubBytes", "2-ShiftRows", "3-AddRoundKey  (MixColumns yok)"],
             "accent_green",
         )
-        right_lay.addWidget(self._box_r14, alignment=Qt.AlignmentFlag.AlignLeft)
+        right_lay.addWidget(self._box_r14)
         self._box_r14.setVisible(False)
         self._widgets.append(self._box_r14)
 
@@ -299,7 +286,7 @@ class _AESIntroWidget(QWidget):
         self._intro_cipher = self._make_box(
             "Şifreli Metin  (Ciphertext)", "accent_green"
         )
-        right_lay.addWidget(self._intro_cipher, alignment=Qt.AlignmentFlag.AlignLeft)
+        right_lay.addWidget(self._intro_cipher)
         self._intro_cipher.setVisible(False)
         self._widgets.append(self._intro_cipher)
 
@@ -311,7 +298,7 @@ class _AESIntroWidget(QWidget):
         self._btn_start.setStyleSheet(self._start_btn_style())
         self._btn_start.setVisible(False)
         self._btn_start.clicked.connect(self._on_complete)
-        right_lay.addWidget(self._btn_start, alignment=Qt.AlignmentFlag.AlignLeft)
+        right_lay.addWidget(self._btn_start, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._widgets.append(self._btn_start)
         right_lay.addStretch()
 
@@ -319,9 +306,9 @@ class _AESIntroWidget(QWidget):
     def _make_box(text: str, color_key: str) -> QFrame:
         color = ANIM_COLORS[color_key]
         f = QFrame()
-        # Kutu genişliği içerikle sınırlandırılır; aksi halde sağ panelin
-        # tamamını kaplayıp gereksiz geniş görünür (yatayda taşma hissi).
-        f.setMaximumWidth(_INTRO_BOX_MAX_W)
+        # SHA introsuyla aynı: kutu genişliği SINIRLANMAZ; sağ panelin tam
+        # genişliğine yayılır. Tüm kutular aynı parent genişliğini aldığından
+        # HEPSİ EŞİT genişlikte görünür ve panel düzgün dolar.
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -345,8 +332,8 @@ class _AESIntroWidget(QWidget):
     def _make_round_box(title: str, ops: list[str], color_key: str) -> QFrame:
         color = ANIM_COLORS[color_key]
         f = QFrame()
-        # Kutu içerikle sınırlı genişlikte kalır (sağ panelin tamamına yayılmaz).
-        f.setMaximumWidth(_INTRO_BOX_MAX_W)
+        # SHA introsuyla aynı: kutu sağ panelin tam genişliğine yayılır (tüm
+        # kutular eşit genişlikte). Max-width sınırı kaldırıldı.
         f.setStyleSheet(
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 2px solid {color}; border-radius: 6px; }}"
@@ -379,12 +366,12 @@ class _AESIntroWidget(QWidget):
     def _make_arrow() -> QLabel:
         lbl = QLabel("⬇")
         lbl.setFont(QFont("Segoe UI", 14))
-        # Kutular sola yaslı; ok da sola yaslı + küçük girinti ile kutu
-        # kolonunun başına denk gelir (sağ kolonun ortasında asılı kalmaz).
+        # SHA introsuyla aynı: kutular tam genişlik ve ortalı olduğundan ok da
+        # ortalanır (sola yaslı girinti kaldırıldı).
         lbl.setStyleSheet(
-            f"color: {ANIM_COLORS['text_muted']}; border: none; padding-left: 24px;"
+            f"color: {ANIM_COLORS['text_muted']}; border: none;"
         )
-        lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setFixedHeight(20)
         return lbl
 

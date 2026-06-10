@@ -91,6 +91,47 @@ class TestNewWidgetsImport(unittest.TestCase):
         self.assertTrue(callable(_AESPlaintextPrepWidget))
 
 
+class TestAESIntroLayoutLikeSHA(unittest.TestCase):
+    """AES intro yerleşimi SHA introsuyla aynı olmalı (Alt kategori: BİRİM —
+    runtime). Regresyon: AES intro'da sol önizleme sabit-dar (200-240px) ve
+    kutular max-width 360 ile sola sıkışıktı; artık SHA gibi sol panel büyük
+    (stretch=2) ve kutular tam genişlik + eşit (Görsel 3 turu)."""
+
+    def _build_intro(self):
+        from animation_modals import AESAnimationWindow
+        a = AESAnimationWindow(
+            key=bytes(32), plaintext=b"asdasddsada", expected_ct_hex="00" * 16
+        )
+        a.resize(1200, 760)
+        a.show()
+        intro = a._intro
+        for w in intro._widgets:
+            w.setVisible(True)
+        return a, intro
+
+    def test_intro_boxes_equal_width(self):
+        """Alt tür: BİRİM (eşit kutu — pozitif).
+        Beş akış kutusu (Plaintext, R0, R1-13, R14, Ciphertext) AYNI
+        genişlikte olmalı; max-width sınırı kaldırıldığı için hepsi sağ
+        panelin tam genişliğini alır."""
+        a, intro = self._build_intro()
+        boxes = [intro._intro_plain, intro._box_r0, intro._box_main,
+                 intro._box_r14, intro._intro_cipher]
+        widths = {b.width() for b in boxes}
+        self.assertEqual(len(widths), 1,
+                         f"Kutular eşit genişlikte olmalı, görülen: {widths}")
+
+    def test_intro_left_panel_not_fixed_narrow(self):
+        """Alt tür: BİRİM (büyük önizleme — negatif/regresyon).
+        Sol önizleme paneli eski sabit-dar sınırını (≤240px) AŞMALI; SHA gibi
+        stretch=2 ile büyük açıldığından geniş pencerede belirgin büyür."""
+        a, intro = self._build_intro()
+        self.assertGreater(
+            intro._left_frame.width(), 240,
+            "Sol önizleme paneli SHA gibi büyük olmalı (sabit 240px değil)",
+        )
+
+
 class TestPaddingMaskSupport(unittest.TestCase):
     """Padding renk ayrımı API kontratı (Alt kategori: API SIGNATURE — runtime'sız)."""
 

@@ -5,13 +5,15 @@ Doğrulanan:
   * crypto_core raise mesajları "Beklenen → Alınan → Olası neden → Çözüm"
     yapısında ve öğrenci dilinde (≥3 cümle).
   * explain_crypto_exception her tipli istisna için 3 dolu bölüm + teknik
-    detay verir; VerifyError 3 olası nedeni sayar.
+    detay verir.
   * CryptoErrorDialog 3 bölüm kurar; teknik detay başta gizli, açılınca görünür.
   * Bilinmeyen/ham istisna için de güvenli bir açıklama döner (negatif durum).
 """
 from __future__ import annotations
 
 import unittest
+
+from cryptography.exceptions import InvalidSignature
 
 from kriptografi.crypto_core import CryptoCore
 from kriptografi.errors import (
@@ -20,7 +22,6 @@ from kriptografi.errors import (
     PacketFormatError,
     ReplayDetectedError,
     StaleTimestampError,
-    VerifyError,
 )
 from kriptografi.utils import CryptoExplanation, explain_crypto_exception
 
@@ -63,19 +64,16 @@ class TestExplainCryptoException(unittest.TestCase):
             ReplayDetectedError("x"),
             StaleTimestampError("x"),
             IntegrityError("x"),
-            VerifyError("x"),
             DecryptError("x"),
             PacketFormatError("x"),
         ):
             with self.subTest(exc=type(exc).__name__):
                 self._assert_full(explain_crypto_exception(exc))
 
-    def test_verify_error_lists_three_causes(self) -> None:
-        exp = explain_crypto_exception(VerifyError("x"))
-        self.assertIn("(1)", exp.meaning)
-        self.assertIn("(2)", exp.meaning)
-        self.assertIn("(3)", exp.meaning)
-        self.assertIn("Prehashed", exp.meaning)
+    def test_invalid_signature_lists_three_causes(self) -> None:
+        exp = explain_crypto_exception(InvalidSignature("x"))
+        self.assertEqual(exp.meaning.count("•"), 3)
+        self.assertIn("H(m)", exp.meaning)
 
     def test_technical_field_carries_exception_name(self) -> None:
         exp = explain_crypto_exception(IntegrityError("tag mismatch"))
@@ -94,7 +92,7 @@ class TestCryptoErrorDialog(unittest.TestCase):
     def test_dialog_builds_with_three_sections(self) -> None:
         from arayuz.error_dialog import CryptoErrorDialog
 
-        dlg = CryptoErrorDialog(VerifyError("imza"))
+        dlg = CryptoErrorDialog(InvalidSignature("imza"))
         self.assertIn("İmza", dlg.windowTitle())
         # Teknik detay başta gizli, butona basınca görünür. Diyalog exec
         # edilmediği için isVisibleTo(parent) ile niyet/durum kontrol edilir.

@@ -25,14 +25,6 @@ class SignError(CryptoError):
     ``rsa_sign`` ham kütüphane hatasını bu tipe sarar."""
 
 
-class VerifyError(CryptoError):
-    """İmza doğrulamasının başarısız olduğu durum (geçersiz imza).
-
-    NOT: ``rsa_verify`` bilinçli olarak ``bool`` döndürür (geçersiz imza
-    normal bir sonuçtur) ve bu tipi FIRLATMAZ. Tip yalnızca hata-açıklama
-    katmanı (utils.py) tarafından kullanılır."""
-
-
 class EncryptError(CryptoError):
     """Şifreleme (AES-256-GCM) sırasında oluşan hata.
     ``aes_gcm_encrypt`` ham kütüphane hatasını bu tipe sarar."""

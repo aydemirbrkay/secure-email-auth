@@ -26,7 +26,6 @@ from kriptografi.errors import (
     ReplayDetectedError,
     SignError,
     StaleTimestampError,
-    VerifyError,
 )
 
 FRIENDLY_NAMES: dict[str, str] = {
@@ -104,16 +103,6 @@ def format_crypto_exception(exc: BaseException) -> tuple[str, str]:
             "değiştirilmiş olabilir.\n"
             "  • Oturum anahtarı uyuşmuyor olabilir.\n\n"
             "Bu tasarlanmış bir güvenlik davranışıdır.\n\n"
-            f"Detay: {exc}\n\n"
-            f"(Teknik: {exc_name})"
-        )
-
-    if isinstance(exc, VerifyError):
-        return (
-            "İmza Doğrulanamadı",
-            "Dijital imza, Alice'in açık anahtarıyla doğrulanamadı. "
-            "Mesaj imzalandıktan sonra değiştirilmiş veya imza farklı "
-            "bir anahtarla üretilmiş olabilir.\n\n"
             f"Detay: {exc}\n\n"
             f"(Teknik: {exc_name})"
         )
@@ -288,20 +277,6 @@ def explain_crypto_exception(exc: BaseException) -> CryptoExplanation:
             "oturum anahtarının (K_S) farklı olduğu anlamına gelir.",
             "Bu tasarlanmış bir güvenlik davranışıdır; bütünlüğü bozulmuş bir "
             "paket güvenle çözülemez. Paketin değiştirilmediğinden emin olun.",
-            technical,
-        )
-
-    if isinstance(exc, VerifyError):
-        return CryptoExplanation(
-            "İmza Doğrulanamadı",
-            "Dijital imza, Alice'in açık anahtarıyla doğrulanamadı. Üç olası "
-            "neden vardır: (1) mesaj imzalandıktan sonra değiştirilmiş; "
-            "(2) imza farklı bir gizli anahtarla üretilmiş; (3) imzanın bağlı "
-            "olduğu özet H(m), başka bir mesaja ait olabilir (Prehashed "
-            "semantiği — imza mesajın kendisi üzerinde değil, H(m) üzerinde "
-            "yapılır).",
-            "Kimlik ve bütünlük doğrulanamadığı için bu mesaj kabul "
-            "edilmemelidir.",
             technical,
         )
 

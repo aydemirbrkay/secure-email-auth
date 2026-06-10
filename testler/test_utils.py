@@ -42,7 +42,6 @@ from kriptografi.errors import (
     ReplayDetectedError,
     SignError,
     StaleTimestampError,
-    VerifyError,
 )
 from kriptografi.utils import (
     FRIENDLY_NAMES,
@@ -152,13 +151,6 @@ class TestFormatTypedCryptoException(unittest.TestCase):
         self.assertIn("tag uyuşmadı", body)
         self.assertIn("IntegrityError", body)
 
-    def test_verify_error_translation(self) -> None:
-        """Alt tür: BİRİM — VerifyError → imza doğrulama dalı."""
-        title, body = format_crypto_exception(VerifyError("imza geçersiz"))
-        self.assertIn("İmza Doğrulanamadı", title)
-        self.assertIn("imza geçersiz", body)
-        self.assertIn("VerifyError", body)
-
     def test_decrypt_error_translation(self) -> None:
         """Alt tür: BİRİM — DecryptError → çözme dalı."""
         title, body = format_crypto_exception(DecryptError("OAEP başarısız"))
@@ -210,7 +202,6 @@ class TestFormatTypedCryptoException(unittest.TestCase):
             (ReplayDetectedError(), "ReplayDetectedError"),
             (StaleTimestampError(), "StaleTimestampError"),
             (IntegrityError("x"), "IntegrityError"),
-            (VerifyError("x"), "VerifyError"),
             (DecryptError("x"), "DecryptError"),
             (PacketFormatError("x"), "PacketFormatError"),
             (KeygenError("x"), "KeygenError"),

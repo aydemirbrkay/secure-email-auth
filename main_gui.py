@@ -109,6 +109,24 @@ class MainWindow(QMainWindow):
         )
         main_layout.setSpacing(MAIN_LAYOUT_SPACING)
 
+        self._build_header(main_layout)
+        self._build_participant_panels(main_layout)
+        self._build_controls(main_layout)
+        self._key_info_group = self._build_key_info_group()
+
+        self._comparison_group = self._build_comparison_group()
+
+        self._build_bottom_section(main_layout)
+
+        # Renkleri tek noktadan uygula (tema değişiminde tekrar çağrılır)
+        self._apply_styles()
+        self._update_toggle_label()
+        MANAGER.themeChanged.connect(self._on_theme_changed)
+
+        # Erişilebilirlik: ekran-okuyucu adları ve Tab gezinme sırası.
+        self._apply_accessibility()
+
+    def _build_header(self, main_layout: QVBoxLayout) -> None:
         header_row = QHBoxLayout()
         header_row.setSpacing(0)
         header_row.addStretch()
@@ -123,11 +141,13 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(header_row)
 
         self._subtitle = QLabel(
-            "Gizlilik (Confidentiality)  •  Bütünlük (Integrity)  •  Kimlik Doğrulama (Authentication)"
+            "Gizlilik (Confidentiality)  •  Bütünlük (Integrity)  •  "
+            "Kimlik Doğrulama (Authentication)"
         )
         self._subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self._subtitle)
 
+    def _build_participant_panels(self, main_layout: QVBoxLayout) -> None:
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(SPLITTER_HANDLE_WIDTH)
 
@@ -150,6 +170,7 @@ class MainWindow(QMainWindow):
         )
         main_layout.addWidget(splitter, stretch=1)
 
+    def _build_controls(self, main_layout: QVBoxLayout) -> None:
         controls = QHBoxLayout()
         controls.setSpacing(CONTROLS_SPACING)
 
@@ -177,11 +198,14 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(controls)
 
-        self._key_info_group = QGroupBox("RSA-2048 Anahtar Bilgileri  —  Anahtarlar Başarıyla Üretildi")
-        self._key_info_group.setVisible(False)
-        key_info_layout = QVBoxLayout(self._key_info_group)
-        key_info_layout.setSpacing(3)
-        key_info_layout.setContentsMargins(6, 8, 6, 4)
+    def _build_key_info_group(self) -> QGroupBox:
+        group = QGroupBox(
+            "RSA-2048 Anahtar Bilgileri  —  Anahtarlar Başarıyla Üretildi"
+        )
+        group.setVisible(False)
+        layout = QVBoxLayout(group)
+        layout.setSpacing(3)
+        layout.setContentsMargins(6, 8, 6, 4)
 
         alice_row = QHBoxLayout()
         self._alice_key_lbl = QLabel("Alice Açık Anahtarı (K⁺_A):")
@@ -195,7 +219,7 @@ class MainWindow(QMainWindow):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         alice_row.addWidget(self._alice_key_value, stretch=1)
-        key_info_layout.addLayout(alice_row)
+        layout.addLayout(alice_row)
 
         bob_row = QHBoxLayout()
         self._bob_key_lbl = QLabel("Bob Açık Anahtarı (K⁺_B):")
@@ -209,15 +233,15 @@ class MainWindow(QMainWindow):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         bob_row.addWidget(self._bob_key_value, stretch=1)
-        key_info_layout.addLayout(bob_row)
+        layout.addLayout(bob_row)
+        return group
 
-        self._comparison_group = QGroupBox(
-            "Orijinal Mesaj ↔ Alınan Mesaj Karşılaştırması"
-        )
-        self._comparison_group.setVisible(False)
-        cmp_outer = QVBoxLayout(self._comparison_group)
-        cmp_outer.setSpacing(4)
-        cmp_outer.setContentsMargins(6, 8, 6, 4)
+    def _build_comparison_group(self) -> QGroupBox:
+        group = QGroupBox("Orijinal Mesaj ↔ Alınan Mesaj Karşılaştırması")
+        group.setVisible(False)
+        outer = QVBoxLayout(group)
+        outer.setSpacing(4)
+        outer.setContentsMargins(6, 8, 6, 4)
 
         # Kart çerçeveleri tema değişiminde yeniden stillendirilmek üzere toplanır.
         self._card_frames: list[QFrame] = []
@@ -225,7 +249,8 @@ class MainWindow(QMainWindow):
         msg_row = QHBoxLayout()
         msg_row.setSpacing(10)
 
-        alice_msg_f = QFrame(); self._card_frames.append(alice_msg_f)
+        alice_msg_f = QFrame()
+        self._card_frames.append(alice_msg_f)
         alice_msg_f.setMinimumHeight(62)
         alice_msg_lay = QVBoxLayout(alice_msg_f)
         alice_msg_lay.setContentsMargins(8, 6, 8, 6)
@@ -235,11 +260,14 @@ class MainWindow(QMainWindow):
         alice_msg_lay.addWidget(self._alice_msg_title)
         self._alice_msg_cmp = QLabel("")
         self._alice_msg_cmp.setWordWrap(True)
-        self._alice_msg_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._alice_msg_cmp.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         alice_msg_lay.addWidget(self._alice_msg_cmp)
         msg_row.addWidget(alice_msg_f, stretch=3)
 
-        msg_mid_f = QFrame(); self._card_frames.append(msg_mid_f)
+        msg_mid_f = QFrame()
+        self._card_frames.append(msg_mid_f)
         msg_mid_f.setMinimumHeight(62)
         msg_mid_f.setMaximumWidth(70)
         msg_mid_lay = QVBoxLayout(msg_mid_f)
@@ -255,7 +283,8 @@ class MainWindow(QMainWindow):
         msg_mid_lay.addWidget(self._cmp_msg_label)
         msg_row.addWidget(msg_mid_f)
 
-        bob_msg_f = QFrame(); self._card_frames.append(bob_msg_f)
+        bob_msg_f = QFrame()
+        self._card_frames.append(bob_msg_f)
         bob_msg_f.setMinimumHeight(62)
         bob_msg_lay = QVBoxLayout(bob_msg_f)
         bob_msg_lay.setContentsMargins(8, 6, 8, 6)
@@ -265,26 +294,31 @@ class MainWindow(QMainWindow):
         bob_msg_lay.addWidget(self._bob_msg_title)
         self._bob_msg_cmp = QLabel("")
         self._bob_msg_cmp.setWordWrap(True)
-        self._bob_msg_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._bob_msg_cmp.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         bob_msg_lay.addWidget(self._bob_msg_cmp)
         msg_row.addWidget(bob_msg_f, stretch=3)
-
-        cmp_outer.addLayout(msg_row)
+        outer.addLayout(msg_row)
 
         hash_row = QHBoxLayout()
         hash_row.setSpacing(10)
 
-        alice_hash_f = QFrame(); self._card_frames.append(alice_hash_f)
+        alice_hash_f = QFrame()
+        self._card_frames.append(alice_hash_f)
         alice_hash_f.setMinimumHeight(48)
         alice_hash_lay = QVBoxLayout(alice_hash_f)
         alice_hash_lay.setContentsMargins(8, 4, 8, 4)
         self._alice_hash_cmp = QLabel("")
         self._alice_hash_cmp.setWordWrap(True)
-        self._alice_hash_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._alice_hash_cmp.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         alice_hash_lay.addWidget(self._alice_hash_cmp)
         hash_row.addWidget(alice_hash_f, stretch=3)
 
-        hash_mid_f = QFrame(); self._card_frames.append(hash_mid_f)
+        hash_mid_f = QFrame()
+        self._card_frames.append(hash_mid_f)
         hash_mid_f.setMinimumHeight(48)
         hash_mid_f.setMaximumWidth(70)
         hash_mid_lay = QVBoxLayout(hash_mid_f)
@@ -300,18 +334,22 @@ class MainWindow(QMainWindow):
         hash_mid_lay.addWidget(self._cmp_hash_label)
         hash_row.addWidget(hash_mid_f)
 
-        bob_hash_f = QFrame(); self._card_frames.append(bob_hash_f)
+        bob_hash_f = QFrame()
+        self._card_frames.append(bob_hash_f)
         bob_hash_f.setMinimumHeight(48)
         bob_hash_lay = QVBoxLayout(bob_hash_f)
         bob_hash_lay.setContentsMargins(8, 4, 8, 4)
         self._bob_hash_cmp = QLabel("")
         self._bob_hash_cmp.setWordWrap(True)
-        self._bob_hash_cmp.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._bob_hash_cmp.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         bob_hash_lay.addWidget(self._bob_hash_cmp)
         hash_row.addWidget(bob_hash_f, stretch=3)
+        outer.addLayout(hash_row)
+        return group
 
-        cmp_outer.addLayout(hash_row)
-
+    def _build_bottom_section(self, main_layout: QVBoxLayout) -> None:
         self._bottom_section = QWidget()
         self._bottom_section.setVisible(False)
         bs_lay = QVBoxLayout(self._bottom_section)
@@ -341,16 +379,7 @@ class MainWindow(QMainWindow):
 
         self._bottom_body.setVisible(False)
         bs_lay.addWidget(self._bottom_body)
-
         main_layout.addWidget(self._bottom_section)
-
-        # Renkleri tek noktadan uygula (tema değişiminde tekrar çağrılır)
-        self._apply_styles()
-        self._update_toggle_label()
-        MANAGER.themeChanged.connect(self._on_theme_changed)
-
-        # Erişilebilirlik: ekran-okuyucu adları ve Tab gezinme sırası.
-        self._apply_accessibility()
 
     # ------------------------------------------------------------------
     # Erişilebilirlik (a11y)
@@ -675,8 +704,10 @@ class MainWindow(QMainWindow):
 
         alice_lines = alice_keys.public_pem().decode().strip().split("\n")
         bob_lines = bob_keys.public_pem().decode().strip().split("\n")
-        alice_b64 = "".join(alice_lines[1:-1])[:60] + "…"
-        bob_b64 = "".join(bob_lines[1:-1])[:60] + "…"
+        alice_body = alice_lines[1:-1] or alice_lines
+        bob_body = bob_lines[1:-1] or bob_lines
+        alice_b64 = "".join(alice_body)[:60] + "…"
+        bob_b64 = "".join(bob_body)[:60] + "…"
 
         self._alice_key_value.setText(alice_b64)
         self._bob_key_value.setText(bob_b64)

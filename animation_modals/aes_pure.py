@@ -3,6 +3,9 @@
 Saf Python AES-256 ECB implementasyonu.
 Animasyon için 14 round'un tüm ara state matrislerini döndürür.
 NIST FIPS-197 test vektörleri ile doğrulanmıştır.
+
+EĞİTİM AMAÇLIDIR — ECB ve ara round verileri gerçek mesaj şifreleme için
+KULLANILMAMALIDIR. Uygulamanın gerçek akışı AES-256-GCM kullanır.
 """
 from __future__ import annotations
 
@@ -142,7 +145,8 @@ def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
     # uzunluktaki anahtar sessizce kabul edilip _key_expansion'da bozulur.
     if len(key) != 32:
         raise ValueError("AES-256 için 32 byte anahtar gerekli")
-    block = (plaintext + bytes(16))[:16]
+    padded = _pkcs7_pad(plaintext, 16)
+    block = padded[:16]
 
     round_keys = _key_expansion(key)
     state = _bytes_to_state(block)
@@ -181,7 +185,6 @@ def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
     initial_state_hex = _state_to_hex(_bytes_to_state(block))
 
     # Plaintext Hazırlığı sayfası için yeni alanlar
-    padded = _pkcs7_pad(plaintext, 16)
     first_block = padded[:16]
     blocks_total = len(padded) // 16
     state_matrix = [

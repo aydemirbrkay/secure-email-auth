@@ -22,7 +22,12 @@ Hata durumunda anlamı: Pure AES implementasyonunda matematiksel bozukluk
 var; animasyondaki tüm round state görselleri yanlış olur.
 """
 import unittest
-from animation_modals.aes_pure import aes256_encrypt_with_rounds
+from animation_modals.aes_pure import (
+    SBOX,
+    _mix_columns,
+    _shift_rows,
+    aes256_encrypt_with_rounds,
+)
 
 class TestAESPure(unittest.TestCase):
 
@@ -97,6 +102,60 @@ class TestAESPure(unittest.TestCase):
         self.assertEqual(len(mat), 4)
         self.assertEqual(len(mat[0]), 4)
         self.assertEqual(len(mat[0][0]), 2)
+
+    def test_short_plaintext_round_state_matches_displayed_first_block(self):
+        """Kısa plaintext için round hesabı ve hazırlık sayfası aynı PKCS#7 bloğunu kullanır."""
+        result = aes256_encrypt_with_rounds(self.KEY, b"abc")
+        first_block = result["first_block"]
+        expected_state = [
+            [f"{first_block[c * 4 + r]:02x}" for c in range(4)]
+            for r in range(4)
+        ]
+        self.assertEqual(result["initial_state_hex"], expected_state)
+
+    def test_every_displayed_operation_matches_its_aes_transformation(self):
+        """Animasyonda gösterilen tüm ara matrisler, önceki state'ten doğru üretilir."""
+        result = aes256_encrypt_with_rounds(self.KEY, self.PLAINTEXT)
+        previous = result["initial_state_hex"]
+
+        for round_data in result["rounds_data"]:
+            round_no = round_data["round"]
+            if round_no > 0:
+                expected_sub = [
+                    [f"{SBOX[int(value, 16)]:02x}" for value in row]
+                    for row in previous
+                ]
+                self.assertEqual(round_data["after_sub_bytes"], expected_sub)
+
+                shifted_ints = _shift_rows(
+                    [[int(value, 16) for value in row] for row in expected_sub]
+                )
+                expected_shift = [
+                    [f"{value:02x}" for value in row] for row in shifted_ints
+                ]
+                self.assertEqual(round_data["after_shift_rows"], expected_shift)
+
+                before_add = expected_shift
+                if round_no < 14:
+                    mixed_ints = _mix_columns(shifted_ints)
+                    before_add = [
+                        [f"{value:02x}" for value in row] for row in mixed_ints
+                    ]
+                    self.assertEqual(round_data["after_mix_columns"], before_add)
+
+            else:
+                before_add = previous
+
+            round_key = result["round_keys_hex"][round_no]
+            expected_add = [
+                [
+                    f"{int(before_add[row][col], 16) ^ int(round_key[row][col], 16):02x}"
+                    for col in range(4)
+                ]
+                for row in range(4)
+            ]
+            self.assertEqual(round_data["after_add_round_key"], expected_add)
+            previous = expected_add
 
 if __name__ == "__main__":
     unittest.main()

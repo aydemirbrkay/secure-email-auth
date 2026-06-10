@@ -49,3 +49,6 @@ desktop.ini
 
 # Local-only çalışma dokümanları (planlar, spec'ler, notlar)
 docs/
+
+# Yerel araç/oturum logları
+claude-log.txt

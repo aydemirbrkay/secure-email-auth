@@ -34,7 +34,17 @@
       "Bash(python -m pytest --collect-only -q -p no:cacheprovider)",
       "Bash(python -c \"import sys,collections; c=collections.Counter\\(l.split\\('::'\\)[0] for l in sys.stdin if '::' in l\\); [print\\(f'{v:4d}  {k}'\\) for k,v in sorted\\(c.items\\(\\)\\)]; print\\('TOPLAM:', sum\\(c.values\\(\\)\\)\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('animation_modals/aes/intro_widget.py', encoding='utf-8'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
-      "Bash(python -m pytest testler/test_animation_smoke.py testler/test_animation_widgets_smoke.py -q)"
+      "Bash(python -m pytest testler/test_animation_smoke.py testler/test_animation_widgets_smoke.py -q)",
+      "Bash(python -B -m pytest testler/test_animation_smoke.py testler/test_animation_widgets_smoke.py -q)",
+      "Bash(python -B -m pytest testler/test_theme_integration.py testler/test_accessibility.py -q)",
+      "Bash(python -B -m pytest testler/test_aes_matrix_view.py testler/test_animation_smoke.py -q)",
+      "Bash(python -B -m pytest testler/test_animation_widgets_smoke.py testler/test_animation_smoke.py testler/test_aes_matrix_view.py -q)",
+      "Bash(python -B -c ' *)",
+      "Bash(python -B -m pytest testler/test_animation_smoke.py -q)",
+      "Bash(py -3.11 -B -c ' *)",
+      "Bash(py -3.11 -B -m pytest testler/test_animation_widgets_smoke.py -q)",
+      "Bash(py -3.11 -B -m pytest testler/test_rsa_animation.py -q)",
+      "Bash(py -3.11 -B -m pytest -q -p no:cacheprovider)"
     ]
   }
 }

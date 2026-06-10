@@ -228,22 +228,25 @@ class _SHA256DiagramWidget(QWidget):
             label="E", label_xy=(e_cx + 6, top_y + box_h + 6),
         )
 
-        # T2 → A' (aktif: ph==3)
+        # T2 → A' (aktif: ph==3). Etiket HEDEF kutu (A') hizasında, kutunun
+        # hemen üstünde (bot_y - 16) → eskiden geniş T2 kutusunun merkezine
+        # göre konumlanıp yanlışlıkla B' üstüne düşüyordu (Görsel 3).
         t2a_state = self._arrow_state(ph, active_at=3)
         self._draw_flow_arrow(
             p, ANIM_COLORS["accent_mauve"], t2a_state, pulse,
             [(t2_x + t2_w // 2, mid_y + 72), (a_out_cx, bot_y)],
             head="down", head_xy=(a_out_cx, bot_y),
-            label="T2", label_xy=(t2_x + t2_w // 2 + 6, mid_y + 80),
+            label="T2", label_xy=(a_out_cx + 6, bot_y - 16),
         )
 
-        # T1 → E' (aktif: ph==4)
+        # T1 → E' (aktif: ph==4). Etiket HEDEF kutu (E') hizasında (eskiden T1
+        # kutusu merkezine göre F' üstüne düşüyordu).
         t1e_state = self._arrow_state(ph, active_at=4)
         self._draw_flow_arrow(
             p, ANIM_COLORS["accent_yellow"], t1e_state, pulse,
             [(t1_x + t1_w // 2, mid_y + 72), (e_out_cx, bot_y)],
             head="down", head_xy=(e_out_cx, bot_y),
-            label="T1", label_xy=(t1_x + t1_w // 2 - 22, mid_y + 80),
+            label="T1", label_xy=(e_out_cx + 6, bot_y - 16),
         )
 
         # D → E' (kesikli, shift katkısı) — E' aktifken (ph==4) vurgulanır

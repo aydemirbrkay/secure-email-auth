@@ -8,14 +8,17 @@ from PyQt6.QtWidgets import (
     QDialog,
     QFrame,
     QHeaderView,
+    QHBoxLayout,
     QLabel,
+    QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from ..aes_pure import SBOX
+from ..aes_pure import SBOX, derive_sbox_value
 from ..base import ANIM_COLORS
 from arayuz.theme import MANAGER
 
@@ -82,6 +85,24 @@ class _SBoxReferenceDialog(QDialog):
         self.used_mappings_label.setWordWrap(True)
         layout.addWidget(self.used_mappings_label)
 
+        # Sayfa geçiş butonları: tablo ↔ "S-Box nasıl üretildi?" türetimi.
+        nav_row = QHBoxLayout()
+        self.show_table_btn = QPushButton("S-Box Tablosu")
+        self.show_table_btn.clicked.connect(self.show_table_page)
+        self.show_derivation_btn = QPushButton("S-Box nasıl üretildi?")
+        self.show_derivation_btn.clicked.connect(self._show_default_derivation)
+        nav_row.addWidget(self.show_table_btn)
+        nav_row.addWidget(self.show_derivation_btn)
+        nav_row.addStretch()
+        layout.addLayout(nav_row)
+
+        self._stack = QStackedWidget(self)
+        self._stack.addWidget(self._build_table_page())
+        self._stack.addWidget(self._build_derivation_page())
+        layout.addWidget(self._stack, stretch=1)
+
+    def _build_table_page(self) -> QWidget:
+        """16×16 S-Box referans tablosunu taşıyan sayfayı kurar."""
         self.table_frame = QFrame(self)
         self.table_layout = QVBoxLayout(self.table_frame)
         self.table_layout.setContentsMargins(12, 10, 12, 12)
@@ -98,8 +119,25 @@ class _SBoxReferenceDialog(QDialog):
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setFixedHeight(30)
         self.table.verticalHeader().setFixedWidth(40)
+        self.table.cellClicked.connect(self._on_cell_clicked)
         self.table_layout.addWidget(self.table)
-        layout.addWidget(self.table_frame, stretch=1)
+        return self.table_frame
+
+    def _build_derivation_page(self) -> QWidget:
+        """Seçilen byte'ın S-Box türetim adımlarını gösteren sayfayı kurar."""
+        self.derivation_frame = QFrame(self)
+        derivation_layout = QVBoxLayout(self.derivation_frame)
+        derivation_layout.setContentsMargins(16, 14, 16, 16)
+        derivation_layout.setSpacing(8)
+
+        self.derivation_label = QLabel("")
+        self.derivation_label.setWordWrap(True)
+        self.derivation_label.setTextFormat(Qt.TextFormat.RichText)
+        self.derivation_label.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+        derivation_layout.addWidget(self.derivation_label, stretch=1)
+        return self.derivation_frame
 
     def _example_text(self) -> str:
         if not self._mappings:
@@ -115,6 +153,54 @@ class _SBoxReferenceDialog(QDialog):
         unique = list(dict.fromkeys(self._mappings))
         summary = ", ".join(f"{source}→{result}" for source, result in unique)
         return f"Bu adımda kullanılan eşlemeler: {summary}"
+
+    # ------------------------------------------------------------------
+    # Sayfa geçişi ve S-Box türetimi anlatımı
+    # ------------------------------------------------------------------
+
+    def show_table_page(self) -> None:
+        """Referans tablosu sayfasını gösterir."""
+        self._stack.setCurrentIndex(0)
+
+    def show_derivation_for(self, byte: int) -> None:
+        """Verilen byte'ın S-Box türetimini açıklayıp türetim sayfasına geçer.
+
+        Çarpımsal ters ve affine dönüşüm adımlarını öğrenci diline indirgenmiş
+        biçimde ``derivation_label`` içine yazar ve sayfayı değiştirir.
+        """
+        self.derivation_label.setText(self._derivation_text(byte))
+        self._stack.setCurrentIndex(1)
+
+    def _show_default_derivation(self) -> None:
+        """Türetim butonu için varsayılan örneği (ilk eşleme ya da 0x53) açar."""
+        default = int(self._mappings[0][0], 16) if self._mappings else 0x53
+        self.show_derivation_for(default)
+
+    def _on_cell_clicked(self, row: int, col: int) -> None:
+        """Tablodaki bir hücreye tıklanınca o girdi byte'ının türetimini açar."""
+        self.show_derivation_for(row * 16 + col)
+
+    def _derivation_text(self, byte: int) -> str:
+        """Bir byte'ın S-Box değerine türetilişini HTML metin olarak üretir."""
+        d = derive_sbox_value(byte)
+        inverse_note = (
+            "0x00'ın çarpımsal tersi yoktur; AES sözleşmesi gereği 0 alınır."
+            if byte == 0
+            else f"GF(2⁸) gövdesinde {byte:02x} · {d.inverse:02x} = 01 "
+            f"olduğu için tersi <b>{d.inverse:02x}</b>'dir."
+        )
+        return (
+            f"<h3>S-Box değeri nasıl üretilir? (örnek: {byte:02x})</h3>"
+            "S-Box sabit bir tablo değildir; her byte iki adımla üretilir.<br><br>"
+            "<b>Adım 1 — Çarpımsal ters (GF(2⁸))</b><br>"
+            f"{inverse_note}<br>"
+            f"İndirgenemez polinom: 0x11B.<br><br>"
+            "<b>Adım 2 — Affine dönüşüm</b><br>"
+            f"Ters değer ({d.inverse:02x}) bit-döndürmeli XOR ve "
+            f"<code>{d.affine_const:02x}</code> sabitiyle birleştirilir.<br><br>"
+            f"<b>Sonuç:</b> S[{byte >> 4:X},{byte & 0xF:X}] = "
+            f"<b>{d.result:02x}</b>"
+        )
 
     def _populate_table(self) -> None:
         for row in range(16):
@@ -174,6 +260,13 @@ class _SBoxReferenceDialog(QDialog):
             f"border: 1px solid {ANIM_COLORS['border']}; padding: 4px; }}"
             f"QTableCornerButton::section {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; }}"
+        )
+        self.derivation_frame.setStyleSheet(
+            f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
+        )
+        self.derivation_label.setStyleSheet(
+            f"color: {ANIM_COLORS['text_primary']};"
         )
         self._highlight_used_cells()
         self.update()

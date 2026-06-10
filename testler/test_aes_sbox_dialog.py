@@ -127,5 +127,51 @@ class TestSBoxReferenceDialog(unittest.TestCase):
         )
 
 
+class TestSBoxDerivationPage(unittest.TestCase):
+    """Diyalog içindeki 'S-Box nasıl üretildi?' türetim sayfası testleri."""
+
+    def setUp(self):
+        self._original_theme = MANAGER.mode
+
+    def tearDown(self):
+        MANAGER.set_mode(self._original_theme)
+
+    def test_starts_on_table_page(self):
+        """Diyalog açıldığında önce referans tablosu sayfası görünür."""
+        dialog = _SBoxReferenceDialog([("53", "ed")])
+
+        self.assertEqual(dialog._stack.currentIndex(), 0)
+
+    def test_show_derivation_switches_page_and_describes_steps(self):
+        """Türetim istenince sayfa değişir ve ara değerler metinde yer alır."""
+        dialog = _SBoxReferenceDialog([("53", "ed")])
+
+        dialog.show_derivation_for(0x53)
+
+        self.assertEqual(dialog._stack.currentIndex(), 1)
+        text = dialog.derivation_label.text().lower()
+        self.assertIn("53", text)
+        self.assertIn("ed", text)  # S[5,3] = ed
+        self.assertIn("ca", text)  # 0x53'ün GF(2^8) çarpımsal tersi
+
+    def test_back_button_returns_to_table(self):
+        """Geri dönünce tekrar tablo sayfası gösterilir."""
+        dialog = _SBoxReferenceDialog([("53", "ed")])
+        dialog.show_derivation_for(0x53)
+
+        dialog.show_table_page()
+
+        self.assertEqual(dialog._stack.currentIndex(), 0)
+
+    def test_clicking_table_cell_opens_its_derivation(self):
+        """Tablo hücresine tıklamak o byte'ın türetimini açar."""
+        dialog = _SBoxReferenceDialog([("53", "ed")])
+
+        dialog._on_cell_clicked(0xA, 0xB)  # byte 0xAB
+
+        self.assertEqual(dialog._stack.currentIndex(), 1)
+        self.assertIn("ab", dialog.derivation_label.text().lower())
+
+
 if __name__ == "__main__":
     unittest.main()

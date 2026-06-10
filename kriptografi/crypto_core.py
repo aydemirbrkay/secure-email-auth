@@ -138,6 +138,29 @@ class StepResult:
     data: dict = field(default_factory=dict)
 
 
+@dataclass
+class _StepBuilder:
+    """Akış adımlarını eklenme sırasına göre numaralandırır."""
+
+    steps: list[StepResult] = field(default_factory=list)
+
+    def add(
+        self,
+        *,
+        step_name: str,
+        description: str,
+        step_type: StepType,
+        data: dict,
+    ) -> None:
+        self.steps.append(StepResult(
+            step_number=len(self.steps) + 1,
+            step_name=step_name,
+            description=description,
+            step_type=step_type,
+            data=data,
+        ))
+
+
 # ---------------------------------------------------------------------------
 # Ana Kriptografi Sınıfı
 # ---------------------------------------------------------------------------
@@ -260,9 +283,8 @@ class CryptoCore:
 
         Sözleşme (bilinçli): geçersiz imza bir HATA değil, beklenen normal
         bir sonuçtur; bu yüzden ``InvalidSignature`` yakalanıp ``False``
-        döndürülür (``VerifyError`` FIRLATILMAZ). Çağıran (``bob_receive``)
-        bunu ``is_valid`` bayrağı olarak UI'a yansıtır. ``VerifyError`` tipi
-        yalnızca hata-açıklama katmanı (utils.py) için tanımlıdır.
+        döndürülür ve istisna fırlatılmaz. Çağıran (``bob_receive``) bunu
+        ``is_valid`` bayrağı olarak UI'a yansıtır.
         """
         try:
             public_key.verify(
@@ -370,7 +392,7 @@ class CryptoCore:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
-        fingerprint = hashlib.sha256(pem).digest()[:8].hex()
+        fingerprint = hashlib.sha256(pem).digest()[:16].hex()
         return (
             cls.PROTOCOL_TAG
             + b"|from="
@@ -487,21 +509,25 @@ class CryptoCore:
     # ------------------------------------------------------------------
 
     def alice_send(self, message: str) -> Tuple[EncryptedPacket, list[StepResult]]:
-        """Alice'in tam gönderim iş akışını gerçekleştirir (zamanlama ile)."""
+        """Alice'in tam gönderim iş akışını gerçekleştirir (zamanlama ile).
+
+        Eğitim arayüzünün adımları gösterebilmesi için ``StepResult.data``
+        içinde K_S ve H(m) gibi hassas ara değerler bilinçli olarak yer alır.
+        Bu kayıtlar üretim loglarına veya uzak telemetriye gönderilmemelidir.
+        """
         if not self.alice_keys or not self.bob_keys:
             raise RuntimeError(
                 "Anahtarlar oluşturulmadı. Önce setup_keys() çağrılmalı."
             )
 
-        steps: list[StepResult] = []
+        builder = _StepBuilder()
         msg_bytes = message.encode("utf-8")
 
         # Adım 1: SHA-256 özet hesaplama — H(m)
         t0 = time.perf_counter()
         msg_hash = self.sha256_hash(msg_bytes)
         elapsed_1 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=1,
+        builder.add(
             step_name="SHA-256 Özet Hesaplama",
             description="Mesaj içeriğinden 256-bit özet değeri H(m) üretildi.",
             step_type=StepType.HASH,
@@ -511,14 +537,13 @@ class CryptoCore:
                 "hash_bytes": msg_hash,
                 "elapsed_ms": f"{elapsed_1:.4f} ms",
             },
-        ))
+        )
 
         # Adım 2: RSA dijital imza — K⁻_A(H(m))
         t0 = time.perf_counter()
         signature = self.rsa_sign(self.alice_keys.private_key, msg_hash)
         elapsed_2 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=2,
+        builder.add(
             step_name="RSA-2048 Dijital İmza",
             description=(
                 "Özet değeri H(m), Alice'in RSA gizli anahtarı (K⁻_A) ile "
@@ -531,7 +556,7 @@ class CryptoCore:
                 "key_info": "Alice RSA-2048 Gizli Anahtar (K⁻_A)",
                 "elapsed_ms": f"{elapsed_2:.2f} ms",
             },
-        ))
+        )
 
         # Adım 3: Mesaj ve imzanın birleştirilmesi — m ∥ K⁻_A(H(m))
         # RSA-2048 PSS imzası sabit 256 byte olduğu için ayraç (delimiter)
@@ -548,8 +573,7 @@ class CryptoCore:
             )
         combined = msg_bytes + signature
         elapsed_3 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=3,
+        builder.add(
             step_name="Mesaj ve İmza Birleştirme",
             description=(
                 "Orijinal mesaj (m) ile dijital imza K⁻_A(H(m)) "
@@ -565,7 +589,7 @@ class CryptoCore:
                 "signature_size": f"{len(signature)} byte",
                 "elapsed_ms": f"{elapsed_3:.4f} ms",
             },
-        ))
+        )
 
         # Adım 4: AES-256-GCM simetrik şifreleme (AAD ile bağlamsal bağlama)
         # AAD: protokol sürümü + Alice'in açık anahtar parmak izi + zaman
@@ -576,8 +600,7 @@ class CryptoCore:
         aad = self.build_aad(self.alice_keys.public_key)
         nonce, ciphertext = self.aes_gcm_encrypt(session_key, combined, aad)
         elapsed_4 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=4,
+        builder.add(
             step_name="AES-256-GCM Şifreleme",
             description=(
                 "Birleştirilmiş veri, yeni üretilen simetrik oturum "
@@ -597,7 +620,7 @@ class CryptoCore:
                 "associated_data_size": f"{len(aad)} byte",
                 "elapsed_ms": f"{elapsed_4:.4f} ms",
             },
-        ))
+        )
 
         # Adım 5: Oturum anahtarını RSA ile şifrele — K⁺_B(K_S)
         t0 = time.perf_counter()
@@ -605,8 +628,7 @@ class CryptoCore:
             self.bob_keys.public_key, session_key
         )
         elapsed_5 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=5,
+        builder.add(
             step_name="RSA Oturum Anahtarı Şifreleme",
             description=(
                 "Oturum anahtarı (K_S), Bob'un RSA açık anahtarı (K⁺_B) "
@@ -619,7 +641,7 @@ class CryptoCore:
                 "key_info": "Bob RSA-2048 Açık Anahtar (K⁺_B)",
                 "elapsed_ms": f"{elapsed_5:.2f} ms",
             },
-        ))
+        )
 
         # Adım 6: Paket oluştur ve gönder
         packet = EncryptedPacket(
@@ -634,8 +656,7 @@ class CryptoCore:
             + len(nonce)
             + len(aad)
         )
-        steps.append(StepResult(
-            step_number=6,
+        builder.add(
             step_name="Paket Gönderimi",
             description=(
                 "Şifreli mesaj K_S(m ∥ K⁻_A(H(m))), şifreli oturum "
@@ -648,9 +669,9 @@ class CryptoCore:
                 "nonce_hex": nonce.hex(),
                 "associated_data": aad.decode("ascii"),
             },
-        ))
+        )
 
-        return packet, steps
+        return packet, builder.steps
 
     # ------------------------------------------------------------------
     # Tam İş Akışı — Alıcı (Bob) Tarafı
@@ -666,13 +687,16 @@ class CryptoCore:
         ``now_fn``: "şimdi"yi (Unix saniye) döndüren çağrılabilir; tazelik
         kontrolünün test edilebilmesi için enjekte edilebilir. Varsayılan
         ``time.time`` olduğundan davranış geriye uyumludur.
+
+        Eğitim arayüzünün adımları gösterebilmesi için ``StepResult.data``
+        içinde K_S ve H(m) gibi hassas ara değerler bilinçli olarak yer alır.
         """
         if not self.alice_keys or not self.bob_keys:
             raise RuntimeError(
                 "Anahtarlar oluşturulmadı. Önce setup_keys() çağrılmalı."
             )
 
-        steps: list[StepResult] = []
+        builder = _StepBuilder()
 
         # Adım 1: RSA ile oturum anahtarını çöz — K⁻_B(K⁺_B(K_S)) = K_S
         t0 = time.perf_counter()
@@ -680,8 +704,7 @@ class CryptoCore:
             self.bob_keys.private_key, packet.encrypted_session_key
         )
         elapsed_1 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=1,
+        builder.add(
             step_name="RSA Oturum Anahtarı Çözme",
             description=(
                 "Bob, kendi RSA gizli anahtarı (K⁻_B) ile şifreli oturum "
@@ -693,7 +716,7 @@ class CryptoCore:
                 "key_info": "Bob RSA-2048 Gizli Anahtar (K⁻_B)",
                 "elapsed_ms": f"{elapsed_1:.2f} ms",
             },
-        ))
+        )
 
         # Adım 2: AES-256-GCM ile deşifrele (AAD doğrulaması ile birlikte)
         # AAD paketle birlikte gelir ve aynı değer decrypt'e verilir;
@@ -707,8 +730,7 @@ class CryptoCore:
             packet.associated_data,
         )
         elapsed_2 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=2,
+        builder.add(
             step_name="AES-256-GCM Deşifreleme",
             description=(
                 "Elde edilen K_S ile şifreli veri çözüldü. Bu adımda "
@@ -725,7 +747,7 @@ class CryptoCore:
                 ),
                 "elapsed_ms": f"{elapsed_2:.4f} ms",
             },
-        ))
+        )
 
         # Tazelik + replay kontrolü (eklenen koruma katmanı):
         # AAD ancak GCM tag doğrulandıktan SONRA güvenilir olduğu için bu
@@ -761,8 +783,7 @@ class CryptoCore:
                 "Deşifre edilen mesaj geçerli UTF-8 değil; paket bozulmuş ya "
                 "da beklenen biçimde kodlanmamış olabilir."
             ) from exc
-        steps.append(StepResult(
-            step_number=3,
+        builder.add(
             step_name="Mesaj ve İmza Ayrıştırma",
             description=(
                 "Mesaj (m) ve dijital imza birbirinden ayrıştırıldı. "
@@ -776,14 +797,13 @@ class CryptoCore:
                 "message_size": f"{len(msg_bytes)} byte",
                 "signature_size": f"{len(signature)} byte",
             },
-        ))
+        )
 
         # Adım 4: SHA-256 özetini yeniden hesapla — H(m)
         t0 = time.perf_counter()
         msg_hash = self.sha256_hash(msg_bytes)
         elapsed_4 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=4,
+        builder.add(
             step_name="SHA-256 Özet Yeniden Hesaplama",
             description=(
                 "Bob, aldığı mesajdan bağımsız olarak SHA-256 özetini "
@@ -795,7 +815,7 @@ class CryptoCore:
                 "hash_bytes": msg_hash,
                 "elapsed_ms": f"{elapsed_4:.4f} ms",
             },
-        ))
+        )
 
         # Adım 5: RSA ile imza doğrula — K⁺_A ile doğrulama
         t0 = time.perf_counter()
@@ -803,8 +823,7 @@ class CryptoCore:
             self.alice_keys.public_key, signature, msg_hash
         )
         elapsed_5 = (time.perf_counter() - t0) * 1000
-        steps.append(StepResult(
-            step_number=5,
+        builder.add(
             step_name="RSA İmza Doğrulama ve Bütünlük Kontrolü",
             description=(
                 "Bob, Alice'in RSA açık anahtarı (K⁺_A) ile dijital imzayı "
@@ -821,6 +840,6 @@ class CryptoCore:
                 "key_info": "Alice RSA-2048 Açık Anahtar (K⁺_A)",
                 "elapsed_ms": f"{elapsed_5:.2f} ms",
             },
-        ))
+        )
 
-        return message, is_valid, steps
+        return message, is_valid, builder.steps

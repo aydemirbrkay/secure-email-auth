@@ -49,7 +49,6 @@ from kriptografi.errors import (
     PacketFormatError,
     ReplayDetectedError,
     StaleTimestampError,
-    VerifyError,
 )
 
 
@@ -927,6 +926,13 @@ class TestAADBuilder(unittest.TestCase):
         self.assertIn(b"|from=", aad_alice)
         self.assertIn(b"|ts=1000", aad_alice)
 
+    def test_aad_sender_fingerprint_is_128_bit(self) -> None:
+        aad = self.crypto.build_aad(
+            self.crypto.alice_keys.public_key, timestamp=1000
+        )
+        fingerprint = aad.split(b"|from=", 1)[1].split(b"|", 1)[0]
+        self.assertEqual(len(fingerprint), 32)
+
     def test_aad_is_deterministic_for_same_inputs(self) -> None:
         """Alt tür: BİRİM — AAD üretimi deterministik.
 
@@ -1038,7 +1044,6 @@ class TestTypedExceptionHierarchy(unittest.TestCase):
             DecryptError,
             IntegrityError,
             PacketFormatError,
-            VerifyError,
             ReplayDetectedError,
             StaleTimestampError,
         ):

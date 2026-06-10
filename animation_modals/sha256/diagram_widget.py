@@ -184,14 +184,17 @@ class _SHA256DiagramWidget(QWidget):
         t1_fill = QColor(ANIM_COLORS["hl_yellow"]) if highlight_t1 else QColor(ANIM_COLORS["bg_card"])
         self._draw_box(p, t1_x, mid_y, t1_w, 72, t1_fill, t1_border)
         p.setPen(t1_border)
-        p.drawText(QRect(t1_x + 4, mid_y + 4, t1_w - 8, 20),
+        p.drawText(QRect(t1_x + 4, mid_y + 6, t1_w - 8, 18),
                    Qt.AlignmentFlag.AlignCenter,
                    "T1 = Σ1(E) + Ch(E,F,G) + H + K + W")
+        # '= değer' satırı, giriş okunun kutu üstüne indiği bölgeden uzağa
+        # (mid_y+32) taşındı; eskiden +26'da ok/başlık bölgesine yakın olup
+        # okunmuyordu (T2 değeriyle tutarlı net konum).
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(t1_x + 4, mid_y + 26, t1_w - 8, 20),
+        p.drawText(QRect(t1_x + 4, mid_y + 32, t1_w - 8, 20),
                    Qt.AlignmentFlag.AlignCenter, f"= {self._t1}" if ph >= 2 else "= ...")
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(t1_x + 4, mid_y + 48, t1_w - 8, 20),
+        p.drawText(QRect(t1_x + 4, mid_y + 52, t1_w - 8, 18),
                    Qt.AlignmentFlag.AlignCenter,
                    f"K={self._k[:6]}  W={self._w[:6]}")
 

@@ -32,10 +32,12 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 
 from kriptografi.errors import (
     DecryptError,
+    EncryptError,
     IntegrityError,
     KeygenError,
     PacketFormatError,
     ReplayDetectedError,
+    SignError,
     StaleTimestampError,
 )
 
@@ -230,14 +232,23 @@ class CryptoCore:
                 "fonksiyon önceden hesaplanmış H(m)'i (Prehashed) bekler. "
                 "Çözüm: önce sha256_hash(mesaj) ile 32 byte özet üretip onu imzalayın."
             )
-        return private_key.sign(
-            message_hash,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
-            ),
-            Prehashed(hashes.SHA256()),
-        )
+        # Ham kütüphane hatasını tipli SignError'a sar — decrypt/tag akışıyla
+        # tutarlı (DecryptError/IntegrityError gibi). Böylece imza üretimi
+        # başarısız olursa UI "Beklenmeyen Hata" yerine anlamlı mesaj verir.
+        try:
+            return private_key.sign(
+                message_hash,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                Prehashed(hashes.SHA256()),
+            )
+        except Exception as exc:  # noqa: BLE001 — tipli hataya çevriliyor
+            raise SignError(
+                "Dijital imza üretilemedi (RSA-PSS). "
+                f"(Detay: {exc})"
+            ) from exc
 
     @staticmethod
     def rsa_verify(
@@ -245,6 +256,14 @@ class CryptoCore:
         signature: bytes,
         message_hash: bytes,
     ) -> bool:
+        """İmzayı doğrular ve geçerlilik durumunu ``bool`` olarak döndürür.
+
+        Sözleşme (bilinçli): geçersiz imza bir HATA değil, beklenen normal
+        bir sonuçtur; bu yüzden ``InvalidSignature`` yakalanıp ``False``
+        döndürülür (``VerifyError`` FIRLATILMAZ). Çağıran (``bob_receive``)
+        bunu ``is_valid`` bayrağı olarak UI'a yansıtır. ``VerifyError`` tipi
+        yalnızca hata-açıklama katmanı (utils.py) için tanımlıdır.
+        """
         try:
             public_key.verify(
                 signature,
@@ -282,8 +301,16 @@ class CryptoCore:
         ``InvalidTag`` hatası oluşur.
         """
         nonce = os.urandom(self.AES_NONCE_SIZE)
-        aesgcm = AESGCM(key)
-        ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data)
+        # Ham kütüphane hatasını (örn. geçersiz anahtar uzunluğu) tipli
+        # EncryptError'a sar — decrypt tarafındaki IntegrityError ile tutarlı.
+        try:
+            aesgcm = AESGCM(key)
+            ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data)
+        except Exception as exc:  # noqa: BLE001 — tipli hataya çevriliyor
+            raise EncryptError(
+                "AES-256-GCM şifreleme tamamlanamadı. "
+                f"(Detay: {exc})"
+            ) from exc
         return nonce, ciphertext
 
     @staticmethod

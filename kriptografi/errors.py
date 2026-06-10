@@ -21,15 +21,21 @@ class KeygenError(CryptoError):
 
 
 class SignError(CryptoError):
-    """Dijital imza üretimi sırasında oluşan hata."""
+    """Dijital imza üretimi (RSA-PSS) sırasında oluşan hata.
+    ``rsa_sign`` ham kütüphane hatasını bu tipe sarar."""
 
 
 class VerifyError(CryptoError):
-    """İmza doğrulamasının başarısız olduğu durum (geçersiz imza)."""
+    """İmza doğrulamasının başarısız olduğu durum (geçersiz imza).
+
+    NOT: ``rsa_verify`` bilinçli olarak ``bool`` döndürür (geçersiz imza
+    normal bir sonuçtur) ve bu tipi FIRLATMAZ. Tip yalnızca hata-açıklama
+    katmanı (utils.py) tarafından kullanılır."""
 
 
 class EncryptError(CryptoError):
-    """Şifreleme sırasında oluşan hata."""
+    """Şifreleme (AES-256-GCM) sırasında oluşan hata.
+    ``aes_gcm_encrypt`` ham kütüphane hatasını bu tipe sarar."""
 
 
 class DecryptError(CryptoError):
@@ -45,8 +51,10 @@ class PacketFormatError(CryptoError):
 
 
 class ReplayDetectedError(CryptoError):
-    """Aynı paketin tekrar alındığı (replay) tespiti. (Sonraki görevde kullanılacak.)"""
+    """Aynı paketin tekrar alındığı (replay) tespiti.
+    ``_check_freshness_and_replay`` tarafından fırlatılır."""
 
 
 class StaleTimestampError(CryptoError):
-    """Paketin zaman damgası kabul edilebilir aralığın dışında. (Sonraki görevde kullanılacak.)"""
+    """Paketin zaman damgası kabul edilebilir aralığın dışında.
+    ``_check_freshness_and_replay`` tarafından fırlatılır."""

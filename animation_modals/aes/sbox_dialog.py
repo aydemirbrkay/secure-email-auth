@@ -146,7 +146,16 @@ class _SBoxReferenceDialog(QDialog):
         self.resize(target_width, target_height)
 
     def restyle(self) -> None:
-        """Açık diyaloğu aktif uygulama temasına geçirir."""
+        """Açık diyaloğu aktif uygulama temasına geçirir.
+
+        Diyaloğun kendi kapsayıcı stili açıkça verilir; böylece parent
+        (AES penceresi) stylesheet'inin etiketlere sızması (örn. kasıtsız
+        mavi yuvarlak çerçeve) engellenir ve zemin ana uygulamayla aynı kalır.
+        """
+        self.setStyleSheet(
+            f"QDialog {{ background: {ANIM_COLORS['bg_panel']}; }}"
+            f"QLabel {{ background: transparent; border: none; }}"
+        )
         self.rule_label.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
         self.example_label.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self.used_mappings_label.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")

@@ -87,6 +87,27 @@ class TestSBoxReferenceDialog(unittest.TestCase):
         self.assertGreaterEqual(dialog.table.verticalHeader().width(), 36)
         self.assertGreaterEqual(dialog.table.horizontalHeader().height(), 28)
 
+    def test_dialog_uses_theme_background_and_isolates_parent_styles(self):
+        """Diyalog kendi tema zeminini taşımalı (parent stylesheet sızmasına karşı)."""
+        MANAGER.set_mode("dark")
+        dialog = _SBoxReferenceDialog([("cb", "1f")])
+
+        self.assertIn("QDialog", dialog.styleSheet())
+        self.assertIn(ANIM_COLORS["bg_panel"], dialog.styleSheet())
+        # Bilgi şeritleri kasıtsız çerçeve taşımamalı (mavi yuvarlak çerçeve hatası).
+        self.assertNotIn("border", dialog.rule_label.styleSheet())
+
+    def test_dialog_background_follows_theme_change(self):
+        """Tema değişiminde diyalog zemin stili güncellenmeli."""
+        MANAGER.set_mode("dark")
+        dialog = _SBoxReferenceDialog([("cb", "1f")])
+        dark_style = dialog.styleSheet()
+
+        MANAGER.set_mode("light")
+
+        self.assertNotEqual(dialog.styleSheet(), dark_style)
+        self.assertIn(ANIM_COLORS["bg_panel"], dialog.styleSheet())
+
     def test_open_dialog_restyles_when_theme_changes(self):
         MANAGER.set_mode("dark")
         dialog = _SBoxReferenceDialog([("cb", "1f")])

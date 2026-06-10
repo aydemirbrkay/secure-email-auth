@@ -10,7 +10,10 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import (
+    CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms,
+    motion_effects_enabled,
+)
 from .constants import _REG_LABELS
 
 # ---------------------------------------------------------------------------
@@ -73,7 +76,7 @@ class _MatchAssemblyWidget(QWidget):
         self._computed = computed
         self._expected = expected
         self._tick = 0
-        self._timer.start(self._TICK_MS)
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
         self.update()
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
@@ -176,7 +179,7 @@ class _MatchAssemblyWidget(QWidget):
                            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                            f"+ {self._REG_LABELS[i]} = {self._working[i]}")
             if row_t >= 2:
-                pulse = (row_t < 8)
+                pulse = motion_effects_enabled() and row_t < 8
                 col = QColor(ANIM_COLORS["accent_green"])
                 if pulse:
                     phase = (self._tick % 6) / 6.0

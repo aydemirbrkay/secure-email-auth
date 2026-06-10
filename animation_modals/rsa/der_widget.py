@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
     QGraphicsOpacityEffect, QSizePolicy,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 from . import helpers as H
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ class _DERByteFlowWidget(QWidget):
         super().showEvent(event)
         self._phase = 0
         self.update()
-        self._timer.start(900)
+        self._timer.start(get_animation_tick_ms(900))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()

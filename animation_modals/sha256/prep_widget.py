@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 
 # ---------------------------------------------------------------------------
 # SHA Mesaj Hazırlığı (metin → UTF-8 byte) — Task 7 widget'ı
@@ -178,7 +178,7 @@ class _SHAMessagePrepWidget(QWidget):
         )
 
     def start(self) -> None:
-        self._timer.start(self._TICK_MS)
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def _on_tick(self) -> None:
         self._tick += 1
@@ -486,7 +486,7 @@ class _SHA256PaddingWidget(QWidget):
         return self._padded_bytes[start:start + 64]
 
     def start(self) -> None:
-        self._timer.start(self._TICK_MS)
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def _on_tick(self) -> None:
         # Veri görseli baştan tam — fazlar sadece açıklama etiketini günceller.

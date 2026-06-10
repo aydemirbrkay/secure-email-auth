@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 
 # ---------------------------------------------------------------------------
 # Mesaj Genişletme (Message Schedule) animasyonu
@@ -60,7 +60,7 @@ class _WExpansionWidget(QWidget):
         self._tick = 0
         self.update()
         if self._exp:
-            self._timer.start(self._TICK_MS)
+            self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()

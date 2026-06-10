@@ -202,15 +202,15 @@ class _ColoredByteGridWidget(QWidget):
 
                 # Border
                 if is_padding:
-                    p.setPen(QPen(QColor("#FFFFFF"), 2))
+                    p.setPen(QPen(QColor(ANIM_COLORS["text_on_accent"]), 2))
                 elif self._highlighted_idx == i:
-                    p.setPen(QPen(QColor("#FFFFFF"), 2))
+                    p.setPen(QPen(QColor(ANIM_COLORS["text_on_accent"]), 2))
                 else:
                     p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
                 p.drawRect(x, y, cw, ch)
 
                 # Hücre içeriği
-                p.setPen(QColor("#FFFFFF"))
+                p.setPen(QColor(ANIM_COLORS["text_on_accent"]))
                 if row_key == "char":
                     # UTF-8 farkındalığı: Türkçe karakter (ü/ş/ğ vs.) ve emoji
                     # gibi çok-byte karakterler her bir byte hücresinde aynı
@@ -324,14 +324,14 @@ class _ByteStripWidget(QWidget):
             p.fillRect(x, y, cw, ch, qc)
 
             if is_padding:
-                p.setPen(QPen(QColor("#FFFFFF"), 1))
+                p.setPen(QPen(QColor(ANIM_COLORS["text_on_accent"]), 1))
             else:
                 p.setPen(QPen(QColor(ANIM_COLORS["border"]), 1))
             p.drawRect(x, y, cw, ch)
 
             # Hücre içinde hex değeri (kompakt görünüm için 7pt Courier)
             # 22×22 px hücrede "00".."ff" 14 px civarı yer kaplar.
-            p.setPen(QColor("#FFFFFF"))
+            p.setPen(QColor(ANIM_COLORS["text_on_accent"]))
             p.setFont(QFont("Courier New", 7, QFont.Weight.Bold))
             p.drawText(x, y, cw, ch,
                        Qt.AlignmentFlag.AlignCenter, f"{byte_val:02x}")

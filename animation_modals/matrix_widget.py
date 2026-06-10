@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QGridLayout, QLabel, QWidget
 
-from arayuz.theme import COLORS
+from arayuz.theme import COLORS, get_animation_tick_ms
 
 
 # Aktif paletten canlı okunur (tema değişiminde yeni açılan matrisler doğru renkte).
@@ -168,7 +168,7 @@ class MatrixWidget(QWidget):
             index[0] += 1
 
         self._sub_timer.timeout.connect(_tick)
-        self._sub_timer.start(interval_ms)
+        self._sub_timer.start(get_animation_tick_ms(interval_ms))
 
     def animate_row_shift(self, row: int, shift: int, color: str | None = None) -> None:
         """Bir satırı shift kadar sola kaydırır ve renklendirir."""

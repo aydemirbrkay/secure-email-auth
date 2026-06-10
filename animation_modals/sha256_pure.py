@@ -3,6 +3,9 @@
 Saf Python SHA-256 implementasyonu.
 Animasyon için ara round state verilerini döndürür.
 Final hash, hashlib.sha256() ile birebir aynıdır.
+
+EĞİTİM AMAÇLIDIR — manuel round uygulaması gerçek güvenlik kodunda
+KULLANILMAMALIDIR; üretim akışı standart hashlib.sha256() kullanır.
 """
 from __future__ import annotations
 import struct

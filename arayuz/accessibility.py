@@ -43,7 +43,14 @@ class ReduceMotionSettings:
     _KEY = "reduce_motion"
 
     def __init__(self) -> None:
-        self._settings = QSettings("ErciyesBM", "SecureEmail")
+        # INI formatı kayıt defteri erişimine bağlı değildir ve tüm
+        # platformlarda aynı kalıcılık sözleşmesini sağlar.
+        self._settings = QSettings(
+            QSettings.Format.IniFormat,
+            QSettings.Scope.UserScope,
+            "ErciyesBM",
+            "SecureEmail",
+        )
         self._enabled: bool = self.load()
 
     def load(self) -> bool:
@@ -58,6 +65,7 @@ class ReduceMotionSettings:
         """Tercihi günceller ve kalıcılaştırır."""
         self._enabled = bool(value)
         self._settings.setValue(self._KEY, self._enabled)
+        self._settings.sync()
 
 
 # Uygulama geneli tek örnek. theme.get_animation_tick_ms ve menü eylemi bunu

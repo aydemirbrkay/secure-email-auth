@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
     QGraphicsOpacityEffect, QSizePolicy,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, motion_effects_enabled
 from . import helpers as H
 
 # ---------------------------------------------------------------------------
@@ -239,6 +239,10 @@ class _RSAKeyBuilderWidget(QWidget):
 
     def _pulse(self, target: QWidget, color_key: str) -> None:
         """600 ms opacity pulse: 0.4 → 1.0 ile yumuşak parıltı."""
+        if not motion_effects_enabled():
+            target.setGraphicsEffect(None)
+            return
+
         effect = QGraphicsOpacityEffect(target)
         target.setGraphicsEffect(effect)
         effect.setOpacity(0.4)

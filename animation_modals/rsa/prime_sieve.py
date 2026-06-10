@@ -12,7 +12,10 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
     QGraphicsOpacityEffect, QSizePolicy,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import (
+    CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms,
+    motion_effects_enabled,
+)
 from . import helpers as H
 
 # ---------------------------------------------------------------------------
@@ -32,7 +35,10 @@ class _PrimeSieveWidget(QWidget):
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
-        self._timer.start(700)
+        self._timer.stop()
+        self._blink = False
+        if motion_effects_enabled():
+            self._timer.start(get_animation_tick_ms(700))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()

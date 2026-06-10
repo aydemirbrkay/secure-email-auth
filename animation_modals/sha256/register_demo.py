@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 from .constants import _REG_COLORS, _REG_LABELS
 
 # ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ class _RegisterDemoWidget(QWidget):
         self._round_no = 1
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._step)
-        self._timer.start(120)
+        self._timer.start(get_animation_tick_ms(120))
         self.setMinimumSize(160, 150)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 

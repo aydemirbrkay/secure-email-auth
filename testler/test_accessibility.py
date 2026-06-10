@@ -72,6 +72,66 @@ class TestReduceMotion(unittest.TestCase):
         self.assertFalse(motion_effects_enabled())
 
 
+class TestReduceMotionAnimations(unittest.TestCase):
+    def tearDown(self) -> None:
+        REDUCE_MOTION.set_enabled(False)
+
+    def test_base_auto_play_uses_reduced_motion_interval(self) -> None:
+        from PyQt6.QtWidgets import QApplication
+        from animation_modals.base import CryptoAnimationWindow
+
+        class _Window(CryptoAnimationWindow):
+            def _init_content(self) -> None:
+                pass
+
+            def _render_step(self, step_idx: int) -> None:
+                pass
+
+            def _show_match_result(self) -> None:
+                pass
+
+        REDUCE_MOTION.set_enabled(True)
+        w = _Window("Test", total_steps=2)
+        w.show()
+        QApplication.processEvents()
+        self.assertEqual(w._timer.interval(), w.speed_ms * 3)
+        w.close()
+
+    def test_prime_sieve_disables_blink_timer(self) -> None:
+        from PyQt6.QtWidgets import QApplication
+        from animation_modals.rsa.prime_sieve import _PrimeSieveWidget
+
+        REDUCE_MOTION.set_enabled(True)
+        w = _PrimeSieveWidget()
+        w.show()
+        QApplication.processEvents()
+        self.assertFalse(w._timer.isActive())
+        self.assertFalse(w._blink)
+        w.close()
+
+    def test_rsa_key_builder_skips_pulse(self) -> None:
+        from PyQt6.QtWidgets import QFrame
+        from animation_modals.rsa.key_builder import _RSAKeyBuilderWidget
+
+        REDUCE_MOTION.set_enabled(True)
+        w = _RSAKeyBuilderWidget()
+        target = QFrame(w)
+        w._pulse(target, "accent_blue")
+        self.assertIsNone(target.graphicsEffect())
+        self.assertEqual(w._animations, [])
+
+    def test_sha_diagram_disables_pulse_timer(self) -> None:
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+
+        REDUCE_MOTION.set_enabled(True)
+        w = _SHA256DiagramWidget()
+        w.set_data(
+            ["00"] * 8, ["11"] * 8, "1", "2", "3", "4", 1,
+        )
+        self.assertFalse(w._pulse_timer.isActive())
+        self.assertFalse(w._pulse_on)
+
+
 # Not: MainWindow tabanlı a11y doğrulaması (buton accessibleName + menü
 # tercih kalıcılığı) test_theme_integration.py içinde yapılır; o dosya
 # MainWindow'u suite'in geç ve güvenli bir noktasında kurup yıkar. Burada

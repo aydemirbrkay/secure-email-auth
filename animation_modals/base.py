@@ -10,6 +10,7 @@ manual_mode=False: QTimer otomatik oynatır (AES intro).
 from __future__ import annotations
 from collections.abc import Callable
 from enum import Enum
+from functools import lru_cache
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
@@ -29,9 +30,10 @@ from arayuz.theme import (
     ANIM_COLORS,
     button_primary_style,
     button_secondary_style,
+    get_animation_tick_ms,
     progress_bar_style,
 )
-from arayuz.accessibility import set_accessible
+from arayuz.accessibility import set_accessible, motion_effects_enabled
 
 
 class AnimationSpeed(Enum):
@@ -61,6 +63,16 @@ _LABEL_TO_SPEED: dict[str, AnimationSpeed] = {
 # min-height:34 + padding ile ~50 px'e çıkar; gömülü panelde dikey yer
 # kazanmak ve nav butonlarının kaydırmasız sığması için üst sınır koyulur.
 _NAV_BTN_HEIGHT = 36
+
+
+@lru_cache(maxsize=None)
+def cached_font(
+    family: str,
+    point_size: int,
+    weight: QFont.Weight = QFont.Weight.Normal,
+) -> QFont:
+    """Tekrarlanan paint çağrıları için paylaşılan, değiştirilmeyen QFont döndürür."""
+    return QFont(family, point_size, weight)
 
 
 def _btn_style() -> str:
@@ -272,7 +284,7 @@ class CryptoAnimationWindow(QWidget):
         # Türkçe etiket → Enum → ms süresi. UI etiketi Türkçe, iç mantık Enum.
         self.speed_ms = _LABEL_TO_SPEED[text].value
         if self._timer.isActive():
-            self._timer.setInterval(self.speed_ms)
+            self._timer.setInterval(get_animation_tick_ms(self.speed_ms))
 
     def _go_back(self) -> None:
         """Manuel mod: bir önceki adıma dön."""
@@ -319,4 +331,4 @@ class CryptoAnimationWindow(QWidget):
             self._render_step(0)
             self._progress.setValue(1)
             if not self.manual_mode:
-                self._timer.start(self.speed_ms)
+                self._timer.start(get_animation_tick_ms(self.speed_ms))

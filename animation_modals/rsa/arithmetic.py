@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
     QGraphicsOpacityEffect, QSizePolicy,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 from . import helpers as H
 
 # ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ class _MultiplicationWidget(QWidget):
         super().showEvent(event)
         self._reveal = 0
         self.update()
-        self._timer.start(700)
+        self._timer.start(get_animation_tick_ms(700))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()
@@ -176,7 +176,7 @@ class _TotientWidget(QWidget):
         super().showEvent(event)
         self._phase = 0
         self.update()
-        self._timer.start(800)
+        self._timer.start(get_animation_tick_ms(800))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()
@@ -313,7 +313,7 @@ class _GCDWidget(QWidget):
         super().showEvent(event)
         self._reveal = 0
         self.update()
-        self._timer.start(550)
+        self._timer.start(get_animation_tick_ms(550))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()

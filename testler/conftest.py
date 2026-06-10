@@ -19,13 +19,23 @@ masaüstü) olmadan koşabilmesini sağlar. İki sorumluluğu vardır:
 from __future__ import annotations
 
 import os
+import tempfile
 
 # PyQt6 import'larından ÖNCE çalışmalı: QPA platform eklentisi QApplication
 # ilk oluşturulduğunda seçilir; sonradan değiştirilemez.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QApplication
+
+# Testler kullanıcı kayıt defterine/ayar dizinine dokunmadan kalıcılığı sınar.
+QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+QSettings.setPath(
+    QSettings.Format.IniFormat,
+    QSettings.Scope.UserScope,
+    tempfile.mkdtemp(prefix="secure-email-qsettings-"),
+)
 
 
 @pytest.fixture(scope="session", autouse=True)

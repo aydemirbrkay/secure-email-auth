@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 from .register_demo import _RegisterDemoWidget
 
 # ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ class _SHA256IntroWidget(QWidget):
         )
 
     def start(self) -> None:
-        self._reveal_timer.start(500)
+        self._reveal_timer.start(get_animation_tick_ms(500))
 
     def _reveal_next(self) -> None:
         if self._phase >= len(self._reveal_widgets):

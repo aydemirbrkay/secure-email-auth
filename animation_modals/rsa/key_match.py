@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
     QGraphicsOpacityEffect, QSizePolicy,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 from . import helpers as H
 
 # ---------------------------------------------------------------------------
@@ -207,7 +207,7 @@ class _RSAEncryptDecryptWidget(QWidget):
         super().showEvent(event)
         self._tick = 0
         self.update()
-        self._timer.start(self._TICK_MS)
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def hideEvent(self, event) -> None:  # type: ignore[override]
         self._timer.stop()
@@ -267,6 +267,8 @@ class _RSAEncryptDecryptWidget(QWidget):
             )
         # Şifreleme formülü kutusu
         if t > self._T_PLAIN_IN_END:
+            # Bu özet ekran yalnızca modüler üs sonucunu gösterir; bit-bit
+            # square-and-multiply tablosu pedagojik kapsamın dışında tutulur.
             opacity = min(1.0, (t - self._T_PLAIN_IN_END) / (self._T_ENC_END - self._T_PLAIN_IN_END))
             self._draw_formula_box(
                 p, formula_x, enc_y - 10, formula_w, formula_h,

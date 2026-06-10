@@ -90,6 +90,15 @@ class TestNewWidgetsImport(unittest.TestCase):
         from animation_modals.aes.prep_widget import _AESPlaintextPrepWidget
         self.assertTrue(callable(_AESPlaintextPrepWidget))
 
+    def test_cached_font_reuses_same_font_instance(self):
+        """Aynı font tanımı paint kareleri arasında yeniden kullanılmalı."""
+        from PyQt6.QtGui import QFont
+        from animation_modals.base import cached_font
+
+        first = cached_font("Courier New", 13, QFont.Weight.Bold)
+        second = cached_font("Courier New", 13, QFont.Weight.Bold)
+        self.assertIs(first, second)
+
 
 class TestRegisterDemoRenders(unittest.TestCase):
     """SHA intro önizleme (_RegisterDemoWidget) render güvenliği (Alt kategori:
@@ -165,6 +174,63 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
             a._stack.widget(1).minimumSizeHint().width(), 200,
             "Grid min-width scroll'da kapsanmali, stack'e sizmamali",
         )
+
+    def test_round_zero_uses_plaintext_state_as_before_matrix(self):
+        """Round 0 AddRoundKey, plaintext state ⊕ round_key = sonuç göstermeli."""
+        from animation_modals import AESAnimationWindow
+
+        a = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"0123456789abcdef",
+            expected_ct_hex="00" * 16,
+        )
+        a._switch_to_rounds_only()
+
+        self.assertEqual(a._matrix_pair._prev_view._state, a._initial_state_hex)
+        self.assertNotEqual(
+            a._matrix_pair._prev_view._state,
+            a._matrix_pair._curr_view._after,
+        )
+
+    def test_plaintext_matrix_phase_uses_balanced_timing(self):
+        """State matrisi ne uzun bekletmeli ne de takip edilemeyecek kadar hızlı dolmalı."""
+        from animation_modals.aes.prep_widget import _AESPlaintextPrepWidget
+
+        self.assertEqual(_AESPlaintextPrepWidget._MATRIX_START_TICK, 96)
+        self.assertEqual(_AESPlaintextPrepWidget._MATRIX_TICKS_PER_COLUMN, 8)
+        self.assertEqual(_AESPlaintextPrepWidget._FINISH_TICK, 128)
+
+    def test_plaintext_matrix_columns_advance_every_eight_ticks(self):
+        """Dört sütun dengeli aralıklarla görünmeli ve 128. tick'te tamamlanmalı."""
+        from animation_modals.aes.prep_widget import _AESPlaintextPrepWidget
+
+        block = b"0123456789abcdef"
+        state = [[f"{row}{col}" for col in range(4)] for row in range(4)]
+        widget = _AESPlaintextPrepWidget(
+            block.decode(),
+            block,
+            block,
+            block,
+            1,
+            state,
+        )
+        widget._tick = 95
+
+        widget._on_tick()
+        self.assertTrue(all(widget._matrix_filled[row][0] for row in range(4)))
+        self.assertFalse(any(widget._matrix_filled[row][1] for row in range(4)))
+
+        for _ in range(8):
+            widget._on_tick()
+        self.assertTrue(all(widget._matrix_filled[row][1] for row in range(4)))
+
+        while widget._tick < 127:
+            widget._on_tick()
+        self.assertFalse(widget._finished)
+
+        widget._on_tick()
+        self.assertTrue(widget._finished)
+        self.assertTrue(all(all(row) for row in widget._matrix_filled))
 
 
 class TestPaddingMaskSupport(unittest.TestCase):
@@ -247,6 +313,61 @@ class TestAESOpensLikeSHA(unittest.TestCase):
         self.assertLessEqual(
             a._stack.minimumSizeHint().width(), a.width(),
             "Stack min genişliği pencereye sığmalı; aksi halde intro yatay scroll açar",
+        )
+
+    def test_embedded_aes_keeps_outer_scroll_and_navigation_fixed(self):
+        """AES içeriği kendi içinde kaymalı; Alice paneli tüm pencereyi kaydırmamalı."""
+        from PyQt6.QtWidgets import QApplication
+        from arayuz.alice_panel import AlicePanel
+        from animation_modals import AESAnimationWindow
+
+        panel = AlicePanel()
+        panel.resize(850, 600)
+        panel.show()
+        aes = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"0123456789abcdef",
+            expected_ct_hex="00" * 16,
+            on_close=lambda: None,
+        )
+        aes._switch_to_rounds_only()
+        panel.show_animation(aes)
+        QApplication.processEvents()
+
+        outer = panel._anim_scroll
+        self.assertEqual(outer.horizontalScrollBar().maximum(), 0)
+        self.assertEqual(outer.verticalScrollBar().maximum(), 0)
+        self.assertLessEqual(
+            aes._btn_next.y() + aes._btn_next.height(),
+            outer.viewport().height(),
+        )
+        self.assertGreater(aes._round_scroll.horizontalScrollBar().maximum(), 0)
+
+    def test_short_embedded_aes_scrolls_content_not_navigation(self):
+        """Kısa panelde dikey scroll round içeriğinde kalır; alt butonlar sabittir."""
+        from PyQt6.QtWidgets import QApplication
+        from arayuz.alice_panel import AlicePanel
+        from animation_modals import AESAnimationWindow
+
+        panel = AlicePanel()
+        panel.resize(850, 500)
+        panel.show()
+        aes = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"0123456789abcdef",
+            expected_ct_hex="00" * 16,
+            on_close=lambda: None,
+        )
+        aes._switch_to_rounds_only()
+        panel.show_animation(aes)
+        QApplication.processEvents()
+
+        outer = panel._anim_scroll
+        self.assertEqual(outer.verticalScrollBar().maximum(), 0)
+        self.assertGreater(aes._round_scroll.verticalScrollBar().maximum(), 0)
+        self.assertLessEqual(
+            aes._btn_next.y() + aes._btn_next.height(),
+            outer.viewport().height(),
         )
 
 
@@ -342,6 +463,12 @@ class TestSHADiagramArrowState(unittest.TestCase):
         for ph in range(7):
             w._phase = ph
             w.render(QPixmap(800, 285))  # istisna fırlatırsa test fail eder
+
+    def test_diagram_round_phases_are_slow_enough_to_follow(self):
+        """Yalnızca SHA sıkıştırma diyagramının round içi işlem fazları yavaşlatılır."""
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+
+        self.assertEqual(_SHA256DiagramWidget._PHASE_INTERVAL_MS, 600)
 
     def test_shift_arrows_method_exists(self):
         """Alt tür: SMOKE (kaydırma okları API).

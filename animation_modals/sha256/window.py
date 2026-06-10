@@ -373,7 +373,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         if active:
             return (
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-                f"color: #FFFFFF; border: 2px solid {ANIM_COLORS['accent_blue']}; "
+                f"color: {ANIM_COLORS['text_on_accent']}; border: 2px solid {ANIM_COLORS['accent_blue']}; "
                 f"border-radius: 4px; padding: 2px 4px; font-weight: bold; }}"
             )
         return (
@@ -382,7 +382,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             f"border: 2px solid {ANIM_COLORS['border']}; "
             f"border-radius: 4px; padding: 2px 4px; font-weight: bold; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border-color: {ANIM_COLORS['accent_blue']}; }}"
+            f"color: {ANIM_COLORS['text_on_accent']}; border-color: {ANIM_COLORS['accent_blue']}; }}"
         )
 
     def _diag_jump_round(self, round_idx_in_block: int) -> None:

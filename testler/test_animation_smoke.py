@@ -310,15 +310,18 @@ class TestAESPureContract(unittest.TestCase):
 # Tezdeki sabit değerler — RSA animasyon modülünde
 # ---------------------------------------------------------------------------
 
-class TestRSAConstantsInvariants(unittest.TestCase):
-    """RSA animasyon modülü demo değerleri rastgele seçilir
-    (_reseed_demo); spesifik sayılar değil matematiksel invariantlar
-    sınanır (cross-modül smoke)."""
+class TestRSAStaticInitialValuesInvariants(unittest.TestCase):
+    """RSA yardımcı modülünün statik başlangıç değerlerinde spesifik sayılar
+    değil matematiksel invariantlar sınanır (cross-modül smoke).
+
+    Yeniden üretilen rastgele demo değerleri ayrıca test_rsa_animation.py
+    içindeki _reseed_demo testleriyle doğrulanır.
+    """
 
     def test_consistency(self) -> None:
         """Alt tür: INVARIANT (RSA modülüs ve totient).
-        n = p · q  VE  ϕ(n) = (p-1)(q-1). Random demo değerleriyle
-        her açılışta bu temel RSA bağıtları sağlanmalı."""
+        n = p · q  VE  ϕ(n) = (p-1)(q-1). Statik başlangıç değerleri bu
+        temel RSA bağıtlarını sağlamalı."""
         from animation_modals.rsa.helpers import _P, _Q, _N, _PHI
         self.assertEqual(_N, _P * _Q)
         self.assertEqual(_PHI, (_P - 1) * (_Q - 1))

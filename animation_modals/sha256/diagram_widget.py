@@ -10,7 +10,10 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import (
+    CryptoAnimationWindow, ANIM_COLORS, cached_font, get_animation_tick_ms,
+    motion_effects_enabled,
+)
 from .constants import _REG_COLORS, _REG_LABELS
 
 # ---------------------------------------------------------------------------
@@ -36,6 +39,7 @@ class _SHA256DiagramWidget(QWidget):
     # 4 = T1→E' vurgusu
     # 5 = tüm çıkış registerları (tamamlandı)
     _ANIM_PHASES = 6
+    _PHASE_INTERVAL_MS = 600
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -87,9 +91,13 @@ class _SHA256DiagramWidget(QWidget):
         self._round_no = round_no
         # Animasyonu başlat
         self._phase = 0
-        self._anim_timer.start(380)
-        self._pulse_on = True
-        self._pulse_timer.start(190)  # faz süresinin yarısı → faz başına 1 nabız
+        self._anim_timer.start(get_animation_tick_ms(self._PHASE_INTERVAL_MS))
+        self._pulse_timer.stop()
+        self._pulse_on = motion_effects_enabled()
+        # Nabız (blink) salt dekoratif → hareket azaltma açıkken atlanır
+        # (fotosensitif kullanıcı için titreşim üretmesin); sabit kalır.
+        if self._pulse_on:
+            self._pulse_timer.start(get_animation_tick_ms(190))
         self.update()
 
     def _next_phase(self) -> None:
@@ -130,9 +138,9 @@ class _SHA256DiagramWidget(QWidget):
         mid_y = top_y + box_h + 36
         bot_y = mid_y + 84
 
-        font_lbl = QFont("Georgia", 9, QFont.Weight.Bold)
-        font_val = QFont("Courier New", 8)
-        font_mid = QFont("Courier New", 9)
+        font_lbl = cached_font("Georgia", 9, QFont.Weight.Bold)
+        font_val = cached_font("Courier New", 8)
+        font_mid = cached_font("Courier New", 9)
 
         # Aşamaya göre vurgu belirleme
         # ph 0: sadece giriş
@@ -263,7 +271,7 @@ class _SHA256DiagramWidget(QWidget):
         p.drawLine(d_cx, top_y + box_h, d_cx, bot_y)
         p.drawLine(d_cx, bot_y, e_out_cx, bot_y)
         self._arrowhead_right(p, e_out_cx, bot_y, size=8 if d_active else 6)
-        p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
+        p.setFont(cached_font("IBM Plex Sans", 7, QFont.Weight.Bold))
         p.setPen(d_col)
         # "+D" etiketi E' kutusunun İÇİNE değil, kutunun ÜSTÜNDEKİ ok bölgesine
         # çizilir (bot_y - 16). Eskiden bot_y hizasında olduğu için çıkış
@@ -297,7 +305,7 @@ class _SHA256DiagramWidget(QWidget):
         )
 
         # Kaydırma açıklaması (legend)
-        p.setFont(QFont("IBM Plex Sans", 8))
+        p.setFont(cached_font("IBM Plex Sans", 8))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         legend_y = bot_y + box_h + 6
         p.drawText(QRect(ox, legend_y, total, 14),
@@ -314,14 +322,14 @@ class _SHA256DiagramWidget(QWidget):
             "✓ Round tamamlandı",
         ]
         p.setPen(QColor(ANIM_COLORS["accent_blue"] if ph < 5 else ANIM_COLORS["accent_green"]))
-        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setFont(cached_font("Georgia", 9, QFont.Weight.Bold))
         lbl_idx = min(ph, len(phase_labels) - 1)
         p.drawText(QRect(0, 0, W, 16), Qt.AlignmentFlag.AlignLeft,
                    f"  {phase_labels[lbl_idx]}")
 
         # Round numarası (sağ)
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.setFont(QFont("IBM Plex Sans", 10))
+        p.setFont(cached_font("IBM Plex Sans", 10))
         p.drawText(QRect(0, 0, W, 14), Qt.AlignmentFlag.AlignRight,
                    f"Round {self._round_no}/64  ")
 
@@ -427,7 +435,7 @@ class _SHA256DiagramWidget(QWidget):
             self._arrowhead(p, head_xy[0], head_xy[1], size=head_sz)
 
         # Etiket — yalnızca pasif değilse okunaklı renkte (pasifken soluk).
-        p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
+        p.setFont(cached_font("IBM Plex Sans", 7, QFont.Weight.Bold))
         p.setPen(col)
         p.drawText(label_xy[0], label_xy[1], label)
 

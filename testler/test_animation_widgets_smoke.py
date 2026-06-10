@@ -255,8 +255,8 @@ class TestSHADiagramArrowState(unittest.TestCase):
     def test_diagram_renders_all_phases_without_error(self):
         """Alt tür: BİRİM (render smoke — çakışma/çizim regresyonu).
         Diyagram tüm fazlarda (0..6) hatasız boyanmalı. +D etiketinin kutu
-        üstüne taşınması ve ok çizim mantığı paintEvent'i bozmamalı; bu test
-        QPainter zincirinde bir istisna oluşursa yakalar."""
+        üstüne taşınması, kaydırma okları ve ok çizim mantığı paintEvent'i
+        bozmamalı; bu test QPainter zincirinde bir istisna oluşursa yakalar."""
         from PyQt6.QtGui import QPixmap
         from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
         w = _SHA256DiagramWidget()
@@ -266,6 +266,15 @@ class TestSHADiagramArrowState(unittest.TestCase):
         for ph in range(7):
             w._phase = ph
             w.render(QPixmap(800, 285))  # istisna fırlatırsa test fail eder
+
+    def test_shift_arrows_method_exists(self):
+        """Alt tür: SMOKE (kaydırma okları API).
+        _draw_shift_arrows metodu tanımlı olmalı — B→C', C→D', F→G', G→H'
+        kaydırma oklarını çizen yardımcı (Y5 eğitsel hareketlilik). Render
+        smoke testi bu metodu ph>=3'te çağırır; metot silinirse paintEvent
+        AttributeError verir."""
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+        self.assertTrue(hasattr(_SHA256DiagramWidget, "_draw_shift_arrows"))
 
 
 class TestSHAStepCount(unittest.TestCase):

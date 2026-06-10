@@ -265,6 +265,18 @@ class _SHA256DiagramWidget(QWidget):
         p.drawText(QRect(e_out_cx - box_w - 4, bot_y - 16, box_w, 14),
                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "+D")
 
+        # ── Kaydırma okları: B→C', C→D', F→G', G→H' ──
+        # SHA-256'da her round'da yalnız A' ve E' hesaplanır; diğer registerlar
+        # bir SAĞA kaydırılır (B'=A, C'=B, ... ekranda gösterilen kaydırmalar).
+        # Bu kaydırmalar ince/soluk diagonal oklarla gösterilir ki "tüm
+        # registerlar hareket ediyor" hissi oluşsun ama ana işlem (T1/T2/A'/E')
+        # öne çıkmaya devam etsin (oklar düşük alpha + 1px). Yalnız çıkış
+        # görünürken (ph>=3) çizilir.
+        if show_out:
+            self._draw_shift_arrows(
+                p, ox, top_y + box_h, bot_y, box_w, gap,
+            )
+
         # ── Alt satır: çıkış registerları ──
         custom_out_colors = list(_REG_COLORS)
         if highlight_a_out:
@@ -412,6 +424,37 @@ class _SHA256DiagramWidget(QWidget):
         p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
         p.setPen(col)
         p.drawText(label_xy[0], label_xy[1], label)
+
+    def _draw_shift_arrows(
+        self, p: QPainter, ox: int, src_y: int, dst_y: int,
+        box_w: int, gap: int,
+    ) -> None:
+        """Register kaydırma oklarını (B→C', C→D', F→G', G→H') çizer.
+
+        Amaç: SHA-256 round'unda A' ve E' dışındaki registerların bir sağa
+        kaydırıldığını görselleştirir (eğitsel hareketlilik). Oklar ince ve
+        soluk (düşük alpha) çizilir ki ana işlem akış oklarının (T1/T2)
+        önüne geçmesin; her kaynak register kutusunun altından hedef çıkış
+        register kutusunun üstüne ince diagonal çizgi + küçük ok ucu.
+
+        Parametreler:
+          ox    : register satırının sol kenarı (x).
+          src_y : kaynak (üst) register kutularının ALT kenarı (y).
+          dst_y : hedef (alt/çıkış) register kutularının ÜST kenarı (y).
+          box_w : kutu genişliği. gap: kutular arası yatay boşluk.
+
+        Yan etki: verilen QPainter üzerine çizim yapar.
+        """
+        # (kaynak_idx, hedef_idx): B(1)→C'(2), C(2)→D'(3), F(5)→G'(6), G(6)→H'(7)
+        shifts = [(1, 2), (2, 3), (5, 6), (6, 7)]
+        col = QColor(ANIM_COLORS["text_muted"])
+        col.setAlpha(110)  # soluk: ikincil kaydırma, ana okların önüne geçmez
+        p.setPen(QPen(col, 1))
+        for src, dst in shifts:
+            sx = ox + src * (box_w + gap) + box_w // 2
+            dx = ox + dst * (box_w + gap) + box_w // 2
+            p.drawLine(sx, src_y, dx, dst_y)
+            self._arrowhead(p, dx, dst_y, size=4)
 
     @staticmethod
     def _arrowhead(p: QPainter, x: int, y: int, size: int = 6) -> None:

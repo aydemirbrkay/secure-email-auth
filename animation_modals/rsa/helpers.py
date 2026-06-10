@@ -77,6 +77,11 @@ _N:   int = _P * _Q
 _PHI: int = (_P - 1) * (_Q - 1)
 _E:   int = 17
 _D:   int = pow(_E, -1, _PHI)
+# Şifrelenecek örnek mesaj. Eskiden sabit (65) idi; anahtarlar her açılışta
+# değiştiği halde m sabit kaldığı için c/m' "hep aynı" görünüyordu. Artık
+# _reseed_demo() m'yi de 2 ≤ m < n ve gcd(m,n)=1 koşuluyla rastgele seçer;
+# böylece m → c → m' döngüsü her demo'da farklı sayılarla gözlemlenir.
+_M:   int = 65
 
 # Tam sayıyı Unicode üst-simgeye çevir (RSA formüllerinde m^e yerine mᵉ için)
 _SUP_TRANS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
@@ -97,18 +102,20 @@ def _reseed_demo() -> None:
 
     Seçim kuralları:
       - p, q ∈ _PRIME_POOL (11..97 asalları), p ≠ q
-      - n = p × q ≥ 143 (m = 65 her zaman < n olsun)
+      - n = p × q ≥ 143 (örnek mesaj için makul aralık)
       - e: küçük ve gcd(e, ϕ) = 1 koşulunu sağlayan ilk yaygın değer
         (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
       - d = e⁻¹ mod ϕ, (e × d) mod ϕ == 1 invariantı sağlanmalı
+      - m: 2 ≤ m < n ve gcd(m, n) = 1 koşuluyla rastgele (doğru RSA örneği:
+        m, n ile aralarında asal olmalı ki şifreleme bire-bir olsun)
     """
-    global _P, _Q, _N, _PHI, _E, _D
+    global _P, _Q, _N, _PHI, _E, _D, _M
     global _DER_N, _DER_E, _DER_SEQ, _B64_DEMO
 
     while True:
         p, q = random.sample(_PRIME_POOL, 2)
         n = p * q
-        if n < 143:               # m=65 < n garantisi
+        if n < 143:               # örnek mesaj için makul aralık garantisi
             continue
         phi = (p - 1) * (q - 1)
         e = next(
@@ -126,11 +133,18 @@ def _reseed_demo() -> None:
             continue
         break
 
+    # Mesaj m: n ile aralarında asal, 2 ≤ m < n. gcd=1 koşulu RSA'nın
+    # doğru çalışması için gerekir (m, p veya q'nun katı olmamalı).
+    m = random.randrange(2, n)
+    while gcd(m, n) != 1:
+        m = random.randrange(2, n)
+
     _P, _Q = p, q
     _N = p * q
     _PHI = phi
     _E = e
     _D = d
+    _M = m
     _DER_N = _der_int(_N)
     _DER_E = _der_int(_E)
     _DER_SEQ = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E

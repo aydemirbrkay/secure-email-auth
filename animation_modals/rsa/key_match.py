@@ -160,7 +160,8 @@ class _KeyMatchWidget(QWidget):
 
 class _RSAEncryptDecryptWidget(QWidget):
     """
-    Tezdeki Eq:RSAExample animasyonu:
+    RSA şifreleme/deşifreleme turu (Eq:RSAExample tarzı). Değerler her
+    açılışta H._reseed_demo() ile rastgele seçilir; örnek bir tur:
       m = 65   →   c = m^e mod n = 65^17 mod 3233 = 2790
       c = 2790 →   m' = c^d mod n = 2790^2753 mod 3233 = 65   ✓
 
@@ -190,11 +191,12 @@ class _RSAEncryptDecryptWidget(QWidget):
         super().__init__(parent)
         self.setMinimumHeight(240)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # Mesaj sabit (m = 65); şifreli ve çözülmüş değerler instance
-        # oluşturulduğunda CARİ modül H._E, H._N, H._D değerlerine göre hesaplanır.
-        # H._reseed_demo() her RSAAnimationWindow açılışında bu değerleri
-        # yenilediği için widget her zaman güncel (e, n, d) ile çalışır.
-        self._M = 65
+        # Mesaj ve türevleri CARİ modül değerlerinden (H._M, H._E, H._N, H._D)
+        # okunur. H._reseed_demo() her RSAAnimationWindow açılışında m dahil tüm
+        # değerleri yenilediği için m → c → m' döngüsü her demo'da farklı
+        # sayılarla gözlemlenir (anahtarlar değişirken m'nin de değişmesi
+        # 'değişen RSA' kavramını pekiştirir).
+        self._M = H._M
         self._C = pow(self._M, H._E, H._N)
         self._M_PRIME = pow(self._C, H._D, H._N)
         self._tick = 0

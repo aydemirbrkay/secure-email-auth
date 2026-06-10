@@ -62,18 +62,45 @@ class TestRSAAnimationConstants(unittest.TestCase):
         """Alt tür: INVARIANT (idempotency / tekrar tutarlılığı).
         _reseed_demo() 5 ardışık çağrı yapılınca her seferinde:
           1. RSA matematik bağıtları (üst test'teki 3 invariant) korunur
-          2. n > 65 (animasyon mesajı m=65 < n garantisi — şifreleme turu
-             için gerekli; aksi halde 65^e mod n çalışmaz)
+          2. Mesaj m geçerli: 2 ≤ m < n VE gcd(m, n) = 1 (doğru RSA örneği;
+             m artık sabit 65 değil, her açılışta rastgele seçilir)
         Kullanıcı pencereyi defalarca açtığında her seferde MATEMATIK
-        doğru kalır."""
+        doğru kalır ve m → c → m' döngüsü doğru çalışır."""
+        from math import gcd
         import animation_modals.rsa.helpers as rsa
         for _ in range(5):
             rsa._reseed_demo()
             self.assertEqual(rsa._N, rsa._P * rsa._Q)
             self.assertEqual(rsa._PHI, (rsa._P - 1) * (rsa._Q - 1))
             self.assertEqual((rsa._E * rsa._D) % rsa._PHI, 1)
-            # m = 65 her zaman < n olmalı (encryption tour için)
-            self.assertGreater(rsa._N, 65)
+            # m geçerli aralıkta ve n ile aralarında asal olmalı
+            self.assertGreaterEqual(rsa._M, 2)
+            self.assertLess(rsa._M, rsa._N)
+            self.assertEqual(gcd(rsa._M, rsa._N), 1)
+
+    def test_encrypt_decrypt_roundtrip_recovers_m(self):
+        """Alt tür: BİRİM (RSA tur doğruluğu — pozitif).
+        Rastgele m için c = m^e mod n ve m' = c^d mod n hesaplanınca
+        m' == m olmalı (RSA bire-bir). gcd(m,n)=1 koşulu bunu garanti eder;
+        m → c → m' döngüsünün her demo değeriyle çalıştığının kanıtı."""
+        import animation_modals.rsa.helpers as rsa
+        for _ in range(5):
+            rsa._reseed_demo()
+            c = pow(rsa._M, rsa._E, rsa._N)
+            m_prime = pow(c, rsa._D, rsa._N)
+            self.assertEqual(m_prime, rsa._M)
+
+    def test_reseed_demo_varies_message(self):
+        """Alt tür: BİRİM (çeşitlilik — negatif/regresyon).
+        m artık sabit DEĞİL: birçok reseed sonrası en az iki farklı m
+        görülmeli. Hep aynı değer çıkarsa (eski 65 sabiti gibi) kullanıcı
+        'değişen RSA' deneyimi yaşamaz."""
+        import animation_modals.rsa.helpers as rsa
+        seen = set()
+        for _ in range(20):
+            rsa._reseed_demo()
+            seen.add(rsa._M)
+        self.assertGreater(len(seen), 1, "m her açılışta değişmeli")
 
     def test_reseed_demo_function_exists(self):
         """Alt tür: SMOKE (API varlığı + çeşitlilik kontrolü).

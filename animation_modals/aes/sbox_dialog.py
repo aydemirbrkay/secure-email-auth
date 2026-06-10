@@ -18,8 +18,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..aes_pure import SBOX, derive_sbox_value
+from ..aes_pure import SBOX
 from ..base import ANIM_COLORS
+from .sbox_derivation import _SBoxDerivationWidget
 from arayuz.theme import MANAGER
 
 
@@ -124,19 +125,15 @@ class _SBoxReferenceDialog(QDialog):
         return self.table_frame
 
     def _build_derivation_page(self) -> QWidget:
-        """Seçilen byte'ın S-Box türetim adımlarını gösteren sayfayı kurar."""
+        """S-Box türetimini canlandıran animasyon widget'ını taşıyan sayfayı kurar."""
         self.derivation_frame = QFrame(self)
         derivation_layout = QVBoxLayout(self.derivation_frame)
         derivation_layout.setContentsMargins(16, 14, 16, 16)
         derivation_layout.setSpacing(8)
 
-        self.derivation_label = QLabel("")
-        self.derivation_label.setWordWrap(True)
-        self.derivation_label.setTextFormat(Qt.TextFormat.RichText)
-        self.derivation_label.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
-        derivation_layout.addWidget(self.derivation_label, stretch=1)
+        self.derivation_widget = _SBoxDerivationWidget(self.derivation_frame)
+        self.derivation_widget.set_mappings(self._mappings)
+        derivation_layout.addWidget(self.derivation_widget, stretch=1)
         return self.derivation_frame
 
     def _example_text(self) -> str:
@@ -159,48 +156,29 @@ class _SBoxReferenceDialog(QDialog):
     # ------------------------------------------------------------------
 
     def show_table_page(self) -> None:
-        """Referans tablosu sayfasını gösterir."""
+        """Referans tablosu sayfasını gösterir ve türetim animasyonunu durdurur."""
+        self.derivation_widget.stop()
         self._stack.setCurrentIndex(0)
 
     def show_derivation_for(self, byte: int) -> None:
-        """Verilen byte'ın S-Box türetimini açıklayıp türetim sayfasına geçer.
-
-        Çarpımsal ters ve affine dönüşüm adımlarını öğrenci diline indirgenmiş
-        biçimde ``derivation_label`` içine yazar ve sayfayı değiştirir.
-        """
-        self.derivation_label.setText(self._derivation_text(byte))
+        """Verilen byte'a kilitlenip türetim sayfasına geçer ve animasyonu başlatır."""
+        self.derivation_widget.set_byte(byte)
+        self.derivation_widget.start()
         self._stack.setCurrentIndex(1)
 
     def _show_default_derivation(self) -> None:
-        """Türetim butonu için varsayılan örneği (ilk eşleme ya da 0x53) açar."""
-        default = int(self._mappings[0][0], 16) if self._mappings else 0x53
-        self.show_derivation_for(default)
+        """Türetim butonu için mesaj eşlemeleri arasında gezen animasyonu başlatır.
+
+        Eşleme yoksa varsayılan byte (0x53) üzerinde durur; aksi halde
+        kullanıcının mesajındaki SubBytes girdileri arasında otomatik gezer.
+        """
+        self.derivation_widget.set_mappings(self._mappings)
+        self.derivation_widget.start()
+        self._stack.setCurrentIndex(1)
 
     def _on_cell_clicked(self, row: int, col: int) -> None:
         """Tablodaki bir hücreye tıklanınca o girdi byte'ının türetimini açar."""
         self.show_derivation_for(row * 16 + col)
-
-    def _derivation_text(self, byte: int) -> str:
-        """Bir byte'ın S-Box değerine türetilişini HTML metin olarak üretir."""
-        d = derive_sbox_value(byte)
-        inverse_note = (
-            "0x00'ın çarpımsal tersi yoktur; AES sözleşmesi gereği 0 alınır."
-            if byte == 0
-            else f"GF(2⁸) gövdesinde {byte:02x} · {d.inverse:02x} = 01 "
-            f"olduğu için tersi <b>{d.inverse:02x}</b>'dir."
-        )
-        return (
-            f"<h3>S-Box değeri nasıl üretilir? (örnek: {byte:02x})</h3>"
-            "S-Box sabit bir tablo değildir; her byte iki adımla üretilir.<br><br>"
-            "<b>Adım 1 — Çarpımsal ters (GF(2⁸))</b><br>"
-            f"{inverse_note}<br>"
-            f"İndirgenemez polinom: 0x11B.<br><br>"
-            "<b>Adım 2 — Affine dönüşüm</b><br>"
-            f"Ters değer ({d.inverse:02x}) bit-döndürmeli XOR ve "
-            f"<code>{d.affine_const:02x}</code> sabitiyle birleştirilir.<br><br>"
-            f"<b>Sonuç:</b> S[{byte >> 4:X},{byte & 0xF:X}] = "
-            f"<b>{d.result:02x}</b>"
-        )
 
     def _populate_table(self) -> None:
         for row in range(16):
@@ -265,9 +243,7 @@ class _SBoxReferenceDialog(QDialog):
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
-        self.derivation_label.setStyleSheet(
-            f"color: {ANIM_COLORS['text_primary']};"
-        )
+        self.derivation_widget.update()  # QPainter widget'ı yeni paletle yeniden boyanır.
         self._highlight_used_cells()
         self.update()
 
@@ -275,6 +251,8 @@ class _SBoxReferenceDialog(QDialog):
         self.restyle()
 
     def _disconnect_theme_signal(self, _result: int) -> None:
+        """Diyalog kapanınca tema sinyalini çözer ve türetim animasyonunu durdurur."""
+        self.derivation_widget.stop()
         try:
             MANAGER.themeChanged.disconnect(self._on_theme_changed)
         except TypeError:

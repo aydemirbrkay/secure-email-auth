@@ -142,17 +142,17 @@ class TestSBoxDerivationPage(unittest.TestCase):
 
         self.assertEqual(dialog._stack.currentIndex(), 0)
 
-    def test_show_derivation_switches_page_and_describes_steps(self):
-        """Türetim istenince sayfa değişir ve ara değerler metinde yer alır."""
+    def test_show_derivation_switches_page_and_locks_byte(self):
+        """Türetim istenince sayfa değişir ve widget o byte'a kilitlenir."""
         dialog = _SBoxReferenceDialog([("53", "ed")])
 
         dialog.show_derivation_for(0x53)
 
         self.assertEqual(dialog._stack.currentIndex(), 1)
-        text = dialog.derivation_label.text().lower()
-        self.assertIn("53", text)
-        self.assertIn("ed", text)  # S[5,3] = ed
-        self.assertIn("ca", text)  # 0x53'ün GF(2^8) çarpımsal tersi
+        self.assertEqual(dialog.derivation_widget.current_byte, 0x53)
+        d = dialog.derivation_widget.current_derivation
+        self.assertEqual(d.inverse, 0xCA)  # 0x53'ün GF(2^8) çarpımsal tersi
+        self.assertEqual(d.result, 0xED)   # S[5,3] = ed
 
     def test_back_button_returns_to_table(self):
         """Geri dönünce tekrar tablo sayfası gösterilir."""
@@ -170,7 +170,7 @@ class TestSBoxDerivationPage(unittest.TestCase):
         dialog._on_cell_clicked(0xA, 0xB)  # byte 0xAB
 
         self.assertEqual(dialog._stack.currentIndex(), 1)
-        self.assertIn("ab", dialog.derivation_label.text().lower())
+        self.assertEqual(dialog.derivation_widget.current_byte, 0xAB)
 
 
 if __name__ == "__main__":

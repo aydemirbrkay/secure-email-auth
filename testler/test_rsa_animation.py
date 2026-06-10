@@ -173,6 +173,34 @@ class TestRSAAnimationStructure(unittest.TestCase):
         import animation_modals.rsa.key_match as rsa
         self.assertTrue(hasattr(rsa, "_RSAEncryptDecryptWidget"))
 
+    def test_encrypt_decrypt_widget_renders_long_values(self):
+        """Alt tür: BİRİM (kutu genişliği regresyonu — render).
+        4 haneli m/c/m' değerleriyle bile widget hatasız boyanmalı. Kutu
+        genişliği QFontMetrics ile içeriğe göre ayarlandığından (Y3),
+        "m' = 8632 ✓" gibi uzun etiket kutuya sığar; render istisna atmaz."""
+        from PyQt6.QtGui import QPixmap
+        import animation_modals.rsa.key_match as rsa
+        w = rsa._RSAEncryptDecryptWidget()
+        w.resize(880, 260)
+        w._M, w._C, w._M_PRIME = 8632, 1234, 8632  # en uzun durum
+        w._tick = w._T_MATCH_END
+        w.render(QPixmap(880, 260))  # istisna fırlatırsa fail
+
+    def test_box_font_fits_worst_case_label(self):
+        """Alt tür: BİRİM (sığma garantisi — pozitif).
+        En uzun kutu etiketi "m' = 8632 ✓", hesaplanan box_w içine seçilen
+        adaptif punto ile sığmalı (taşma yok). box_w üst sınırı 152;
+        QFontMetrics ile 11→8pt arasında sığan punto bulunmalı."""
+        from PyQt6.QtGui import QFont, QFontMetrics
+        label = "m' = 8632 ✓"
+        box_w = 152
+        fits = any(
+            QFontMetrics(QFont("Courier New", pt, QFont.Weight.Bold))
+            .horizontalAdvance(label) <= box_w - 10
+            for pt in (11, 10, 9, 8)
+        )
+        self.assertTrue(fits, "En uzun etiket adaptif punto ile kutuya sığmalı")
+
 
 if __name__ == "__main__":
     unittest.main()

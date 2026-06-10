@@ -226,12 +226,23 @@ class _RSAEncryptDecryptWidget(QWidget):
         W = self.width()  # NOT: 'H' helpers modül takma adı; gölgelememek için yalnız W
         t = self._tick
 
-        # m/c kutuları biraz daraltıldı → formül kutusu için daha çok yer
-        # (random RSA'da n,d 4 hane olabilir, "1805³³⁴³ mod 4819" gibi
-        # uzun ifade sığsın).
-        box_w, box_h = 86, 44
+        # m/c/m' kutu genişliği İÇERİĞE göre belirlenir. m artık rastgele
+        # (4 haneye kadar) ve m' kutusunda " ✓" eklenince "m' = 1804 ✓" gibi
+        # etiketler sabit 86px'e sığmıyordu (Görsel 1). QFontMetrics ile üç
+        # kutunun en geniş metni ölçülüp +16 padding eklenir; 86 taban, 140
+        # tavan (formül kutusuna yer kalsın).
+        from PyQt6.QtGui import QFontMetrics
+        box_h = 44
         margin = 14
         ox = margin
+        _box_texts = [
+            f"m = {self._M}",
+            f"c = {self._C}",
+            f"m' = {self._M_PRIME} ✓",
+        ]
+        _fm = QFontMetrics(QFont("Courier New", 11, QFont.Weight.Bold))
+        _needed = max(_fm.horizontalAdvance(s) for s in _box_texts) + 16
+        box_w = max(86, min(152, _needed))
 
         # Formül kutusu — m ve c/m' arasında kalan boşluğa uyarlanır
         # m' artık c ile aynı genişlikte (86 px) olduğu için ek hesaplama
@@ -344,9 +355,18 @@ class _RSAEncryptDecryptWidget(QWidget):
         p.setBrush(QBrush(fill))
         p.setPen(QPen(col, 2))
         p.drawRoundedRect(x, y, w, h, 6, 6)
-        # Adaptive font — m' = 1804 ✓ gibi uzun etiketler 86 px kutuya
-        # sığsın diye 10+ karakterde 10pt'a düşülür.
-        font_size = 11 if len(text) <= 10 else 10
+        # Adaptive font — metin kutuya KESİN sığsın diye QFontMetrics ile
+        # ölçülerek 11→8pt arasında en büyük sığan punto seçilir (sabit
+        # karakter eşiği yerine gerçek piksel ölçümü; "m' = 8632 ✓" gibi en
+        # uzun durumda bile taşma olmaz).
+        from PyQt6.QtGui import QFontMetrics
+        font_size = 8
+        for pt in (11, 10, 9, 8):
+            if QFontMetrics(
+                QFont("Courier New", pt, QFont.Weight.Bold)
+            ).horizontalAdvance(text) <= w - 10:
+                font_size = pt
+                break
         p.setFont(QFont("Courier New", font_size, QFont.Weight.Bold))
         text_col = QColor(ANIM_COLORS["text_primary"])
         text_col.setAlphaF(opacity)

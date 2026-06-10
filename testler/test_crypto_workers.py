@@ -41,17 +41,23 @@ from kriptografi.crypto_workers import (
 )
 
 
-def _wait_for_signal(signal, timeout_ms: int = 15000) -> list:
-    """Verilen sinyali gerçek bir Qt event-loop üzerinden bekler.
+def _start_and_wait_for_signal(worker, signal, timeout_ms: int = 20000) -> list:
+    """Sinyale BAĞLANDIKTAN SONRA worker'ı başlatır ve sinyali bekler.
 
-    ``pytest-qt`` her ortamda kurulu olmayabileceği için ona sert
-    bağımlılık yaratmadan, saf PyQt6 ile ``QEventLoop`` + ``QTimer``
-    timeout fallback'i kullanılır. Worker ``QThread.start()`` ile arka
-    planda koşarken sinyalini event-loop üzerinden alırız (run()'ı
-    doğrudan çağırmak DEĞİL).
+    Kritik (flaky kök neden): ``connect`` mutlaka ``worker.start()``'tan
+    ÖNCE yapılmalıdır. Aksi halde hızlı bir worker (örn. AliceSendWorker
+    yalnızca milisaniye sürer) ``finished_ok``'u biz dinlemeye başlamadan
+    emit edebilir; cross-thread queued sinyal hiçbir slota ulaşmaz, kaybolur
+    ve event-loop timeout'a düşerek testi sahte biçimde kırar. Connect→start
+    sırasıyla emit, queued event olarak kuyrukta bekler ve ``loop.exec()``
+    başlayınca güvenle işlenir.
 
-    Dönüş: sinyalin payload'ını içeren liste (timeout olduysa boş).
-    Timeout durumunda ``RuntimeError`` fırlatılır ki test asılı kalmasın.
+    ``pytest-qt`` her ortamda kurulu olmayabileceği (ve unittest.TestCase'e
+    fixture enjekte edilemediği) için saf PyQt6 ``QEventLoop`` + ``QTimer``
+    yolu kullanılır.
+
+    Dönüş: sinyalin payload'ını içeren liste. Timeout durumunda
+    ``RuntimeError`` fırlatılır ki test asılı kalmasın.
     """
     loop = QEventLoop()
     received: list = []
@@ -71,6 +77,7 @@ def _wait_for_signal(signal, timeout_ms: int = 15000) -> list:
     timer.timeout.connect(_on_timeout)
     timer.start(timeout_ms)
 
+    worker.start()  # BAĞLANTI kurulduktan SONRA başlat — yarışı önler
     loop.exec()  # event-loop: worker thread'inin sinyali burada işlenir
 
     timer.stop()
@@ -311,9 +318,9 @@ class TestWorkerRealThread(unittest.TestCase):
         crypto = CryptoCore()
         worker = KeygenWorker(crypto)
 
-        worker.start()  # gerçek QThread başlatma (run() ana thread'de DEĞİL)
+        # connect→start sırası helper içinde garanti edilir (gerçek QThread).
         try:
-            payloads = _wait_for_signal(worker.finished_ok)
+            payloads = _start_and_wait_for_signal(worker, worker.finished_ok)
         finally:
             worker.wait(20000)  # thread'in temiz bitmesini bekle
 
@@ -333,9 +340,9 @@ class TestWorkerRealThread(unittest.TestCase):
         crypto.setup_keys()
         worker = AliceSendWorker(crypto, "gerçek thread mesajı")
 
-        worker.start()
+        # AliceSendWorker ms sürer; connect→start sırası flaky'yi engeller.
         try:
-            payloads = _wait_for_signal(worker.finished_ok)
+            payloads = _start_and_wait_for_signal(worker, worker.finished_ok)
         finally:
             worker.wait(20000)
 

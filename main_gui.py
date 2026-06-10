@@ -616,9 +616,37 @@ class MainWindow(QMainWindow):
         """
         return gen == self._op_generation
 
+    def _finalize_worker(self, attr: str, *, wait: bool) -> None:
+        """Bir QThread worker'ını güvenle emekliye ayırır.
+
+        Sinyalleri koparır, ``wait=True`` ise iş parçacığının bitmesini bekler
+        (reset sırasında "QThread: Destroyed while thread is still running"
+        uyarısını ve paylaşılan ``CryptoCore`` üstündeki yarışı önler), sonra
+        ``deleteLater`` ile siler ve referansı temizler. ``deleteLater`` ayrıca
+        ``parent=self`` ile biriken worker'ların bellek sızıntısını da kapatır.
+        """
+        w = getattr(self, attr, None)
+        if w is None:
+            return
+        try:
+            w.finished_ok.disconnect()
+            w.failed.disconnect()
+        except TypeError:
+            pass  # zaten bağlı değilse sessiz geç
+        if wait and w.isRunning():
+            w.quit()        # run() event loop kullanmaz; etkisiz ama zararsız
+            w.wait(3000)    # kripto bitene dek bekle (kısa; keygen ~1-2 sn)
+        w.deleteLater()
+        setattr(self, attr, None)
+
     def _on_keygen(self) -> None:
         # RSA-2048 anahtar üretimi ~1-2 sn sürebilir; UI donmaması için
         # arka planda bir QThread worker'ı kullanıyoruz.
+        # Güvenlik kilidi: önceki worker hâlâ koşuyorsa yeni başlatma
+        # (buton zaten devre dışı kalır ama defansif guard paylaşılan
+        # CryptoCore üstünde çakışmayı kesin engeller).
+        if self._keygen_worker is not None and self._keygen_worker.isRunning():
+            return
         self._btn_keygen.setEnabled(False)
         self._btn_keygen.setText("Anahtar Üretiliyor…")
         self._bob_panel.show_keygen_step()
@@ -643,7 +671,7 @@ class MainWindow(QMainWindow):
         if not self._is_current_generation(gen):
             return  # bayat sonuç — araya reset/yeni işlem girdi
         self._btn_keygen.setText("Anahtar Üret")
-        self._keygen_worker = None
+        self._finalize_worker("_keygen_worker", wait=False)
 
         alice_lines = alice_keys.public_pem().decode().strip().split("\n")
         bob_lines = bob_keys.public_pem().decode().strip().split("\n")
@@ -676,7 +704,7 @@ class MainWindow(QMainWindow):
         """
         if not self._is_current_generation(gen):
             return  # bayat sonuç — araya reset/yeni işlem girdi
-        self._receive_worker = None
+        self._finalize_worker("_receive_worker", wait=False)
         self._decoded_message = message
         self._is_valid = is_valid
         self._bob_panel.set_steps(bob_steps)
@@ -696,10 +724,10 @@ class MainWindow(QMainWindow):
         CryptoErrorDialog(exc, self).exec()
 
         # Worker referansını temizle — hangi worker patladı bilmiyoruz,
-        # ama hepsini güvenle None yapabiliriz.
-        self._keygen_worker = None
-        self._send_worker = None
-        self._receive_worker = None
+        # ama hepsini güvenle emekliye ayırabiliriz (failed sonrası run bitti).
+        self._finalize_worker("_keygen_worker", wait=False)
+        self._finalize_worker("_send_worker", wait=False)
+        self._finalize_worker("_receive_worker", wait=False)
 
         # Buton durumları: kullanıcı tekrar deneyebilmeli.
         self._btn_keygen.setEnabled(True)
@@ -708,6 +736,9 @@ class MainWindow(QMainWindow):
         self._btn_next.setText("Sonraki Adım")
 
     def _on_start(self) -> None:
+        # Defansif guard: önceki gönderim worker'ı hâlâ koşuyorsa bekle.
+        if self._send_worker is not None and self._send_worker.isRunning():
+            return
         message = self._alice_panel.msg_input.toPlainText().strip()
         if not message:
             QMessageBox.warning(self, "Uyarı", "Lütfen bir e-posta mesajı yazın!")
@@ -740,7 +771,7 @@ class MainWindow(QMainWindow):
         if not self._is_current_generation(gen):
             return  # bayat sonuç — araya reset/yeni işlem girdi
         self._packet = packet
-        self._send_worker = None
+        self._finalize_worker("_send_worker", wait=False)
         self._btn_start.setText("Şifreleme Başlat")
 
         self._alice_panel.set_steps(alice_steps)
@@ -800,6 +831,10 @@ class MainWindow(QMainWindow):
 
         elif self._phase == "transit":
             if self._packet is not None:
+                # Defansif guard: önceki alım worker'ı hâlâ koşuyorsa bekle.
+                if (self._receive_worker is not None
+                        and self._receive_worker.isRunning()):
+                    return
                 self._bob_panel.set_packet_info(self._packet)
                 # Deşifreleme akışını arka plana al (RSA-OAEP çözme +
                 # AES-GCM doğrulamalı deşifre + RSA-PSS imza doğrulama).
@@ -888,20 +923,13 @@ class MainWindow(QMainWindow):
         # hemen sonra emit edilen sinyalin yarış durumunu da kapatır).
         self._next_generation()
 
-        # Koşan bir worker varsa sinyallerini kopar — geç gelen
-        # finished_ok çağrıları sıfırlanmış UI üstüne yazmasın.
-        # Worker'ın kendisine interrupt edilemez (kriptografi kütüphanesi
-        # C seviyesinde çalıştığı için); ancak sonucunu görmezden
-        # gelebiliriz.
+        # Koşan bir worker varsa sinyallerini kopar ve bitmesini bekle —
+        # geç gelen finished_ok çağrıları sıfırlanmış UI üstüne yazmasın ve
+        # Python referansı None'a çekilirken hâlâ koşan QThread "Destroyed
+        # while running" uyarısı vermesin. Kripto C seviyesinde interrupt
+        # edilemez; bu yüzden quit() etkisizdir ama wait() ile bitişi bekleriz.
         for attr in ("_keygen_worker", "_send_worker", "_receive_worker"):
-            w = getattr(self, attr, None)
-            if w is not None:
-                try:
-                    w.finished_ok.disconnect()
-                    w.failed.disconnect()
-                except TypeError:
-                    pass  # zaten bağlantı yoksa sessiz geç
-                setattr(self, attr, None)
+            self._finalize_worker(attr, wait=True)
 
         self._alice_panel.reset()
         self._bob_panel.reset()

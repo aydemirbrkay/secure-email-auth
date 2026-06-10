@@ -199,6 +199,24 @@ class _AESIntroWidget(QWidget):
         left_lay.addWidget(self._demo_title)
         self._matrix_demo = _MatrixDemoWidget()
         left_lay.addWidget(self._matrix_demo, stretch=1)
+
+        # Köprü notu: önizlemedeki iç mekaniğin (ECB tek-blok dönüşümleri)
+        # gerçek mesaj şifrelemesi OLMADIĞINI, gerçek iletimin AES-256-GCM
+        # (kimlik doğrulama tag'i ile) yapıldığını kullanıcıya açıkça söyler.
+        # Eğitimsel doğruluk için kritik: kullanıcı ECB'yi gerçek mod sanmasın.
+        self._bridge_note = QLabel(
+            "Not: Bu önizleme AES'in iç mekaniğini (ECB tek-blok dönüşümleri) "
+            "gösterir. Gerçek mesaj iletimi AES-256-GCM ile yapılır; GCM, "
+            "kimlik doğrulama etiketi (auth tag) ekleyerek mesaj bütünlüğünü garanti eder."
+        )
+        self._bridge_note.setFont(QFont("Segoe UI", 8))
+        self._bridge_note.setStyleSheet(
+            f"color: {ANIM_COLORS['text_muted']}; border: none;"
+        )
+        self._bridge_note.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._bridge_note.setWordWrap(True)
+        left_lay.addWidget(self._bridge_note)
+
         h_row.addWidget(left_frame, stretch=2)
 
         # Sağ: başlık + akış şeması — SHA gibi stretch=3 ile kalan alanı alır.
@@ -392,6 +410,9 @@ class _AESIntroWidget(QWidget):
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
         self._demo_title.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
+        self._bridge_note.setStyleSheet(
+            f"color: {ANIM_COLORS['text_muted']}; border: none;"
+        )
         self._intro_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         for box in (self._intro_plain, self._box_r0, self._box_main,
                     self._box_r14, self._intro_cipher):

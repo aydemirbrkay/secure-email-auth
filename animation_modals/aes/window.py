@@ -14,10 +14,6 @@ from ..aes_pure import aes256_encrypt_with_rounds
 from .constants import _COLORS_OP
 from .intro_widget import _AESIntroWidget
 from .prep_widget import _AESPlaintextPrepWidget
-from .op_widgets import (
-    _ShiftRowsAnimWidget, _MixColumnsAnimWidget,
-    _SubBytesAnimWidget, _AddRoundKeyAnimWidget,
-)
 from .steps import _build_steps
 from .round_flow import _AESRoundFlowWidget
 
@@ -216,10 +212,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._desc_lbl.setWordWrap(True)
         lay.addWidget(self._desc_lbl)
 
-        # Matris + yardımcı widget
-        content_row = QHBoxLayout()
-        content_row.setSpacing(12)
-
+        # Tek içerik: yan yana iki QPainter matris (ÖNCEKİ / operatör / ŞİMDİKİ).
+        # Tekrar eden operasyona-özel yan panel (_side_stack) kaldırıldı; sol
+        # matris zaten işlemi gösteriyor, operatör (AddRoundKey'de ⊕/=, diğerlerde
+        # "→") akışı anlatıyor. Operasyon adı üstte _op_title'da.
         self._mat_frame = QFrame()
         mat_frame = self._mat_frame
         mat_frame.setStyleSheet(
@@ -229,70 +225,20 @@ class AESAnimationWindow(CryptoAnimationWindow):
         mat_lay = QVBoxLayout(mat_frame)
         mat_lay.setContentsMargins(8, 6, 8, 6)
         mat_lay.setSpacing(4)
-
-        # Yan yana iki QPainter matris + Yeniden Oynat butonu.
-        # Operasyon adı zaten _op_title (üstte) ve _arrow_label
-        # (matrislerin arasında "→ OperationName →") tarafından
-        # gösterildiği için ayrı bir matrix_context etiketi yok.
         self._matrix_pair = _AESStateCompareWidget(parent=self)
         mat_lay.addWidget(self._matrix_pair)
 
-        content_row.addWidget(mat_frame)
-
-        # Sağ panel — operasyona göre değişir. Min 300 ve max 470: yan panel
-        # widget'ları (XOR/S-Box/MixColumns) büyütülen hücre ve yazılarına yer
-        # bulsun, yazılar taşmadan sığsın; çok dar viewport'larda yine de
-        # makul kalır (gerektiğinde dış kaydırma devreye girer).
-        self._side_stack = QStackedWidget()
-        self._side_stack.setMinimumWidth(300)
-        self._side_stack.setMaximumWidth(470)
-
-        empty = QWidget()  # boş panel (yedek)
-        self._side_stack.addWidget(empty)                    # index 0
-
-        # ShiftRows: scroll area içinde (4 satır × 92px = ~400px gerektirir)
+        # Matris çifti geniş olabildiğinden (AddRoundKey'de 3 matris yan yana)
+        # dar pencerede yatay scroll güvenlik ağı olarak korunur; aksi halde
+        # min-width stack üzerinden intro'ya sızabilir.
         from PyQt6.QtWidgets import QScrollArea
-        self._shift_widget = _ShiftRowsAnimWidget()
-        shift_scroll = QScrollArea()
-        shift_scroll.setWidget(self._shift_widget)
-        shift_scroll.setWidgetResizable(True)
-        shift_scroll.setStyleSheet("background: transparent; border: none;")
-        self._side_stack.addWidget(shift_scroll)             # index 1
-
-        self._mix_widget = _MixColumnsAnimWidget()           # MixColumns için
-        self._side_stack.addWidget(self._mix_widget)         # index 2
-
-        # SubBytes: byte → S-Box[byte] görselleştirmesi
-        self._sub_widget = _SubBytesAnimWidget()
-        sub_scroll = QScrollArea()
-        sub_scroll.setWidget(self._sub_widget)
-        sub_scroll.setWidgetResizable(True)
-        sub_scroll.setStyleSheet("background: transparent; border: none;")
-        self._side_stack.addWidget(sub_scroll)               # index 3
-
-        # AddRoundKey: state ⊕ round_key = yeni state
-        self._ark_widget = _AddRoundKeyAnimWidget()
-        ark_scroll = QScrollArea()
-        ark_scroll.setWidget(self._ark_widget)
-        ark_scroll.setWidgetResizable(True)
-        ark_scroll.setStyleSheet("background: transparent; border: none;")
-        self._side_stack.addWidget(ark_scroll)               # index 4
-
-        content_row.addWidget(self._side_stack)
-        # content_row'u (matris 598px + side_stack 300px ≈ 920px) bir konteynere
-        # koyup yatay scroll'a sarıyoruz. Aksi halde bu geniş min-width
-        # QStackedWidget üzerinden TÜM sayfalara (intro dahil) yayılıp pencereyi
-        # 820px'e küçülmekten alıkoyuyor ve intro ekranında gereksiz yatay scroll
-        # bırakıyordu (Görsel 6). Scroll yalnızca dar pencerede devreye girer.
-        content_wrap = QWidget()
-        content_wrap.setLayout(content_row)
         row_scroll = QScrollArea()
-        row_scroll.setWidget(content_wrap)
+        row_scroll.setWidget(mat_frame)
         row_scroll.setWidgetResizable(True)
         row_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         row_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         row_scroll.setStyleSheet("background: transparent; border: none;")
         lay.addWidget(row_scroll, stretch=1)
         return w
@@ -538,23 +484,14 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
         after = step["matrix"]
 
-        # Sağ panel — operasyona göre değişir (eskisi gibi)
+        # round_key yalnızca AddRoundKey adımında gerekir (matris_pair'de
+        # "ÖNCEKİ ⊕ round_key = ŞİMDİKİ" düzeni için). Diğer operasyonlarda
+        # (SubBytes/ShiftRows/MixColumns) tekrar eden yan panel kaldırıldı;
+        # tek sol matris + aradaki "→" oku işlemi anlatmaya yeter.
         rnd = step["round"]
         rk: list[list[str]] | None = None
-        if op == "SubBytes":
-            self._side_stack.setCurrentIndex(3)
-            self._sub_widget.set_data(before, after)
-        elif op == "ShiftRows":
-            self._side_stack.setCurrentIndex(1)
-            self._shift_widget.set_data(before, after)
-        elif op == "MixColumns":
-            self._side_stack.setCurrentIndex(2)
-            self._mix_widget.set_data(before, after)
-        else:  # AddRoundKey
-            self._side_stack.setCurrentIndex(4)
-            if rnd < len(self._round_keys_hex):
-                rk = self._round_keys_hex[rnd]
-                self._ark_widget.set_data(before, after, rk, rnd)
+        if op == "AddRoundKey" and rnd < len(self._round_keys_hex):
+            rk = self._round_keys_hex[rnd]
 
         # State matrisi: yan yana iki matris + animasyon (tek satıra indi)
         self._matrix_pair.start_step(

@@ -338,8 +338,9 @@ class TestAESStateCompareWidget(unittest.TestCase):
 
     def test_start_step_sets_arrow_label(self):
         """Alt tür: BİRİM (UI label güncellemesi).
-        İki matris arasındaki ok etiketi operasyon adını ('ShiftRows')
-        içermeli — kullanıcı hangi AES adımını izlediğini metinden okur.
+        SubBytes/ShiftRows/MixColumns adımlarında iki matris arasındaki etiket
+        SADECE büyük bir "→" oku olmalı (operasyon adı üstte _op_title'da
+        gösterildiğinden, dar kutuda okunmayan "→ Op →" metni kaldırıldı).
         Renk parametresi (op_color) sadece görsel; testte doğrulanmaz."""
         w = self._make_widget()
         w.start_step(
@@ -347,7 +348,8 @@ class TestAESStateCompareWidget(unittest.TestCase):
             [["00"] * 4] * 4, [["FF"] * 4] * 4,
             op_color="#5B8EC2",
         )
-        self.assertIn("ShiftRows", w._arrow_label.text())
+        self.assertEqual(w._arrow_label.text(), "→")
+        self.assertNotIn("ShiftRows", w._arrow_label.text())
 
     def test_addroundkey_shows_persistent_round_key_matrix(self):
         """Alt tür: BİRİM (round_key kalıcı matris akışı).

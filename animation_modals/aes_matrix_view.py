@@ -592,10 +592,14 @@ class _AESStateCompareWidget(QWidget):
             self._op2_label.setStyleSheet(f"color: {op_color}; font-weight: bold;")
             self._op2_label.setVisible(True)
         else:
-            # Diğer operasyonlar: round_key matrisi + 2. operatör gizli
+            # Diğer operasyonlar (SubBytes/ShiftRows/MixColumns): round_key
+            # matrisi + 2. operatör gizli. Aradaki etiket SADECE büyük bir "→"
+            # oku; işlem adı zaten üstte _op_title'da ("Round N — ShiftRows")
+            # yazdığından, dar kutuda dikey sıkışıp okunmayan "→ Op →" metni
+            # kaldırıldı (Görsel 5-6 düzeltmesi).
             self._rk_view.setVisible(False)
             self._op2_label.setVisible(False)
-            self._arrow_label.setText(f"→  {operation}  →")
+            self._arrow_label.setText("→")
             self._arrow_label.setStyleSheet(f"color: {op_color}; font-weight: bold;")
 
         # Şimdiki view'a animasyon

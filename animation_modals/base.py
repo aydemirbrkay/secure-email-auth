@@ -31,6 +31,7 @@ from arayuz.theme import (
     button_secondary_style,
     progress_bar_style,
 )
+from arayuz.accessibility import set_accessible
 
 
 class AnimationSpeed(Enum):
@@ -160,11 +161,19 @@ class CryptoAnimationWindow(QWidget):
             self._btn_prev.setEnabled(False)
             self._btn_prev.setFixedHeight(_NAV_BTN_HEIGHT)
             self._btn_prev.clicked.connect(self._go_back)
+            set_accessible(
+                self._btn_prev, "Önceki adım",
+                "Animasyonda bir önceki adıma döner."
+            )
             controls.addWidget(self._btn_prev)
 
             self._btn_next = QPushButton("İleri  ▶")
             self._btn_next.setFixedHeight(_NAV_BTN_HEIGHT)
             self._btn_next.clicked.connect(self._advance_step)
+            set_accessible(
+                self._btn_next, "Sonraki adım",
+                "Animasyonda bir sonraki adıma ilerler."
+            )
             controls.addWidget(self._btn_next)
         else:
             self._speed_lbl = QLabel("Hız:")
@@ -174,12 +183,19 @@ class CryptoAnimationWindow(QWidget):
             self._speed_combo.addItems(list(SPEED_LABELS_TR.values()))
             self._speed_combo.setCurrentText(SPEED_LABELS_TR[AnimationSpeed.NORMAL])
             self._speed_combo.currentTextChanged.connect(self._on_speed_changed)
+            set_accessible(
+                self._speed_combo, "Oynatma hızı",
+                "Otomatik oynatma adım hızını seçer."
+            )
             controls.addWidget(self._speed_combo)
 
         controls.addStretch()
 
         self._btn_close = QPushButton("✕  Kapat")
         self._btn_close.setFixedHeight(_NAV_BTN_HEIGHT)
+        set_accessible(
+            self._btn_close, "Kapat", "Animasyon penceresini kapatır."
+        )
         if self._on_close is not None:
             self._btn_close.clicked.connect(self._on_close)
         else:

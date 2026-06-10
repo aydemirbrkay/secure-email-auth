@@ -259,9 +259,22 @@ class _MatchAssemblyWidget(QWidget):
             p.drawRoundedRect(card_x, card_y, card_w, card_h, 6, 6)
             p.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
             p.setPen(col)
-            text = "✅  Eşleşme: Başarılı" if match_all else "❌  Eşleşme: HATA"
+            text = self._match_badge_text(match_all)
             p.drawText(QRect(card_x, card_y, card_w, card_h),
                        Qt.AlignmentFlag.AlignCenter, text)
+
+    @staticmethod
+    def _match_badge_text(match_all: bool) -> str:
+        """Final hash eşleşme rozetinin metnini döndürür.
+
+        Başarı durumunda ✓/✅ işareti KULLANILMAZ (kullanıcı geri bildirimi);
+        metin tek başına yeterli, kart rengi (yeşil) zaten başarıyı gösterir.
+        Hata durumunda ❌ uyarı sinyali olarak korunur.
+
+        Parametre: match_all — iki hash birebir eşleşti mi.
+        Dönüş: rozet metni ("Eşleşme: Başarılı" / "❌  Eşleşme: HATA").
+        """
+        return "Eşleşme: Başarılı" if match_all else "❌  Eşleşme: HATA"
 
     def _draw_small_box(
         self, p: QPainter, x: int, y: int, w: int, h: int,

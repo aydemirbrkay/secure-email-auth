@@ -277,6 +277,27 @@ class TestSHADiagramArrowState(unittest.TestCase):
         self.assertTrue(hasattr(_SHA256DiagramWidget, "_draw_shift_arrows"))
 
 
+class TestSHAMatchBadge(unittest.TestCase):
+    """Final hash eşleşme rozeti metni (Alt kategori: BİRİM — saf metin).
+    Y4: başarı rozetinden ✓/✅ işareti kaldırıldı."""
+
+    def test_success_badge_has_no_checkmark(self):
+        """Alt tür: BİRİM (negatif — işaret yokluğu).
+        Başarı rozeti ✅/✓ İÇERMEMELİ; sadece 'Eşleşme: Başarılı' metni."""
+        from animation_modals.sha256.match_widget import _MatchAssemblyWidget
+        text = _MatchAssemblyWidget._match_badge_text(True)
+        self.assertNotIn("✅", text)
+        self.assertNotIn("✓", text)
+        self.assertIn("Eşleşme: Başarılı", text)
+
+    def test_error_badge_keeps_cross(self):
+        """Alt tür: BİRİM (pozitif — hata sinyali korunur).
+        Hata durumunda ❌ uyarı işareti korunur (başarıdan ayırt edilsin)."""
+        from animation_modals.sha256.match_widget import _MatchAssemblyWidget
+        text = _MatchAssemblyWidget._match_badge_text(False)
+        self.assertIn("❌", text)
+
+
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
     (Alt kategori: SMOKE — class attribute kontratı)."""

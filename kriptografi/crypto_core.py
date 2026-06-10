@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -165,6 +166,10 @@ class CryptoCore:
         # yeter. Bu cache çekirdek algoritmaya dokunmaz, yalnızca
         # bob_receive üstüne eklenen bir tazelik/tekrar katmanıdır.
         self._seen_nonces: "OrderedDict[Tuple[str, bytes], None]" = OrderedDict()
+        # Replay cache check-then-act'i atomik tutar: tek CryptoCore örneği
+        # birden çok worker thread'e paylaşıldığında (bkz. crypto_workers.py)
+        # eşzamanlı bob_receive çağrıları aynı nonce'u iki kez kabul edemesin.
+        self._nonce_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Anahtar Üretimi
@@ -397,16 +402,20 @@ class CryptoCore:
         # replay. Nonce her şifrelemede rastgele üretildiği için aynı
         # ikilinin yeniden görülmesi paketin tekrar oynatıldığını gösterir.
         key = (fingerprint, nonce)
-        if key in self._seen_nonces:
-            raise ReplayDetectedError(
-                "Bu paket daha önce alınmış (aynı gönderen + nonce); "
-                "replay saldırısı tespit edildi."
-            )
+        # Kilit: kontrol-ve-ekle (check-then-act) tek atomik adım olmalı;
+        # aksi halde iki thread aynı nonce'u eşzamanlı kontrol edip ikisi de
+        # "ilk kez" sayıp kabul edebilir (replay korumasını zayıflatır).
+        with self._nonce_lock:
+            if key in self._seen_nonces:
+                raise ReplayDetectedError(
+                    "Bu paket daha önce alınmış (aynı gönderen + nonce); "
+                    "replay saldırısı tespit edildi."
+                )
 
-        # İlk kez görülüyor: cache'e ekle ve LRU sınırını uygula.
-        self._seen_nonces[key] = None
-        if len(self._seen_nonces) > _NONCE_CACHE_MAX:
-            self._seen_nonces.popitem(last=False)
+            # İlk kez görülüyor: cache'e ekle ve LRU sınırını uygula.
+            self._seen_nonces[key] = None
+            if len(self._seen_nonces) > _NONCE_CACHE_MAX:
+                self._seen_nonces.popitem(last=False)
 
     # ------------------------------------------------------------------
     # RSA ile Oturum Anahtarı Şifreleme

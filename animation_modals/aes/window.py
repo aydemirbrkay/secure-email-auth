@@ -2,7 +2,7 @@
 """AESAnimationWindow — AES-256-GCM şifreleme sürecini görselleştirir."""
 from __future__ import annotations
 from collections.abc import Callable
-from PyQt6.QtCore import Qt, QTimer, QRect, QPoint
+from PyQt6.QtCore import Qt, QTimer, QRect, QPoint, QSize
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygon
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -75,6 +75,13 @@ class AESAnimationWindow(CryptoAnimationWindow):
             manual_mode=True,
             on_close=on_close,
         )
+        if on_close is not None:
+            # Gömülü Alice panelinde dış QScrollArea tüm AES penceresini
+            # kaydırmamalı. Viewport yüksekliğini kabul et; taşan round içeriğini
+            # sayfa içindeki QScrollArea yönetir, alt navigasyon sabit kalır.
+            self.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored
+            )
 
         # Pencere boyutu base sınıftan gelir (standalone modda ekranın %82'si).
         # SHA introsuyla birebir aynı davranış için AES burada KENDİNİ KÜÇÜLTMEZ;
@@ -82,6 +89,24 @@ class AESAnimationWindow(CryptoAnimationWindow):
         # round/flow sayfa min-genişliklerinin pencereye sığmamasına ve intro
         # ekranında boşluklu yatay scroll'a yol açıyordu. Büyük açılınca intro
         # ekranı doldurur, butonlar sabit kalır, yatay scroll çıkmaz.
+
+    def sizeHint(self) -> QSize:  # type: ignore[override]
+        """Gömülü modda dış panel yerine iç sayfaların scroll yapmasını sağla."""
+        hint = super().sizeHint()
+        if self._on_close is not None:
+            hint.setHeight(self.minimumSizeHint().height())
+        return hint
+
+    def hasHeightForWidth(self) -> bool:  # type: ignore[override]
+        """Gömülü modda dış scroll'un word-wrap yüksekliğini dayatmasını önle."""
+        if self._on_close is not None:
+            return False
+        return super().hasHeightForWidth()
+
+    def heightForWidth(self, width: int) -> int:  # type: ignore[override]
+        if self._on_close is not None:
+            return self.minimumSizeHint().height()
+        return super().heightForWidth(width)
 
     # ------------------------------------------------------------------
     # İçerik kurulumu
@@ -240,6 +265,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         row_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         row_scroll.setStyleSheet("background: transparent; border: none;")
+        self._round_scroll = row_scroll
         lay.addWidget(row_scroll, stretch=1)
         return w
 
@@ -263,6 +289,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._flow_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._flow_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._flow_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # QStackedWidget tüm sayfaların minimum genişliğini ortak kullanır.
+        # Uzun başlık minimumSizeHint'iyle AES penceresini genişletmemeli;
+        # dar panelde başlık mevcut alanı kullanır, akış içeriği kendi scroll'unda kalır.
+        self._flow_title.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         top_row.addWidget(self._flow_title, stretch=1)
         top_row.addStretch()
         lay.addLayout(top_row)
@@ -387,7 +419,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         if active:
             return (
                 f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-                f"color: #FFFFFF; border: 2px solid {ANIM_COLORS['accent_blue']}; "
+                f"color: {ANIM_COLORS['text_on_accent']}; border: 2px solid {ANIM_COLORS['accent_blue']}; "
                 f"border-radius: 3px; padding: 2px 4px; font-weight: bold; }}"
             )
         return (
@@ -396,14 +428,14 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"border: 2px solid {ANIM_COLORS['border']}; "
             f"border-radius: 3px; padding: 2px 4px; font-weight: bold; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border-color: {ANIM_COLORS['accent_blue']}; }}"
+            f"color: {ANIM_COLORS['text_on_accent']}; border-color: {ANIM_COLORS['accent_blue']}; }}"
         )
 
     @staticmethod
     def _flow_btn_style() -> str:
         return (
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border: none; border-radius: 5px; "
+            f"color: {ANIM_COLORS['text_on_accent']}; border: none; border-radius: 5px; "
             f"padding: 4px 12px; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
         )
@@ -416,7 +448,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"border: 1px solid {ANIM_COLORS['border']}; "
             f"border-radius: 5px; padding: 4px 12px; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; }}"
+            f"color: {ANIM_COLORS['text_on_accent']}; }}"
         )
 
     def _update_round_bar(self, active: int) -> None:
@@ -480,7 +512,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         before = (
             self._steps_data[step_idx - 1]["matrix"]
             if step_idx > 0
-            else step["matrix"]
+            else self._initial_state_hex
         )
         after = step["matrix"]
 

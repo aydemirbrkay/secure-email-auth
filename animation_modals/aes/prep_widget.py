@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
-from ..base import CryptoAnimationWindow, ANIM_COLORS
+from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
 
 # ---------------------------------------------------------------------------
 # Plaintext Hazırlığı widget'ı — intro ile Round 0 arasına eklenen sayfa
@@ -30,6 +30,13 @@ class _AESPlaintextPrepWidget(QWidget):
     """
 
     _TICK_MS = 60
+    _MATRIX_START_TICK = 96
+    _MATRIX_TICKS_PER_COLUMN = 8
+    _MATRIX_COLUMN_COUNT = 4
+    _FINISH_TICK = (
+        _MATRIX_START_TICK
+        + _MATRIX_TICKS_PER_COLUMN * _MATRIX_COLUMN_COUNT
+    )
 
     def __init__(
         self,
@@ -242,7 +249,7 @@ class _AESPlaintextPrepWidget(QWidget):
         self._btn_continue.setStyleSheet(self._continue_btn_style())
 
     def start(self) -> None:
-        self._timer.start(self._TICK_MS)
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def _on_tick(self) -> None:
         self._tick += 1
@@ -263,17 +270,17 @@ class _AESPlaintextPrepWidget(QWidget):
             self._phase = 2
         elif self._tick == 81:
             self._phase = 3
-        elif self._tick >= 96 and self._tick < 150:
+        elif self._MATRIX_START_TICK <= self._tick < self._FINISH_TICK:
             # Faz 4: sütun sütun dolum
-            local = self._tick - 96
-            col = local // 14
-            if col < 4:
+            local = self._tick - self._MATRIX_START_TICK
+            col = local // self._MATRIX_TICKS_PER_COLUMN
+            if col < self._MATRIX_COLUMN_COUNT:
                 for r in range(4):
                     if not self._matrix_filled[r][col]:
                         self._cell_lbls[r][col].setText(self._state_matrix[r][col])
                         self._cell_lbls[r][col].setStyleSheet(self._cell_style(True))
                         self._matrix_filled[r][col] = True
-        elif self._tick >= 151:
+        elif self._tick >= self._FINISH_TICK:
             self._fill_matrix_immediate()
             self._jump_to_final()
 

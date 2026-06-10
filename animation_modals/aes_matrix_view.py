@@ -4,7 +4,7 @@ _AESMatrixView ve _AESStateCompareWidget — AES state matrisi için
 QPainter tabanlı byte-hareket animasyon görünümü.
 
 _AESMatrixView: tek 4×4 matris, statik veya animasyonlu mod.
-_AESStateCompareWidget: yan yana iki _AESMatrixView (Önceki / Şimdiki)
+_AESStateCompareWidget: yan yana iki _AESMatrixView (Önceki / Canlı sonuç)
                         + Yeniden Oynat butonu.
 
 Operasyon başına koreografi `_draw_overlay_<op>` metodlarında tanımlıdır:
@@ -17,11 +17,10 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, QRect, QTimer
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
-from PyQt6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
-)
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from .base import ANIM_COLORS
+from .base import ANIM_COLORS, cached_font, get_animation_tick_ms
+from .aes.sbox_dialog import _SBoxReferenceDialog
 
 
 class _AESMatrixView(QWidget):
@@ -41,14 +40,14 @@ class _AESMatrixView(QWidget):
     _TITLE_H = 22      # opsiyonel başlık satırı yüksekliği
 
     # Animasyon
-    _TICK_MS = 40      # 25 fps
+    _TICK_MS = 55      # Round içi byte/faz geçişleri rahatça takip edilsin.
 
     # Operasyon başına toplam tick sayıları
     _TICKS_BY_OP: dict[str, int] = {
-        "AddRoundKey": 60,    # ~2.4 s
-        "SubBytes":    64,    # ~2.6 s
-        "ShiftRows":   80,    # ~3.2 s
-        "MixColumns":  80,    # ~3.2 s
+        "AddRoundKey": 60,    # ~3.3 s
+        "SubBytes":    64,    # ~3.5 s
+        "ShiftRows":   80,    # ~4.4 s
+        "MixColumns":  80,    # ~4.4 s
     }
 
     def __init__(
@@ -120,7 +119,7 @@ class _AESMatrixView(QWidget):
         self._tick = 0
         self._total_ticks = self._TICKS_BY_OP[operation]
         self._on_done = on_done
-        self._anim_timer.start(self._TICK_MS)
+        self._anim_timer.start(get_animation_tick_ms(self._TICK_MS))
         self.update()
 
     def replay(self) -> None:
@@ -144,6 +143,7 @@ class _AESMatrixView(QWidget):
 
     def _on_tick(self) -> None:
         self._tick += 1
+        self._state = self._state_for_tick(self._tick)
         if self._tick >= self._total_ticks:
             self._anim_timer.stop()
             self._state = [row[:] for row in self._after]
@@ -155,6 +155,40 @@ class _AESMatrixView(QWidget):
             return
         self.update()
 
+    def _state_for_tick(self, tick: int) -> list[list[str]]:
+        """Cari operasyonun verilen tick'teki matris durumunu saf olarak üretir."""
+        state = [row[:] for row in self._before]
+
+        if self._op == "AddRoundKey":
+            cells_done = min(16, tick // 2 + 1)
+            for idx in range(cells_done):
+                state[idx // 4][idx % 4] = self._after[idx // 4][idx % 4]
+
+        elif self._op == "SubBytes":
+            cell_idx = min(15, tick // 4)
+            for idx in range(cell_idx):
+                state[idx // 4][idx % 4] = self._after[idx // 4][idx % 4]
+            if tick % 4 >= 2:
+                state[cell_idx // 4][cell_idx % 4] = self._after[cell_idx // 4][cell_idx % 4]
+
+        elif self._op == "ShiftRows":
+            for start, end, row in ((0, 10, 0), (10, 30, 1), (30, 50, 2), (50, 70, 3)):
+                if tick >= start + (end - start) // 2:
+                    state[row] = self._after[row][:]
+            if tick >= 70:
+                state = [row[:] for row in self._after]
+
+        elif self._op == "MixColumns":
+            for col in range(4):
+                phase_t = tick - col * 20
+                if phase_t < 5:
+                    continue
+                rows_done = min(4, (phase_t - 5) // 2 + 1)
+                for row in range(rows_done):
+                    state[row][col] = self._after[row][col]
+
+        return state
+
     # --- Çizim ---
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
@@ -164,7 +198,7 @@ class _AESMatrixView(QWidget):
         # Başlık (varsa)
         title_h = self._TITLE_H if self._label_title else 0
         if self._label_title:
-            p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+            p.setFont(cached_font("Georgia", 10, QFont.Weight.Bold))
             p.setPen(QColor(self._label_color))
             p.drawText(QRect(0, 4, self.width(), 18),
                        Qt.AlignmentFlag.AlignCenter, self._label_title)
@@ -173,7 +207,7 @@ class _AESMatrixView(QWidget):
         oy = title_h + 4
 
         # Sütun etiketleri (c0..c3)
-        p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+        p.setFont(cached_font("Georgia", 8, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
         for c in range(4):
             x = ox + self._LABEL_W + c * (self._CELL_W + self._CELL_GAP)
@@ -185,7 +219,7 @@ class _AESMatrixView(QWidget):
         for r in range(4):
             cy = cell_oy + r * (self._CELL_H + self._CELL_GAP)
             # Satır etiketi
-            p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
+            p.setFont(cached_font("Georgia", 8, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
             p.drawText(QRect(ox, cy, self._LABEL_W, self._CELL_H),
                        Qt.AlignmentFlag.AlignCenter, f"r{r}")
@@ -227,7 +261,7 @@ class _AESMatrixView(QWidget):
         p.drawRoundedRect(x, y, self._CELL_W, self._CELL_H, 4, 4)
         text_col = QColor(ANIM_COLORS["text_primary"])
         text_col.setAlphaF(alpha)
-        p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
+        p.setFont(cached_font("Courier New", 13, QFont.Weight.Bold))
         p.setPen(text_col)
         p.drawText(QRect(x, y, self._CELL_W, self._CELL_H),
                    Qt.AlignmentFlag.AlignCenter, value)
@@ -278,14 +312,10 @@ class _AESMatrixView(QWidget):
             p.setPen(QPen(accent, 2))
             p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
             # Mini ⊕ rozeti
-            p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+            p.setFont(cached_font("Georgia", 9, QFont.Weight.Bold))
             p.setPen(accent)
             p.drawText(QRect(cx + self._CELL_W - 14, cy + 2, 12, 12),
                        Qt.AlignmentFlag.AlignCenter, "⊕")
-            # _state'i bu hücre için after değerine yükselt
-            if self._state[r][c] != self._after[r][c]:
-                self._state[r][c] = self._after[r][c]
-
     def _draw_overlay_subbytes(self, p: QPainter, ox: int, oy: int) -> None:
         """SubBytes koreografisi — 16 hücre row-major sırayla S-Box dönüşümü.
 
@@ -306,12 +336,6 @@ class _AESMatrixView(QWidget):
         accent_peach = QColor(ANIM_COLORS["accent_peach"])
         accent_green = QColor(ANIM_COLORS["accent_green"])
 
-        # Tamamlanmış önceki hücreleri yeni değerle güncelle
-        for idx in range(cell_idx):
-            r = idx // 4
-            c = idx % 4
-            self._state[r][c] = self._after[r][c]
-
         # Aktif hücre — vurgu + rozet
         ar = cell_idx // 4
         ac = cell_idx % 4
@@ -325,7 +349,6 @@ class _AESMatrixView(QWidget):
         # Hücre değeri color flash:
         # phase 0-1: turuncu (eski) → phase 2: yeşil (yeni)
         if phase_t >= 2:
-            self._state[ar][ac] = self._after[ar][ac]
             flash_color = accent_green
         else:
             flash_color = accent_peach
@@ -339,7 +362,7 @@ class _AESMatrixView(QWidget):
         if 1 <= phase_t <= 2:
             before_val = self._before[ar][ac]
             after_val = self._after[ar][ac]
-            p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            p.setFont(cached_font("Courier New", 8, QFont.Weight.Bold))
             p.setPen(accent_blue)
             badge_text = f"S[{before_val}]={after_val}"
             badge_y = cy - 14 if cy > 18 else cy + self._CELL_H + 2
@@ -368,9 +391,6 @@ class _AESMatrixView(QWidget):
 
         for r_start, r_end, row, shift in row_phases:
             if r_start <= t < r_end:
-                phase_t = t - r_start
-                phase_len = r_end - r_start
-
                 # Aktif satırı vurgula (4 hücre çerçevesi)
                 for c in range(4):
                     cx, cy = self._cell_xy(ox, oy, row, c)
@@ -380,7 +400,7 @@ class _AESMatrixView(QWidget):
 
                 # Satırın sağına ok rozeti / "sabit" etiketi
                 row_y = oy + row * (self._CELL_H + self._CELL_GAP)
-                p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+                p.setFont(cached_font("Georgia", 9, QFont.Weight.Bold))
                 p.setPen(accent)
                 lbl = "sabit" if shift == 0 else f"← {shift} bayt"
                 p.drawText(
@@ -390,17 +410,7 @@ class _AESMatrixView(QWidget):
                     lbl,
                 )
 
-                # Faz ortasına geldiğimizde _state'i bu satır için _after'a kaydır
-                # (görsel olarak "kayma tamamlandı" hissi)
-                if phase_len > 0 and phase_t >= phase_len // 2:
-                    for c in range(4):
-                        self._state[row][c] = self._after[row][c]
                 return  # her tick yalnızca bir satır aktif
-
-        # 70-79: tüm satırlar tamamlandı, _state hepsi _after
-        for r in range(4):
-            for c in range(4):
-                self._state[r][c] = self._after[r][c]
 
     def _draw_overlay_mixcolumns(self, p: QPainter, ox: int, oy: int) -> None:
         """MixColumns koreografisi — 4 sütun sırayla GF(2⁸) dönüşümü.
@@ -431,7 +441,6 @@ class _AESMatrixView(QWidget):
                 p.setBrush(Qt.BrushStyle.NoBrush)
                 p.setPen(QPen(cc, 2))
                 p.drawRoundedRect(cx, cy, self._CELL_W, self._CELL_H, 4, 4)
-                self._state[r][completed_c] = self._after[r][completed_c]
 
         # Aktif sütun vurgusu
         for r in range(4):
@@ -444,7 +453,6 @@ class _AESMatrixView(QWidget):
         if 5 <= phase_t < 15:
             rows_done = min(4, (phase_t - 5) // 2 + 1)
             for r in range(rows_done):
-                self._state[r][col_idx] = self._after[r][col_idx]
                 cx, cy = self._cell_xy(ox, oy, r, col_idx)
                 # Color flash — yeşil
                 flash = QColor(ANIM_COLORS["accent_green"])
@@ -457,7 +465,7 @@ class _AESMatrixView(QWidget):
         if 4 <= phase_t < 18:
             balloon_x = ox + 4 * (self._CELL_W + self._CELL_GAP) + 4
             balloon_y = oy + 4
-            p.setFont(QFont("Courier New", 8))
+            p.setFont(cached_font("Courier New", 8))
             p.setPen(col_color)
             # MixColumns sabit matrisinde HER çıkış baytı FARKLI katsayı satırı
             # kullanır; tek genel formül ("2·a₀⊕3·a₁⊕a₂⊕a₃ vb.") göstermek
@@ -482,7 +490,7 @@ class _AESStateCompareWidget(QWidget):
 
     Sol: önceki state (donmuş, set_state ile)
     Orta: aktif operasyon etiketi (renkli ok)
-    Sağ: şimdiki state (canlı, play_animation ile)
+    Sağ: işlem sonucu (canlı, play_animation ile)
     Üst sağ: Yeniden Oynat butonu
     """
 
@@ -493,13 +501,26 @@ class _AESStateCompareWidget(QWidget):
         outer.setContentsMargins(8, 6, 8, 6)
         outer.setSpacing(4)
 
-        # Üst sağ: Yeniden Oynat butonu
+        # Üst satır: gerektiğinde S-Box referansı + replay.
         top_row = QHBoxLayout()
         top_row.addStretch(1)
+
+        self._sbox_btn = QPushButton("S-Box Tablosu")
+        self._sbox_btn.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['accent_yellow']}; "
+            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
+            f"border-radius: 5px; padding: 4px 10px; font-weight: bold; }}"
+        )
+        self._sbox_btn.setFixedHeight(28)
+        self._sbox_btn.clicked.connect(self._show_sbox_reference)
+        self._sbox_btn.setVisible(False)
+        top_row.addWidget(self._sbox_btn)
+
         self._replay_btn = QPushButton("⟲  Yeniden Oynat")
         self._replay_btn.setStyleSheet(
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border: none; border-radius: 6px; "
+            f"color: {ANIM_COLORS['text_on_accent']}; border: none; border-radius: 6px; "
             f"padding: 4px 14px; font-weight: bold; }}"
             f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
         )
@@ -507,8 +528,10 @@ class _AESStateCompareWidget(QWidget):
         self._replay_btn.clicked.connect(self._on_replay)
         top_row.addWidget(self._replay_btn)
         outer.addLayout(top_row)
+        self._subbytes_mappings: list[tuple[str, str]] = []
+        self._sbox_dialog: _SBoxReferenceDialog | None = None
 
-        # Orta: önceki view → [operatör] → şimdiki view.
+        # Orta: önceki view → [operatör] → canlı sonuç view.
         # AddRoundKey adımında araya KALICI round_key matrisi ve ⊕ / =
         # operatörleri girer: "ÖNCEKİ ⊕ round_key = ŞİMDİKİ". Diğer
         # operasyonlarda round_key matrisi ve ikinci operatör gizlenir,
@@ -539,7 +562,7 @@ class _AESStateCompareWidget(QWidget):
         mid_row.addWidget(self._op2_label)
 
         self._curr_view = _AESMatrixView(
-            label_title="ŞİMDİKİ (canlı)",
+            label_title="SONUÇ",
             label_color=ANIM_COLORS["accent_blue"],
         )
         mid_row.addWidget(self._curr_view)
@@ -574,7 +597,7 @@ class _AESStateCompareWidget(QWidget):
         *,
         round_key: list[list[str]] | None = None,
     ) -> None:
-        """Adımı başlat: önceki donmuş, şimdiki animasyonlu.
+        """Adımı başlat: önceki donmuş, sonuç animasyonlu.
 
         AddRoundKey ve round_key verildiğinde araya KALICI round_key matrisi
         (statik) ile ⊕ / = operatörleri yerleştirilir; böylece
@@ -586,6 +609,16 @@ class _AESStateCompareWidget(QWidget):
         self._curr_view.stop_animation()
         # Önceki view'a donmuş before state
         self._prev_view.set_state(before)
+        self._sbox_btn.setVisible(operation == "SubBytes")
+        self._subbytes_mappings = (
+            [
+                (before[row][col], after[row][col])
+                for row in range(4)
+                for col in range(4)
+            ]
+            if operation == "SubBytes"
+            else []
+        )
 
         if operation == "AddRoundKey" and round_key is not None:
             # round_key'i kalıcı matris olarak göster + ⊕ / = operatörleri
@@ -614,17 +647,27 @@ class _AESStateCompareWidget(QWidget):
             operation, before, after, round_key=round_key,
         )
 
+    def _show_sbox_reference(self) -> None:
+        """AES'in sabit 16×16 S-Box tablosunu ayrı bir referans penceresinde gösterir."""
+        dialog = _SBoxReferenceDialog(self._subbytes_mappings, self)
+        self._sbox_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
     def show_final(self, final_state: list[list[str]]) -> None:
         """Round 14 sonrası: iki matris de final state, animasyon yok.
 
         round_key matrisi ve ikinci operatör gizlenir; yalnızca
-        ÖNCEKİ = ŞİMDİKİ (final) gösterilir.
+        ÖNCEKİ = SONUÇ (final) gösterilir.
         """
         self._curr_view.stop_animation()
         self._rk_view.setVisible(False)
         self._op2_label.setVisible(False)
         self._prev_view.set_state(final_state)
         self._curr_view.set_state(final_state)
+        self._sbox_btn.setVisible(False)
+        self._subbytes_mappings = []
         self._arrow_label.setText("=  FINAL  =")
         self._arrow_label.setStyleSheet(
             f"color: {ANIM_COLORS['accent_green']}; font-weight: bold;"

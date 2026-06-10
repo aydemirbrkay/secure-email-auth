@@ -36,6 +36,8 @@ veya kapatma sonrası timer çalışmaya devam eder (memory leak).
 """
 import unittest
 
+from PyQt6.QtCore import Qt
+
 # QWidget alt sınıfları için tek bir QApplication örneği gereklidir; bu örnek
 # artık conftest.py içindeki session kapsamlı autouse `qapp` fixture'ı
 # tarafından sağlanır (headless/offscreen ortam da orada ayarlanır).
@@ -118,6 +120,11 @@ class TestAESMatrixViewAnimation(unittest.TestCase):
         self.assertEqual(view._op, "AddRoundKey")
         self.assertEqual(view._tick, 0)
         self.assertGreater(view._total_ticks, 0)
+
+    def test_animation_tick_is_slow_enough_to_follow(self):
+        """AES round içi byte/faz geçişleri gözle takip edilebilecek hızda olmalı."""
+        view = self._make_view()
+        self.assertGreaterEqual(view._TICK_MS, 55)
 
     def test_play_animation_unknown_op_raises(self):
         """Alt tür: HATA YOLU (geçersiz argüman).
@@ -286,6 +293,40 @@ class TestAESMatrixViewAnimation(unittest.TestCase):
             view._draw_overlay(p, 24, 24)
             p.end()
 
+    def test_repaint_does_not_mutate_animation_state(self):
+        """paintEvent aynı tick'te kaç kez çağrılırsa çağrılsın state değişmemeli."""
+        from PyQt6.QtGui import QPixmap
+
+        before = [[f"{r}{c}" for c in range(4)] for r in range(4)]
+        after = [[f"A{r}{c}" for c in range(4)] for r in range(4)]
+        for operation, tick in (
+            ("AddRoundKey", 12),
+            ("SubBytes", 18),
+            ("ShiftRows", 45),
+            ("MixColumns", 38),
+        ):
+            with self.subTest(operation=operation):
+                view = self._make_view()
+                view.play_animation(operation, before, after)
+                view._anim_timer.stop()
+                view._tick = tick
+                state_before = [row[:] for row in view._state]
+                view.render(QPixmap(view.width(), view.height()))
+                view.render(QPixmap(view.width(), view.height()))
+                self.assertEqual(view._state, state_before)
+
+    def test_on_tick_advances_state_without_repaint(self):
+        """Animasyon state'i boyama değil timer tick'i tarafından ilerletilmeli."""
+        view = self._make_view()
+        before = [["00"] * 4 for _ in range(4)]
+        after = [["FF"] * 4 for _ in range(4)]
+        view.play_animation("AddRoundKey", before, after)
+        view._anim_timer.stop()
+
+        self.assertEqual(view._state, before)
+        view._on_tick()
+        self.assertEqual(view._state[0][0], "FF")
+
 
 class TestAESStateCompareWidget(unittest.TestCase):
     """_AESStateCompareWidget kapsayıcı widget — yan yana iki _AESMatrixView
@@ -358,9 +399,9 @@ class TestAESStateCompareWidget(unittest.TestCase):
         _arrow_label '⊕' olur. Böylece 'ÖNCEKİ ⊕ round_key = ŞİMDİKİ' akışı
         sönmeden ekranda kalır (kullanıcı tekrar oynatmak zorunda kalmaz)."""
         w = self._make_widget()
-        before = [[f"b{r}{c}" for c in range(4)] for r in range(4)]
-        after = [[f"a{r}{c}" for c in range(4)] for r in range(4)]
-        rk = [[f"k{r}{c}" for c in range(4)] for r in range(4)]
+        before = [["fc", "00", "00", "00"]] + [["00"] * 4 for _ in range(3)]
+        after = [["49", "00", "00", "00"]] + [["00"] * 4 for _ in range(3)]
+        rk = [["b5", "00", "00", "00"]] + [["00"] * 4 for _ in range(3)]
         w.start_step("AddRoundKey", before, after, op_color="#5B8EC2",
                      round_key=rk)
         # isHidden(): üst widget gösterilmese de açık görünürlük bayrağını yansıtır
@@ -368,6 +409,38 @@ class TestAESStateCompareWidget(unittest.TestCase):
         self.assertEqual(w._rk_view._state, rk)
         self.assertFalse(w._op2_label.isHidden())
         self.assertEqual(w._arrow_label.text(), "⊕")
+
+    def test_round_detail_has_no_redundant_operation_note(self):
+        """İşlem başlığı varken matrisi aşağı iten ikinci açıklama satırı oluşturulmamalı."""
+        w = self._make_widget()
+        self.assertFalse(hasattr(w, "_operation_note"))
+
+    def test_subbytes_passes_current_mappings_to_sbox_dialog(self):
+        """SubBytes örnekleri round detayında değil S-Box referansında gösterilmeli."""
+        w = self._make_widget()
+        before = [["fc", "00", "00", "00"]] + [["00"] * 4 for _ in range(3)]
+        after = [["b0", "63", "63", "63"]] + [["63"] * 4 for _ in range(3)]
+
+        w.start_step("SubBytes", before, after, op_color="#5B8EC2")
+
+        self.assertFalse(w._sbox_btn.isHidden())
+        self.assertEqual(w._subbytes_mappings[0], ("fc", "b0"))
+        self.assertEqual(len(w._subbytes_mappings), 16)
+
+        w._sbox_btn.click()
+        self.assertEqual(w._sbox_dialog.table.rowCount(), 16)
+        self.assertEqual(w._sbox_dialog.table.columnCount(), 16)
+        self.assertEqual(
+            w._sbox_dialog.windowModality(),
+            Qt.WindowModality.NonModal,
+        )
+        self.assertIn("fc → satır F, sütun C → S[F,C] = b0",
+                      w._sbox_dialog.example_label.text())
+
+    def test_result_label_is_concise(self):
+        """Sağ matris başlığı gereksiz animasyon durumu metni içermez."""
+        w = self._make_widget()
+        self.assertEqual(w._curr_view._label_title, "SONUÇ")
 
     def test_non_addroundkey_hides_round_key_matrix(self):
         """Alt tür: BİRİM (negatif/karşıt durum).

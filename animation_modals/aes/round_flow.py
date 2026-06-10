@@ -2,7 +2,7 @@
 """AES tüm round'ları FIPS 197 tarzı dikey listede gösteren widget."""
 from __future__ import annotations
 from collections.abc import Callable
-from PyQt6.QtCore import Qt, QTimer, QRect, QPoint
+from PyQt6.QtCore import Qt, QTimer, QRect, QPoint, QSize
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygon
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -28,7 +28,7 @@ class _AESRoundFlowWidget(QWidget):
     """
 
     # Hücre ve mizanpaj boyutları
-    _CELL_W = 56
+    _CELL_W = 116
     _CELL_H = 56
     _ARROW_W = 16
     _XOR_W = 18
@@ -36,7 +36,11 @@ class _AESRoundFlowWidget(QWidget):
     _ROW_H = 70
     _HEADER_H = 28
     _LEFT_LABEL_W = 60
+    _NOTE_GAP = 6
+    _NOTE_W = 90
+    _RIGHT_MARGIN = 12
     _BYTE_FONT = QFont("Courier New", 7, QFont.Weight.Bold)
+    _HEADER_FONT = QFont("IBM Plex Sans", 7, QFont.Weight.Bold)
 
     _COL_TITLES = ["Başlangıç", "SubBytes", "ShiftRows", "MixColumns", "Round Key"]
     _COL_COLORS = [
@@ -61,40 +65,47 @@ class _AESRoundFlowWidget(QWidget):
         # 15 satır: Round 0..14
         rows_count = 15
         total_h = self._HEADER_H + rows_count * self._ROW_H + 16
-        # 5 sütun + 3 ok + 1 ⊕
-        total_w = (
-            self._LEFT_LABEL_W + 12
-            + 5 * self._CELL_W
-            + 3 * (self._ARROW_W + 2 * self._COL_GAP)
-            + (self._XOR_W + 2 * self._COL_GAP)
-            + 16
-        )
+        total_w = self._content_width()
         self.setMinimumSize(total_w, total_h)
         self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+
+    def _column_positions(self) -> list[int]:
+        positions = [self._LEFT_LABEL_W + 8]
+        for connector_width in (
+            self._ARROW_W,
+            self._ARROW_W,
+            self._ARROW_W,
+            self._XOR_W,
+        ):
+            positions.append(
+                positions[-1]
+                + self._CELL_W
+                + self._COL_GAP
+                + connector_width
+                + self._COL_GAP
+            )
+        return positions
+
+    def _content_width(self) -> int:
+        return (
+            self._column_positions()[-1]
+            + self._CELL_W
+            + self._NOTE_GAP
+            + self._NOTE_W
+            + self._RIGHT_MARGIN
+        )
+
+    def sizeHint(self) -> QSize:  # type: ignore[override]
+        return QSize(self._content_width(), self.minimumHeight())
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Sütun x koordinatları
-        x = self._LEFT_LABEL_W + 8
-        col_x = []
-        # Sütun 0: Başlangıç
-        col_x.append(x); x += self._CELL_W + self._COL_GAP
-        # → SubBytes
-        col_x.append(x + self._ARROW_W + self._COL_GAP)
-        x = col_x[1] + self._CELL_W + self._COL_GAP
-        # → ShiftRows
-        col_x.append(x + self._ARROW_W + self._COL_GAP)
-        x = col_x[2] + self._CELL_W + self._COL_GAP
-        # → MixColumns
-        col_x.append(x + self._ARROW_W + self._COL_GAP)
-        x = col_x[3] + self._CELL_W + self._COL_GAP
-        # ⊕ Round Key
-        col_x.append(x + self._XOR_W + self._COL_GAP)
+        col_x = self._column_positions()
 
         # === Header ===
-        p.setFont(QFont("Georgia", 9, QFont.Weight.Bold))
+        p.setFont(self._HEADER_FONT)
         for i, (cx, title) in enumerate(zip(col_x, self._COL_TITLES)):
             p.setPen(QColor(self._COL_COLORS[i]))
             p.drawText(QRect(cx, 4, self._CELL_W, self._HEADER_H - 4),
@@ -144,7 +155,7 @@ class _AESRoundFlowWidget(QWidget):
             self._draw_matrix(p, col_x[4], y,
                               self._round_keys[0], self._COL_COLORS[4])
             # Notu sağa
-            self._draw_note(p, col_x[4] + self._CELL_W + 6, y,
+            self._draw_note(p, col_x[4] + self._CELL_W + self._NOTE_GAP, y,
                             "→ Round 1\nbaşlangıcı")
             return
 
@@ -179,8 +190,8 @@ class _AESRoundFlowWidget(QWidget):
         if ri == AES_FINAL_ROUND_INDEX:
             p.setFont(QFont("Georgia", 8, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["accent_green"]))
-            p.drawText(QRect(col_x[4] + self._CELL_W + 4, y,
-                             80, self._CELL_H),
+            p.drawText(QRect(col_x[4] + self._CELL_W + self._NOTE_GAP, y,
+                             self._NOTE_W, self._CELL_H),
                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                        "→  Şifreli\n     blok")
 
@@ -255,7 +266,7 @@ class _AESRoundFlowWidget(QWidget):
         """Sağ tarafta kısa açıklama notu."""
         p.setFont(QFont("Georgia", 8))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(x, y, 80, self._CELL_H),
+        p.drawText(QRect(x, y, self._NOTE_W, self._CELL_H),
                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                    text)
 

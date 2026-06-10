@@ -61,6 +61,12 @@ class _SHA256DiagramWidget(QWidget):
         self._phase = self._ANIM_PHASES  # başlangıçta statik
         self._anim_timer = QTimer(self)
         self._anim_timer.timeout.connect(self._next_phase)
+        # Aktif ok nabzı (pulse): faz içinde ok kalınlığını 3↔5 px arası
+        # değiştirip "şu an bu ok akıyor" hissi verir. Ayrı, hızlı bir timer
+        # ile faz timer'ından bağımsız çalışır.
+        self._pulse_on = False
+        self._pulse_timer = QTimer(self)
+        self._pulse_timer.timeout.connect(self._toggle_pulse)
 
     def set_data(
         self,
@@ -82,13 +88,25 @@ class _SHA256DiagramWidget(QWidget):
         # Animasyonu başlat
         self._phase = 0
         self._anim_timer.start(380)
+        self._pulse_on = True
+        self._pulse_timer.start(190)  # faz süresinin yarısı → faz başına 1 nabız
         self.update()
 
     def _next_phase(self) -> None:
+        """Bir sonraki animasyon fazına geç. Son faza ulaşınca hem faz hem nabız
+        timer'ı durur (oklar 'tamamlandı' durumunda sabitlenir)."""
         self._phase += 1
         if self._phase >= self._ANIM_PHASES:
             self._phase = self._ANIM_PHASES
             self._anim_timer.stop()
+            self._pulse_timer.stop()
+            self._pulse_on = False
+        self.update()
+
+    def _toggle_pulse(self) -> None:
+        """Aktif okun nabız durumunu çevirir (kalın↔ince) ve yeniden boyar.
+        Yalnızca animasyon sürerken çağrılır; aksi halde oklar sabit kalır."""
+        self._pulse_on = not self._pulse_on
         self.update()
 
     # --- QPainter çizimi ---
@@ -178,51 +196,69 @@ class _SHA256DiagramWidget(QWidget):
                    f"K={self._k[:6]}  W={self._w[:6]}")
 
         # ── Oklar ──
-        a_arrow_w = 3 if highlight_a_in else 1
-        e_arrow_w = 3 if highlight_e_in else 1
-
-        # A → T2
-        pen = QPen(QColor(ANIM_COLORS["accent_blue"]), a_arrow_w)
-        p.setPen(pen)
+        # Her ok 3 durumdan birinde: PASİF (henüz sırası gelmedi → soluk/ince),
+        # AKTİF (o anki faz → kalın + parlak + büyük ok ucu + pulse), TAMAMLANDI
+        # (geçti → düz, orta kalınlık). Böylece hangi değerin hangi kutuya gittiği
+        # ve "şu an ne akıyor" net görünür (Görsel 4 düzeltmesi).
+        # Aktif okta pulse: alt-tick ile 3↔5 px arası nabız (canlılık hissi).
+        pulse = 5 if (self._anim_timer.isActive() and self._pulse_on) else 3
         a_cx = ox + box_w // 2
-        p.drawLine(a_cx, top_y + box_h, a_cx, top_y + box_h + 20)
-        p.drawLine(a_cx, top_y + box_h + 20, t2_x + t2_w // 2, mid_y)
-        self._arrowhead(p, t2_x + t2_w // 2, mid_y)
-
-        # E → T1
-        pen = QPen(QColor(ANIM_COLORS["accent_yellow"]), e_arrow_w)
-        p.setPen(pen)
         e_cx = ox + 4 * (box_w + gap) + box_w // 2
-        p.drawLine(e_cx, top_y + box_h, e_cx, top_y + box_h + 20)
-        p.drawLine(e_cx, top_y + box_h + 20, t1_x + t1_w // 2, mid_y)
-        self._arrowhead(p, t1_x + t1_w // 2, mid_y)
-
-        # T2 → A'
-        t2a_w = 3 if highlight_a_out else 1
-        pen2 = QPen(QColor(ANIM_COLORS["accent_mauve"]), t2a_w)
-        p.setPen(pen2)
         a_out_cx = ox + box_w // 2
-        p.drawLine(t2_x + t2_w // 2, mid_y + 72, a_out_cx, bot_y)
-        self._arrowhead(p, a_out_cx, bot_y)
-
-        # T1 → E'
-        t1e_w = 3 if highlight_e_out else 1
-        pen3 = QPen(QColor(ANIM_COLORS["accent_yellow"]), t1e_w)
-        p.setPen(pen3)
         e_out_cx = ox + 4 * (box_w + gap) + box_w // 2
-        p.drawLine(t1_x + t1_w // 2, mid_y + 72, e_out_cx, bot_y)
-        self._arrowhead(p, e_out_cx, bot_y)
+        d_cx = ox + 3 * (box_w + gap) + box_w // 2
 
-        # D → E' (kesikli)
-        pen4 = QPen(QColor(ANIM_COLORS["accent_green"]), 1)
+        # A → T2 (aktif: ph==1; tamamlandı: ph>1)
+        a_state = self._arrow_state(ph, active_at=1)
+        self._draw_flow_arrow(
+            p, ANIM_COLORS["accent_blue"], a_state, pulse,
+            [(a_cx, top_y + box_h), (a_cx, top_y + box_h + 20),
+             (t2_x + t2_w // 2, mid_y)],
+            head="down", head_xy=(t2_x + t2_w // 2, mid_y),
+            label="A", label_xy=(a_cx + 6, top_y + box_h + 6),
+        )
+
+        # E → T1 (aktif: ph==2)
+        e_state = self._arrow_state(ph, active_at=2)
+        self._draw_flow_arrow(
+            p, ANIM_COLORS["accent_yellow"], e_state, pulse,
+            [(e_cx, top_y + box_h), (e_cx, top_y + box_h + 20),
+             (t1_x + t1_w // 2, mid_y)],
+            head="down", head_xy=(t1_x + t1_w // 2, mid_y),
+            label="E", label_xy=(e_cx + 6, top_y + box_h + 6),
+        )
+
+        # T2 → A' (aktif: ph==3)
+        t2a_state = self._arrow_state(ph, active_at=3)
+        self._draw_flow_arrow(
+            p, ANIM_COLORS["accent_mauve"], t2a_state, pulse,
+            [(t2_x + t2_w // 2, mid_y + 72), (a_out_cx, bot_y)],
+            head="down", head_xy=(a_out_cx, bot_y),
+            label="T2", label_xy=(t2_x + t2_w // 2 + 6, mid_y + 80),
+        )
+
+        # T1 → E' (aktif: ph==4)
+        t1e_state = self._arrow_state(ph, active_at=4)
+        self._draw_flow_arrow(
+            p, ANIM_COLORS["accent_yellow"], t1e_state, pulse,
+            [(t1_x + t1_w // 2, mid_y + 72), (e_out_cx, bot_y)],
+            head="down", head_xy=(e_out_cx, bot_y),
+            label="T1", label_xy=(t1_x + t1_w // 2 - 22, mid_y + 80),
+        )
+
+        # D → E' (kesikli, shift katkısı) — E' aktifken (ph==4) vurgulanır
+        d_active = ph == 4
+        d_col = QColor(ANIM_COLORS["accent_green"])
+        if not (ph >= 4):
+            d_col.setAlpha(90)  # henüz sırası gelmedi → soluk
+        pen4 = QPen(d_col, 3 if d_active else 1)
         pen4.setStyle(Qt.PenStyle.DashLine)
         p.setPen(pen4)
-        d_cx = ox + 3 * (box_w + gap) + box_w // 2
         p.drawLine(d_cx, top_y + box_h, d_cx, bot_y)
         p.drawLine(d_cx, bot_y, e_out_cx, bot_y)
-        self._arrowhead_right(p, e_out_cx, bot_y)
-        p.setFont(QFont("IBM Plex Sans", 7))
-        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        self._arrowhead_right(p, e_out_cx, bot_y, size=8 if d_active else 6)
+        p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
+        p.setPen(d_col)
         p.drawText(QRect(e_out_cx - box_w // 2 - 2, bot_y, box_w // 2, box_h // 2),
                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "+D")
 
@@ -305,6 +341,74 @@ class _SHA256DiagramWidget(QWidget):
         pen = QPen(border, 1)
         p.setPen(pen)
         p.drawRoundedRect(x, y, w, h, 4, 4)
+
+    @staticmethod
+    def _arrow_state(ph: int, active_at: int) -> str:
+        """Bir okun mevcut faza (ph) göre durumunu döndürür.
+
+        Amaç: paintEvent'in her ok için tek satırda 'pasif/aktif/tamamlandı'
+        kararını almasını sağlar; çizim mantığı sadeleşir.
+
+        Parametreler:
+          ph        : o anki animasyon fazı (0..5).
+          active_at : bu okun aktif olduğu faz numarası.
+
+        Dönüş: "pending" (henüz sırası gelmedi), "active" (tam o faz) veya
+        "done" (faz geçti) — _draw_flow_arrow bu değere göre stil seçer.
+        """
+        if ph < active_at:
+            return "pending"
+        if ph == active_at:
+            return "active"
+        return "done"
+
+    def _draw_flow_arrow(
+        self, p: QPainter, color_hex: str, state: str, pulse: int,
+        pts: list[tuple[int, int]],
+        head: str, head_xy: tuple[int, int],
+        label: str, label_xy: tuple[int, int],
+    ) -> None:
+        """Durum-duyarlı (pasif/aktif/tamamlandı) etiketli bir akış oku çizer.
+
+        Amaç: SHA round diyagramında hangi register'ın hangi kutuya katkı
+        verdiğini, hangi okun 'şu an' aktif olduğunu görselleştirir
+        (Görsel 4 düzeltmesi). Aktif ok kalın + parlak + büyük ok ucu + nabız;
+        pasif ok soluk/ince; tamamlanmış ok orta kalınlıkta düz.
+
+        Parametreler:
+          color_hex : okun temel rengi (ANIM_COLORS değeri).
+          state     : "pending" | "active" | "done" (_arrow_state çıktısı).
+          pulse     : aktif ok için nabızlı kalınlık (3 veya 5 px).
+          pts       : okun gövde çizgisini oluşturan ardışık (x, y) noktaları.
+          head      : ok ucu yönü — "down" (aşağı).
+          head_xy   : ok ucunun çizileceği (x, y) konumu.
+          label     : ok yanına yazılacak kısa etiket (örn. "A", "T2").
+          label_xy  : etiketin sol-üst (x, y) konumu.
+
+        Yan etki: verilen QPainter üzerine çizim yapar (kalem/fırça değişir).
+        """
+        col = QColor(color_hex)
+        if state == "pending":
+            col.setAlpha(80)        # henüz akmadı → soluk
+            width = 1
+            head_sz = 5
+        elif state == "active":
+            width = pulse           # nabızlı kalın
+            head_sz = 9
+        else:  # done
+            width = 2               # akış tamamlandı → düz orta
+            head_sz = 6
+
+        p.setPen(QPen(col, width))
+        for i in range(len(pts) - 1):
+            p.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1])
+        if head == "down":
+            self._arrowhead(p, head_xy[0], head_xy[1], size=head_sz)
+
+        # Etiket — yalnızca pasif değilse okunaklı renkte (pasifken soluk).
+        p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
+        p.setPen(col)
+        p.drawText(label_xy[0], label_xy[1], label)
 
     @staticmethod
     def _arrowhead(p: QPainter, x: int, y: int, size: int = 6) -> None:

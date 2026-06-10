@@ -187,6 +187,35 @@ class TestSHADiagramFitsWithoutScroll(unittest.TestCase):
         )
 
 
+class TestSHADiagramArrowState(unittest.TestCase):
+    """SHA diyagram okları faza göre durum değiştirmeli (Alt kategori: BİRİM).
+    _arrow_state, her okun pasif/aktif/tamamlandı durumunu faza göre belirler;
+    oklar artık sabit değil, işlemin aktif adımına göre vurgulanır (H3)."""
+
+    def test_arrow_state_pending_active_done(self):
+        """Alt tür: BİRİM (pozitif — durum geçişi).
+        active_at=2 olan bir ok: ph<2 'pending', ph==2 'active', ph>2 'done'
+        döndürmeli. Bu, okun animasyon boyunca üç farklı görünüm almasını
+        (soluk → kalın/nabız → düz) garanti eder."""
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+        fn = _SHA256DiagramWidget._arrow_state
+        self.assertEqual(fn(0, active_at=2), "pending")
+        self.assertEqual(fn(1, active_at=2), "pending")
+        self.assertEqual(fn(2, active_at=2), "active")
+        self.assertEqual(fn(3, active_at=2), "done")
+        self.assertEqual(fn(5, active_at=2), "done")
+
+    def test_arrow_state_first_arrow(self):
+        """Alt tür: BİRİM (negatif/kenar — ilk ok hiç 'pending' kalmamalı).
+        active_at=1 (A→T2) okunda ph=0'da 'pending', ph=1'de 'active';
+        ph asla active_at'ten küçük negatif bir duruma düşmez."""
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+        fn = _SHA256DiagramWidget._arrow_state
+        self.assertEqual(fn(0, active_at=1), "pending")
+        self.assertEqual(fn(1, active_at=1), "active")
+        self.assertEqual(fn(6, active_at=1), "done")
+
+
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
     (Alt kategori: SMOKE — class attribute kontratı)."""

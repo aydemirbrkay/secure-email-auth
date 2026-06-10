@@ -259,7 +259,10 @@ class _SHA256DiagramWidget(QWidget):
         self._arrowhead_right(p, e_out_cx, bot_y, size=8 if d_active else 6)
         p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
         p.setPen(d_col)
-        p.drawText(QRect(e_out_cx - box_w // 2 - 2, bot_y, box_w // 2, box_h // 2),
+        # "+D" etiketi E' kutusunun İÇİNE değil, kutunun ÜSTÜNDEKİ ok bölgesine
+        # çizilir (bot_y - 16). Eskiden bot_y hizasında olduğu için çıkış
+        # register kutusunun değeriyle çakışıyordu (Görsel 2).
+        p.drawText(QRect(e_out_cx - box_w - 4, bot_y - 16, box_w, 14),
                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "+D")
 
         # ── Alt satır: çıkış registerları ──

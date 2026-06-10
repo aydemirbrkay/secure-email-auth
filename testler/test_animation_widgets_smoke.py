@@ -252,6 +252,21 @@ class TestSHADiagramArrowState(unittest.TestCase):
         self.assertEqual(fn(1, active_at=1), "active")
         self.assertEqual(fn(6, active_at=1), "done")
 
+    def test_diagram_renders_all_phases_without_error(self):
+        """Alt tür: BİRİM (render smoke — çakışma/çizim regresyonu).
+        Diyagram tüm fazlarda (0..6) hatasız boyanmalı. +D etiketinin kutu
+        üstüne taşınması ve ok çizim mantığı paintEvent'i bozmamalı; bu test
+        QPainter zincirinde bir istisna oluşursa yakalar."""
+        from PyQt6.QtGui import QPixmap
+        from animation_modals.sha256.diagram_widget import _SHA256DiagramWidget
+        w = _SHA256DiagramWidget()
+        w.resize(800, 285)
+        w.set_data(["6a09e667"] * 8, ["5d7becae"] * 8,
+                   "54eb51c9", "08909ae5", "617364", "428a2f", 41)
+        for ph in range(7):
+            w._phase = ph
+            w.render(QPixmap(800, 285))  # istisna fırlatırsa test fail eder
+
 
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import unittest
+from pathlib import Path
 
 from arayuz import theme
 from arayuz.theme import (
@@ -33,6 +34,16 @@ def _foreign_hex(style: str) -> list[str]:
     """Aktif palette KARŞILIĞI OLMAYAN hex değerlerini döndürür (sızıntı tespiti)."""
     palette = set(v.upper() for v in theme.COLORS.values())
     return [h for h in _HEX_RE.findall(style) if h.upper() not in palette]
+
+
+def _contrast_ratio(foreground: str, background: str) -> float:
+    def luminance(color: str) -> float:
+        channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    light, dark = sorted((luminance(foreground), luminance(background)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
 
 
 class TestThemeStyleHelpers(unittest.TestCase):
@@ -99,6 +110,21 @@ class TestThemeStyleHelpers(unittest.TestCase):
     def test_label_title_unknown_key_raises(self) -> None:
         with self.assertRaises(KeyError):
             label_title_style("accent_yok")
+
+    def test_light_accent_yellow_meets_small_text_contrast(self) -> None:
+        ratio = _contrast_ratio(theme._LIGHT["accent_yellow"], theme._LIGHT["bg_main"])
+        self.assertGreaterEqual(ratio, 4.5)
+
+    def test_animation_sources_do_not_hardcode_white(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        for relative in (
+            "animation_modals/aes_matrix_view.py",
+            "animation_modals/aes/window.py",
+            "animation_modals/sha256/window.py",
+            "animation_modals/byte_widgets.py",
+        ):
+            source = (root / relative).read_text(encoding="utf-8")
+            self.assertNotIn("#FFFFFF", source.upper(), relative)
 
 
 if __name__ == "__main__":

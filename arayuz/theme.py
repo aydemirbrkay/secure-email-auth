@@ -43,7 +43,7 @@ _LIGHT: dict[str, str] = {
     "accent_blue":      "#2563EB",
     "accent_green":     "#059669",
     "accent_red":       "#DC2626",
-    "accent_yellow":    "#B7791F",
+    "accent_yellow":    "#8A5A00",
     "accent_mauve":     "#6D28D9",
     "accent_teal":      "#0D9488",
     "accent_peach":     "#C2630F",

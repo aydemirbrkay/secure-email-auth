@@ -377,10 +377,10 @@ class CryptoCore:
         """Pakete bağlanacak AAD'yi inşa eder.
 
         Biçim (ASCII, okunabilir):
-            ``secure-email-auth/v1|from=<fp16hex>|ts=<unix>``
+            ``secure-email-auth/v1|from=<fp32hex>|ts=<unix>``
 
-        - ``fp16hex``: gönderen açık anahtarının DER kodlu PEM'inin
-          SHA-256 özetinin ilk 8 byte'ının hex gösterimi (16 karakter).
+        - ``fp32hex``: gönderen açık anahtarının DER kodlu PEM'inin
+          SHA-256 özetinin ilk 16 byte'ının hex gösterimi (32 karakter).
         - ``unix``: Unix zaman damgası (saniye).
 
         AAD şifrelenmez ama GCM tag ile korunur; böylece protokol

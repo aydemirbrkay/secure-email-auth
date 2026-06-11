@@ -525,22 +525,58 @@ class _SBoxDerivationWidget(QWidget):
         )
 
     # ------------------------------------------------------------------
-    # Sahne geçişleri (geçici: Aşama 5'te "uçan byte" olacak)
+    # Sahne geçişleri ("uçan byte" kaydırma — süreklilik)
     # ------------------------------------------------------------------
 
     def _paint_transition(self, p: QPainter, rect: QRect, source_step: int,
                           t: float) -> None:
-        """Geçiş penceresinde kaynak adımın çıktısını gösterir.
+        """Kaynak adımın çıktısını sonraki sahnenin giriş konumuna kaydırır.
 
-        Şimdilik kaynak adımın bitmiş hâlini çizer; "uçan byte" kaydırma
-        animasyonu sonraki aşamada eklenecek.
+        Hedef sahnenin sönük bir taslağı arkada durur; üstünde tek bir "uçan
+        byte" kaynak çıkış noktasından hedef giriş noktasına lineer taşınır.
+        Bu, "bir adımın çıktısı sonrakinin girdisidir" fikrini görselleştirir.
         """
+        d = derive_sbox_value(self._byte)
+
+        # Geçişe göre: uçan byte değeri/rengi, kaynak ve hedef noktalar.
         if source_step == 0:
-            self._paint_scene_input(p, rect)
+            value = f"{self._byte:02x}"
+            color = QColor(ANIM_COLORS["accent_blue"])
+            src = QPoint(rect.center().x(), rect.top() + 52)
+            dst = QPoint(rect.center().x() - 70, rect.top() + 46)
+            ghost = self._paint_scene_inverse
         elif source_step == 1:
-            self._paint_scene_inverse(p, rect)
+            value = f"{d.inverse:02x}"
+            color = QColor(ANIM_COLORS["accent_mauve"])
+            src = QPoint(rect.center().x(), rect.top() + 46)
+            dst = QPoint(rect.center().x() - 110, rect.top() + 20)
+            ghost = self._paint_scene_affine
         else:
-            self._paint_scene_affine(p, rect)
+            value = f"{d.result:02x}"
+            color = QColor(ANIM_COLORS["accent_yellow"])
+            src = QPoint(rect.center().x(), rect.top() + 46)
+            dst = QPoint(rect.center().x(), rect.top() + 64)
+            ghost = self._paint_scene_result
+
+        # Hedef sahnenin sönük taslağı (yarı saydam) — bağlam korunur.
+        p.save()
+        p.setOpacity(0.18)
+        ghost(p, rect)
+        p.restore()
+
+        # Uçan byte: src→dst lineer interpolasyon (hafif yukarı yay).
+        x = int(src.x() + (dst.x() - src.x()) * t)
+        y = int(src.y() + (dst.y() - src.y()) * t)
+        box = 48
+        fill = QColor(color)
+        fill.setAlpha(80)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(color, 2))
+        p.drawRoundedRect(x - box // 2, y - box // 2, box, box, 8, 8)
+        p.setFont(QFont("Courier New", 20, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.drawText(QRect(x - box // 2, y - box // 2, box, box),
+                   Qt.AlignmentFlag.AlignCenter, value)
 
     # ------------------------------------------------------------------
     # Ortak çizim yardımcıları

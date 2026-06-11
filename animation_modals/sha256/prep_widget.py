@@ -279,6 +279,17 @@ class _SHA256PaddingWidget(QWidget):
         self._msg_lbl.setWordWrap(True)
         lay.addWidget(self._msg_lbl)
 
+        bd = self._padding_breakdown()
+        self._info_lbl = QLabel(
+            f"Padding: {bd['msg']} byte mesaj + 1 byte ayraç (0x80) + "
+            f"{bd['zeros']} byte sıfır (0x00) + 8 byte uzunluk = "
+            f"{bd['total']} byte ({blocks_count} blok)"
+        )
+        self._info_lbl.setFont(QFont("IBM Plex Sans", 10))
+        self._info_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._info_lbl.setWordWrap(True)
+        lay.addWidget(self._info_lbl)
+
         # Blok navigasyon butonları — eskiden burada başlıkla grid arasındaydı;
         # kullanıcı geri bildirimi: yatay scrollbar'ın hemen ÜSTÜNDE, sol-alt
         # köşede küçük butonlar olsun. Buton oluşturuluyor ama lay'e burada
@@ -361,6 +372,8 @@ class _SHA256PaddingWidget(QWidget):
         ):
             button = QPushButton(text)
             button.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+            button.setCheckable(True)
+            button.setMinimumHeight(34)
             button.clicked.connect(
                 lambda _checked=False, component=key: self._show_component_explanation(component)
             )
@@ -372,6 +385,7 @@ class _SHA256PaddingWidget(QWidget):
         self._detail_explanation.setFont(QFont("IBM Plex Sans", 9))
         self._detail_explanation.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._detail_explanation.setWordWrap(True)
+        self._detail_explanation.setFixedHeight(92)
         self._detail_explanation.setVisible(False)
         lay.addWidget(self._detail_explanation)
 
@@ -392,6 +406,7 @@ class _SHA256PaddingWidget(QWidget):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
+        self.restyle()
 
     def restyle(self) -> None:
         """Tema değişiminde QLabel stillerini DURUM BOZMADAN yeniden uygular
@@ -401,6 +416,7 @@ class _SHA256PaddingWidget(QWidget):
         msg_color = (ANIM_COLORS["text_muted"] if self._msg_is_empty
                      else ANIM_COLORS["text_secondary"])
         self._msg_lbl.setStyleSheet(f"color: {msg_color};")
+        self._info_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
         self._detail_explanation.setStyleSheet(
             f"color: {ANIM_COLORS['text_secondary']}; "
             f"background: {ANIM_COLORS['bg_card']}; "
@@ -409,10 +425,15 @@ class _SHA256PaddingWidget(QWidget):
         )
         for button in self._explanation_buttons.values():
             button.setStyleSheet(
-                f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
-                f"color: {ANIM_COLORS['accent_yellow']}; "
-                f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
-                "border-radius: 5px; padding: 5px 8px; font-weight: bold; }}"
+                f"QPushButton {{ background: {ANIM_COLORS['bg_card']}; "
+                f"color: {ANIM_COLORS['text_primary']}; "
+                f"border: 2px solid {ANIM_COLORS['accent_blue']}; "
+                "border-radius: 6px; padding: 6px 10px; font-weight: bold; }}"
+                f"QPushButton:hover {{ background: {ANIM_COLORS['bg_input']}; "
+                f"border-color: {ANIM_COLORS['accent_yellow']}; }}"
+                f"QPushButton:checked {{ background: {ANIM_COLORS['accent_blue']}; "
+                f"color: {ANIM_COLORS['text_on_accent']}; "
+                f"border-color: {ANIM_COLORS['accent_blue']}; }}"
             )
         if self._block_lbl is not None:
             self._block_lbl.setStyleSheet(
@@ -508,7 +529,15 @@ class _SHA256PaddingWidget(QWidget):
         return ""
 
     def _show_component_explanation(self, component: str) -> None:
-        """Tıklanan padding bileşeninin açıklamasını tek ayrıntı alanında gösterir."""
+        """Tıklanan bileşeni açar; aktif bileşene tekrar tıklanınca açıklamayı kapatır."""
+        clicked = self._explanation_buttons[component]
+        if not clicked.isChecked():
+            self._detail_explanation.clear()
+            self._detail_explanation.setVisible(False)
+            return
+        for key, button in self._explanation_buttons.items():
+            if key != component:
+                button.setChecked(False)
         self._detail_explanation.setText(self._component_explanation(component))
         self._detail_explanation.setVisible(True)
 

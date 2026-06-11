@@ -489,6 +489,18 @@ class TestEmbeddedSHANavigationFixed(unittest.TestCase):
             "Padding sayfası iç scroll ile sınırlı kalmalı",
         )
 
+    def test_padding_explanation_does_not_enable_vertical_scroll(self):
+        """Son 8 byte açıklaması açıldığında padding sayfası aşağı kaydırma açmamalı."""
+        from PyQt6.QtCore import Qt
+
+        w = self._make_window()
+        w._padding_widget._explanation_buttons["length"].click()
+
+        self.assertEqual(
+            w._padding_scroll.verticalScrollBarPolicy(),
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+        )
+
     def test_pages_are_scroll_wrapped(self):
         """Alt tür: BİRİM (negatif/yapısal — kalıbın korunması).
         İçerik widget'ı (prep/padding) DOĞRUDAN bir QScrollArea'nın

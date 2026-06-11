@@ -348,7 +348,7 @@ class TestSHAPrepExplanationPacing(unittest.TestCase):
         widget = TestPaddingBreakdown._make(b"abcdef")
 
         self.assertTrue(widget._detail_explanation.isHidden())
-        self.assertFalse(hasattr(widget, "_info_lbl"))
+        self.assertFalse(widget._info_lbl.isHidden())
         self.assertFalse(hasattr(widget, "_phase_lbl"))
         self.assertFalse(hasattr(widget, "_bitlen_lbl"))
 
@@ -358,6 +358,20 @@ class TestSHAPrepExplanationPacing(unittest.TestCase):
         self.assertIn("compression", widget._detail_explanation.text())
         self.assertIn("son 8 byte", widget._detail_explanation.text())
         self.assertIn("00 00 00 00 00 00 00 30", widget._detail_explanation.text())
+
+        widget._explanation_buttons["length"].click()
+        self.assertTrue(widget._detail_explanation.isHidden())
+
+    def test_padding_explanation_buttons_are_checkable_and_visually_emphasized(self):
+        """Açıklama düğmeleri belirgin olmalı ve yalnız seçili düğme aktif görünmeli."""
+        widget = TestPaddingBreakdown._make(b"abcdef")
+        button = widget._explanation_buttons["separator"]
+
+        self.assertTrue(button.isCheckable())
+        button.click()
+
+        self.assertTrue(button.isChecked())
+        self.assertIn("checked", button.styleSheet())
 
     def test_length_phase_explains_why_last_eight_bytes_are_at_end(self):
         """Uzunluk açıklaması son 8 baytın nerede kullanıldığını gerekçelendirmeli."""

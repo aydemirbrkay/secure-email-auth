@@ -241,12 +241,13 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             message_text=self._data["message_text"],
         )
         padding_scroll = QScrollArea()
+        self._padding_scroll = padding_scroll
         padding_scroll.setWidget(self._padding_widget)
         padding_scroll.setWidgetResizable(True)
         padding_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         padding_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         padding_scroll.setStyleSheet("background: transparent; border: none;")
         padding_scroll.setMinimumHeight(260)
         lay.addWidget(padding_scroll, stretch=1)

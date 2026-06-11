@@ -47,9 +47,9 @@ class _DERByteFlowWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._alice_b64 = alice_b64
-        # Kutu tabanlı yerleşim → eski 1000 px metin duvarından düşük; bit
-        # yeniden-gruplama satırları için ~860 px yeterli (kalanı scroll alanı).
-        self.setMinimumHeight(860)
+        # Kutu tabanlı yerleşim: TLV açıklamaları + bit yeniden-gruplama
+        # satırları için ~980 px (kalanı scroll alanı içinde kaydırılır).
+        self.setMinimumHeight(980)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._tick = 0
         self._timer = QTimer(self)
@@ -299,15 +299,74 @@ class _DERByteFlowWidget(QWidget):
                            colors[key], w=bw, highlight=fresh)
         y = box_y + 34
 
-        # Tamamlanınca toplam DER özeti
+        # Tamamlanınca: TLV (Etiket-Uzunluk-Değer) öğretici kırılımı.
+        # "n = 02 BF neden DER'de 02 02 02 BF oluyor?" sorusunu yanıtlar:
+        # ilk 02 = INTEGER etiketi, ikinci 02 = uzunluk, kalan = değer.
         if shown >= len(der):
-            p.setFont(QFont("Georgia", 10))
-            p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(0, y, self.width(), 18),
-                       Qt.AlignmentFlag.AlignCenter,
-                       f"DER ({len(der)} bayt) hazır — satır içinde Base64'e kodlanır.")
-            y += 22
+            y = self._draw_tlv_explanation(p, y)
         return y
+
+    def _draw_tlv_explanation(self, p: QPainter, y: int) -> int:
+        """DER INTEGER kaydının TLV (Tag-Length-Value) yapısını AES tarzı kısa
+        açıklamalarla anlatır. SEQUENCE'in iki INTEGER'ı tek grupta topladığını,
+        her INTEGER'ın 'etiket(02) + uzunluk + değer' olarak sarıldığını ve bu
+        yüzden n'in ham baytlarının önüne 02+uzunluk geldiğini gösterir."""
+        W = self.width()
+        n_bd = self._der_field_breakdown(H._DER_N)
+        e_bd = self._der_field_breakdown(H._DER_E)
+
+        # Kavram satırı
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "DER her sayıyı 3 parçayla sarar:  ETİKET + UZUNLUK + DEĞER  (TLV)")
+        y += 20
+
+        lines = [
+            (ANIM_COLORS["accent_blue"],
+             f"SEQUENCE (30):  iki INTEGER'ı tek grupta toplar · "
+             f"{self._der[1]:02X} = grubun uzunluğu ({self._der[1]} bayt)"),
+            (ANIM_COLORS["accent_mauve"],
+             f"n →  02 (INTEGER etiketi)  ·  {n_bd['length_hex']} "
+             f"(uzunluk = {n_bd['length']} bayt)  ·  {n_bd['value_hex']} (n'nin baytları)"),
+            (ANIM_COLORS["accent_peach"],
+             f"e →  02 (INTEGER etiketi)  ·  {e_bd['length_hex']} "
+             f"(uzunluk = {e_bd['length']} bayt)  ·  {e_bd['value_hex']} (e'nin baytı)"),
+        ]
+        p.setFont(QFont("Georgia", 9))
+        for col, text in lines:
+            p.setPen(QColor(col))
+            p.drawText(QRect(8, y, W - 16, 16),
+                       Qt.AlignmentFlag.AlignCenter, text)
+            y += 17
+
+        # Somut bağ: n'in ham baytı → DER kaydı
+        p.setFont(QFont("Georgia", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(8, y, W - 16, 16), Qt.AlignmentFlag.AlignCenter,
+                   f"Yani n = {H._N} → ham {n_bd['value_hex']}, DER kaydı: "
+                   f"02 {n_bd['length_hex']} {n_bd['value_hex']}")
+        return y + 22
+
+    @staticmethod
+    def _der_field_breakdown(field: bytes) -> dict:
+        """Bir DER INTEGER kaydını (02 · uzunluk · değer…) TLV parçalarına ayırır.
+
+        Parametre: field — ``02 len v0 v1 …`` biçiminde DER INTEGER baytları
+        (örn. ``H._DER_N``). field[0] etiket, field[1] uzunluk, field[2:] değer.
+
+        Dönüş: ``{'tag': '02', 'length': int, 'length_hex': 'NN',
+        'value_hex': 'HH HH …'}``. value_hex boşlukla ayrılmış 2-hane hex.
+        """
+        tag = f"{field[0]:02X}"
+        length = field[1]
+        value_hex = " ".join(f"{b:02X}" for b in field[2:])
+        return {
+            "tag": tag,
+            "length": length,
+            "length_hex": f"{length:02X}",
+            "value_hex": value_hex,
+        }
 
     def _draw_base64(self, p: QPainter, cx: int, y: int) -> int:
         """DEMO DER'in ilk 3 baytını 24 bite açar ve bu 24 biti 4×6-bit gruba

@@ -279,6 +279,35 @@ class TestDERByteFlowAnimation(unittest.TestCase):
         w._tick = w._t_end
         w.render(QPixmap(640, 860))  # istisna fırlatırsa fail
 
+    def test_der_field_breakdown_matches_encoding(self):
+        """Alt tür: BİRİM (pozitif — TLV kırılımı doğruluğu).
+        _der_field_breakdown, gerçek DER INTEGER kayıtlarını (H._DER_N/_DER_E)
+        Tag-Length-Value parçalarına doğru ayırmalı: etiket '02', uzunluk
+        alanı field[1]'e ve değer baytı sayısına eşit; value_hex tam o kadar
+        bayt içermeli. Bu, 'n = 02 BF → DER 02 02 02 BF' açıklamasının
+        dayandığı kırılımdır."""
+        import animation_modals.rsa.helpers as H
+        from animation_modals.rsa.der_widget import _DERByteFlowWidget
+        for field in (H._DER_N, H._DER_E):
+            bd = _DERByteFlowWidget._der_field_breakdown(field)
+            self.assertEqual(bd["tag"], "02", "INTEGER etiketi 02 olmalı")
+            self.assertEqual(bd["length"], field[1], "uzunluk alanı field[1]")
+            self.assertEqual(bd["length"], len(field) - 2,
+                             "uzunluk, değer baytı sayısına eşit olmalı")
+            self.assertEqual(len(bd["value_hex"].split()), bd["length"],
+                             "value_hex tam 'length' bayt içermeli")
+
+    def test_der_field_breakdown_surfaces_sign_byte(self):
+        """Alt tür: BİRİM (negatif/kenar — işaret baytı görünürlüğü).
+        Üst biti 1 olan değerlerde DER'in eklediği 0x00 işaret baytı value_hex
+        içinde aynen görünmeli (öğrenci ham baytla DER baytı farkını görür).
+        Örn. değer [00, BF], uzunluk 2 → value_hex '00 BF'."""
+        from animation_modals.rsa.der_widget import _DERByteFlowWidget
+        field = bytes([0x02, 0x02, 0x00, 0xBF])  # 02 len=2 değer=00 BF
+        bd = _DERByteFlowWidget._der_field_breakdown(field)
+        self.assertEqual(bd["value_hex"], "00 BF")
+        self.assertEqual(bd["length"], 2)
+
     def test_base64_label_clearance_prevents_overlap(self):
         """Alt tür: BİRİM (yerleşim regresyonu — üst üste binme).
         Base64 bölümünde 'bayt N' etiketli kutu satırı, bölüm başlığıyla

@@ -78,6 +78,9 @@ class MainWindow(QMainWindow):
         self._phase: str = "idle"
         self._alice_has_more: bool = False
         self._bob_has_more: bool = False
+        # Bob'un son kripto adımı gösterildikten sonra doğrulama mesajı (toast +
+        # karşılaştırma) hemen değil, bir sonraki "İleri" basışında çıkar.
+        self._bob_awaiting_verification: bool = False
         self._original_message: str = ""
         self._decoded_message: str = ""
         self._is_valid: bool = False
@@ -883,10 +886,10 @@ class MainWindow(QMainWindow):
                 self._receive_worker.start()
 
         elif self._phase == "bob":
-            step_idx = self._bob_panel.current_step
-            self._bob_has_more = self._bob_panel.show_next_step()
-            self._alice_panel.set_bob_diagram_step(step_idx)
-            if not self._bob_has_more:
+            # Son kripto adımı zaten gösterildiyse, bu basış doğrulama mesajını
+            # açar (toast + karşılaştırma). show_next_step TEKRAR ÇAĞRILMAZ.
+            if self._bob_awaiting_verification:
+                self._bob_awaiting_verification = False
                 self._phase = "done"
                 self._btn_next.setEnabled(False)
                 self._btn_next.setText("Tamamlandı")
@@ -896,6 +899,15 @@ class MainWindow(QMainWindow):
                 self._show_comparison(self._original_message, self._decoded_message)
                 toast = VerificationToast(self._is_valid, parent=self)
                 toast.show()
+                return
+
+            step_idx = self._bob_panel.current_step
+            self._bob_has_more = self._bob_panel.show_next_step()
+            self._alice_panel.set_bob_diagram_step(step_idx)
+            if not self._bob_has_more:
+                # Son adım gösterildi; doğrulama mesajını bir sonraki "İleri"
+                # basışına ertele. Buton "İleri"/aktif kalır.
+                self._bob_awaiting_verification = True
 
     def _show_comparison(self, orig: str, received: str) -> None:
         orig_hash = hashlib.sha256(orig.encode("utf-8")).hexdigest()
@@ -970,6 +982,7 @@ class MainWindow(QMainWindow):
         self._phase = "idle"
         self._alice_has_more = False
         self._bob_has_more = False
+        self._bob_awaiting_verification = False
         self._original_message = ""
         self._decoded_message = ""
         self._is_valid = False

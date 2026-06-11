@@ -533,6 +533,22 @@ class TestSHAStepCount(unittest.TestCase):
         for i, title in enumerate(SHA256AnimationWindow._TITLES):
             self.assertIn(f"Adım {i+1} / 5", title)
 
+    def test_titles_use_two_space_separator(self):
+        """Alt tür: BİRİM (ayraç biçimi — pozitif).
+        Adım numarasından sonra '—' uzun tire değil iki boşluk kullanılır:
+        'Adım N / 5  Başlık'. Kullanıcı isteğiyle tire kaldırıldı."""
+        from animation_modals import SHA256AnimationWindow
+        for i, title in enumerate(SHA256AnimationWindow._TITLES):
+            self.assertIn(f"Adım {i+1} / 5  ", title)
+
+    def test_titles_have_no_emdash_separator(self):
+        """Alt tür: BİRİM (ayraç biçimi — negatif/regresyon).
+        SHA adım başlıklarında uzun tire '—' artık bulunmamalı. Eski biçim
+        ('Adım N / 5 — Başlık') geri sızarsa bu test kırılır."""
+        from animation_modals import SHA256AnimationWindow
+        for title in SHA256AnimationWindow._TITLES:
+            self.assertNotIn("—", title)
+
 
 if __name__ == "__main__":
     unittest.main()

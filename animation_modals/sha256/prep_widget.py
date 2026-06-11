@@ -262,7 +262,7 @@ class _SHA256PaddingWidget(QWidget):
         lay.setSpacing(6)
 
         # Başlık
-        title = QLabel("Adım 2 / 5 — Padding ve Blok Yapısı")
+        title = QLabel("Adım 2 / 5  Padding ve Blok Yapısı")
         title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)

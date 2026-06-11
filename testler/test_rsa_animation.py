@@ -159,6 +159,23 @@ class TestRSAAnimationStructure(unittest.TestCase):
             self.assertIn(f"Adım {i+1} / 8", title,
                           f"index {i}: '{title}'")
 
+    def test_titles_use_two_space_separator(self):
+        """Alt tür: BİRİM (ayraç biçimi — pozitif).
+        Adım numarasından sonra ayraç olarak '—' uzun tire DEĞİL, iki
+        boşluk kullanılır: 'Adım N / 8  Başlık'. Kullanıcı isteği gereği
+        tire kaldırıldı; biçim 'Adım N / 8' + iki boşluk + başlık."""
+        from animation_modals import RSAAnimationWindow
+        for i, title in enumerate(RSAAnimationWindow._TITLES):
+            self.assertIn(f"Adım {i+1} / 8  ", title, f"index {i}: '{title}'")
+
+    def test_titles_have_no_emdash_separator(self):
+        """Alt tür: BİRİM (ayraç biçimi — negatif/regresyon).
+        Adım başlıklarında uzun tire '—' artık bulunmamalı. Eski biçim
+        ('Adım N / 8 — Başlık') geri sızarsa bu test kırılır."""
+        from animation_modals import RSAAnimationWindow
+        for title in RSAAnimationWindow._TITLES:
+            self.assertNotIn("—", title, f"tire kaldırılmalı: '{title}'")
+
     def test_eighth_title_is_encryption_tour(self):
         """Alt tür: SMOKE (sıralama doğrulaması).
         Son adım (index 7) 'Şifreleme' içerir — m → c → m' turu sayfası.

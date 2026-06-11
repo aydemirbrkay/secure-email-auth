@@ -32,14 +32,14 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     """
 
     _TITLES = [
-        "Adım 1 / 8 — p ve q Seçimi",
-        "Adım 2 / 8 — n = p × q",
-        "Adım 3 / 8 — ϕ(n) = (p − 1)(q − 1)",
-        "Adım 4 / 8 — Açık Üs e Seçimi",
-        "Adım 5 / 8 — Gizli Üs d  (e·d = 1 + k·ϕ)",
-        "Adım 6 / 8 — DER ve Base64 Kodlaması",
-        "Adım 7 / 8 — Gerçek Anahtarlarla Eşleşme",
-        "Adım 8 / 8 — Şifreleme / Deşifreleme Turu",
+        "Adım 1 / 8  p ve q Seçimi",
+        "Adım 2 / 8  n = p × q",
+        "Adım 3 / 8  ϕ(n) = (p − 1)(q − 1)",
+        "Adım 4 / 8  Açık Üs e Seçimi",
+        "Adım 5 / 8  Gizli Üs d  (e·d = 1 + k·ϕ)",
+        "Adım 6 / 8  DER ve Base64 Kodlaması",
+        "Adım 7 / 8  Gerçek Anahtarlarla Eşleşme",
+        "Adım 8 / 8  Şifreleme / Deşifreleme Turu",
     ]
 
     _CAPTIONS = [

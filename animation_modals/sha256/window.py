@@ -47,11 +47,11 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
     """
 
     _TITLES = [
-        "Adım 1 / 5 — Mesaj Hazırlığı",
-        "Adım 2 / 5 — Padding ve Blok Yapısı",
-        "Adım 3 / 5 — Mesaj Genişletme (W_i)",
-        "Adım 4 / 5 — Sıkıştırma Round Diyagramı",
-        "Adım 5 / 5 — Hash Eşleşmesi",
+        "Adım 1 / 5  Mesaj Hazırlığı",
+        "Adım 2 / 5  Padding ve Blok Yapısı",
+        "Adım 3 / 5  Mesaj Genişletme (W_i)",
+        "Adım 4 / 5  Sıkıştırma Round Diyagramı",
+        "Adım 5 / 5  Hash Eşleşmesi",
     ]
     _CAPTIONS = [
         "Metnin UTF-8 byte dizisine dönüşümü",
@@ -229,7 +229,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
 
-        title = QLabel("Adım 2 — Mesaj Genişletme (Message Schedule)")
+        title = QLabel("Adım 2  Mesaj Genişletme (Message Schedule)")
         title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_mauve']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)

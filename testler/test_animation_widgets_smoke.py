@@ -193,15 +193,19 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         )
 
     def test_plaintext_matrix_phase_uses_balanced_timing(self):
-        """State matrisi ne uzun bekletmeli ne de takip edilemeyecek kadar hızlı dolmalı."""
+        """State matrisi ne uzun bekletmeli ne de takip edilemeyecek kadar hızlı dolmalı.
+
+        Kullanıcı isteğiyle sütun başına süre 8→3 tick'e çekildi (belirgin
+        hızlanma, sütun-sütun görünürlük korunur); _FINISH_TICK türetilmiştir.
+        """
         from animation_modals.aes.prep_widget import _AESPlaintextPrepWidget
 
         self.assertEqual(_AESPlaintextPrepWidget._MATRIX_START_TICK, 96)
-        self.assertEqual(_AESPlaintextPrepWidget._MATRIX_TICKS_PER_COLUMN, 8)
-        self.assertEqual(_AESPlaintextPrepWidget._FINISH_TICK, 128)
+        self.assertEqual(_AESPlaintextPrepWidget._MATRIX_TICKS_PER_COLUMN, 3)
+        self.assertEqual(_AESPlaintextPrepWidget._FINISH_TICK, 108)
 
-    def test_plaintext_matrix_columns_advance_every_eight_ticks(self):
-        """Dört sütun dengeli aralıklarla görünmeli ve 128. tick'te tamamlanmalı."""
+    def test_plaintext_matrix_columns_advance_every_three_ticks(self):
+        """Dört sütun 3 tick aralıkla görünmeli ve 108. tick'te tamamlanmalı."""
         from animation_modals.aes.prep_widget import _AESPlaintextPrepWidget
 
         block = b"0123456789abcdef"
@@ -220,11 +224,11 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         self.assertTrue(all(widget._matrix_filled[row][0] for row in range(4)))
         self.assertFalse(any(widget._matrix_filled[row][1] for row in range(4)))
 
-        for _ in range(8):
+        for _ in range(3):
             widget._on_tick()
         self.assertTrue(all(widget._matrix_filled[row][1] for row in range(4)))
 
-        while widget._tick < 127:
+        while widget._tick < 107:
             widget._on_tick()
         self.assertFalse(widget._finished)
 

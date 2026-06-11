@@ -175,6 +175,41 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
             "Grid min-width scroll'da kapsanmali, stack'e sizmamali",
         )
 
+    def test_gcm_prep_uses_two_screens_then_rounds(self):
+        """GCM hazırlığı mesaj bloğu tanıtımından sayaç/keystream gerçeğine geçmeli."""
+        from animation_modals import AESAnimationWindow
+
+        a = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"mesaj",
+            expected_ct_hex="00" * 16,
+            nonce=bytes(range(12)),
+        )
+
+        self.assertEqual(a._prep_stack.count(), 2)
+        self.assertIs(a._prep_stack.currentWidget(), a._plaintext_prep_scroll)
+        self.assertFalse(a._plaintext_widget._is_gcm)
+        self.assertTrue(a._gcm_prep_widget._is_gcm)
+
+        a._switch_to_gcm_prep()
+        self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_scroll)
+
+        a._switch_to_rounds_only()
+        self.assertIs(a._stack.currentWidget(), a._round_page)
+
+    def test_ecb_prep_keeps_single_screen(self):
+        """Nonce bulunmayan eğitim akışında hazırlık tek ekran olarak kalmalı."""
+        from animation_modals import AESAnimationWindow
+
+        a = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"mesaj",
+            expected_ct_hex="00" * 16,
+        )
+
+        self.assertEqual(a._prep_stack.count(), 1)
+        self.assertFalse(hasattr(a, "_gcm_prep_widget"))
+
     def test_round_zero_uses_plaintext_state_as_before_matrix(self):
         """Round 0 AddRoundKey, plaintext state ⊕ round_key = sonuç göstermeli."""
         from animation_modals import AESAnimationWindow

@@ -64,6 +64,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
             aes_input = plaintext
 
         aes_result = aes256_encrypt_with_rounds(key, aes_input)
+        message_prep_result = (
+            aes256_encrypt_with_rounds(key, plaintext)
+            if self._gcm_mode
+            else aes_result
+        )
         self._steps_data = _build_steps(aes_result["rounds_data"])
         # GCM modunda final blok = keystream; ECB modunda = şifreli blok.
         self._final_block_hex = aes_result["final_block_hex"]
@@ -83,6 +88,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._state_matrix_data = aes_result.get(
             "state_matrix", [["--"] * 4 for _ in range(4)]
         )
+        self._message_prep_result = message_prep_result
 
         # round → ilk step indeksini hesapla
         self._round_start: dict[int, int] = {}
@@ -177,27 +183,56 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._intro.start()
 
     def _make_plaintext_prep_page(self) -> QWidget:
-        """Yeni Plaintext Hazırlığı sayfası — _AESPlaintextPrepWidget içerir."""
+        """ECB için tek, GCM için mesaj ve sayaç rolleri ayrılmış iki hazırlık ekranı kurar."""
         from PyQt6.QtWidgets import QScrollArea
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 4, 8, 4)
+        self._prep_stack = QStackedWidget()
+        lay.addWidget(self._prep_stack)
+
+        first_data = self._message_prep_result
         self._plaintext_widget = _AESPlaintextPrepWidget(
-            plaintext_text=self._plaintext_text_str,
-            plaintext_bytes=self._plaintext_bytes_data,
-            padded_plaintext=self._padded_plaintext_data,
-            first_block=self._first_block_data,
-            blocks_total=self._blocks_total_data,
-            state_matrix=self._state_matrix_data,
-            on_continue=self._switch_to_rounds_only,
-            mode="gcm" if self._gcm_mode else "ecb",
-            message_bytes=self._message_bytes,
+            plaintext_text=first_data.get("plaintext_text", ""),
+            plaintext_bytes=first_data.get("plaintext_bytes", b""),
+            padded_plaintext=first_data.get("padded_plaintext", b""),
+            first_block=first_data.get("first_block", b""),
+            blocks_total=first_data.get("blocks_total", 1),
+            state_matrix=first_data.get("state_matrix", [["--"] * 4 for _ in range(4)]),
+            on_continue=self._switch_to_gcm_prep if self._gcm_mode else self._switch_to_rounds_only,
+            mode="ecb",
         )
-        scroll = QScrollArea()
-        scroll.setWidget(self._plaintext_widget)
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        lay.addWidget(scroll)
+        if self._gcm_mode:
+            self._plaintext_widget._pp_title.setText("AES blok şifreleyici (temel)")
+            self._plaintext_widget._txt_lbl.setText(
+                "AES bir blok şifreleyicidir: 16 byte blok + 256-bit anahtar → "
+                "14 round → 16 byte blok. GİRDİ = mesajınızın ilk bloğu."
+            )
+            self._plaintext_widget._txt_lbl.setWordWrap(True)
+        self._plaintext_prep_scroll = QScrollArea()
+        self._plaintext_prep_scroll.setWidget(self._plaintext_widget)
+        self._plaintext_prep_scroll.setWidgetResizable(True)
+        self._plaintext_prep_scroll.setStyleSheet("background: transparent; border: none;")
+        self._prep_stack.addWidget(self._plaintext_prep_scroll)
+
+        if self._gcm_mode:
+            self._gcm_prep_widget = _AESPlaintextPrepWidget(
+                plaintext_text=self._plaintext_text_str,
+                plaintext_bytes=self._plaintext_bytes_data,
+                padded_plaintext=self._padded_plaintext_data,
+                first_block=self._first_block_data,
+                blocks_total=self._blocks_total_data,
+                state_matrix=self._state_matrix_data,
+                on_continue=self._switch_to_rounds_only,
+                mode="gcm",
+                message_bytes=self._message_bytes,
+            )
+            self._gcm_prep_widget._pp_title.setText("Mesajınız GCM kullanıyor")
+            self._gcm_prep_scroll = QScrollArea()
+            self._gcm_prep_scroll.setWidget(self._gcm_prep_widget)
+            self._gcm_prep_scroll.setWidgetResizable(True)
+            self._gcm_prep_scroll.setStyleSheet("background: transparent; border: none;")
+            self._prep_stack.addWidget(self._gcm_prep_scroll)
         return w
 
     def _make_round_page(self) -> QWidget:
@@ -426,7 +461,16 @@ class AESAnimationWindow(CryptoAnimationWindow):
         kalır, yalnızca görünen sayfa değişir.
         """
         self._stack.setCurrentWidget(self._plaintext_page)
+        self._prep_stack.setCurrentIndex(0)
         self._plaintext_widget.start()
+
+    def _switch_to_gcm_prep(self) -> None:
+        """GCM akışında temel AES mesaj bloğu ekranından sayaç/keystream ekranına geçer."""
+        if not self._gcm_mode:
+            self._switch_to_rounds_only()
+            return
+        self._prep_stack.setCurrentWidget(self._gcm_prep_scroll)
+        self._gcm_prep_widget.start()
 
     def _switch_to_rounds_only(self) -> None:
         """Plaintext prep tamamlanınca: rounds sayfasına geç (pencere büyütme YOK, zaten büyük)."""
@@ -527,7 +571,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
         # QLabel tabanlı sayfa widget'ları
-        for w in (getattr(self, "_intro", None), getattr(self, "_plaintext_widget", None)):
+        for w in (
+            getattr(self, "_intro", None),
+            getattr(self, "_plaintext_widget", None),
+            getattr(self, "_gcm_prep_widget", None),
+        ):
             if w is not None and hasattr(w, "restyle"):
                 w.restyle()
 

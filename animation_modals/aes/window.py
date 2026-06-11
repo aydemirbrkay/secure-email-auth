@@ -546,14 +546,21 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._linearize_widget.set_state(mat)
         self._linearize_widget.start()
 
-        # Matris ve column-major diziliş + 32 haneli hex çıktı yukarıdaki
-        # animasyon widget'ında gösterildiği için burada uzun teknik açıklama
-        # YOK; yalnızca bu çıktının programın AES sonucu olduğunu tek satırda
-        # belirtiyoruz (kullanıcı geri bildirimi: fazla metin gereksiz).
+        # RSA panelindeki "aynı matematik · farklı boyut" üslubuyla, bu çıktının
+        # programın GERÇEK şifrelemesiyle ilişkisini dürüstçe belirtiyoruz:
+        # AES-256 algoritması gerçektir (FIPS-197 doğrulanmış), ama burada
+        # gösterilen tek-blok ECB çıktısıdır; programın asıl mesaj şifrelemesi
+        # aynı AES'i GCM modunda (sayaç + kimlik etiketi) kullanır, çıktı farklıdır.
         green = ANIM_COLORS["accent_green"]
+        sec = ANIM_COLORS["text_secondary"]
         html_body = (
             f'<div style="color:{green}; font-weight:bold;">'
-            "✅ Yukarıdaki diziliş, programın AES-256 şifreleme sonucudur."
+            "✅ Algoritma gerçektir: bu, FIPS-197 standardına uygun AES-256'nın ta kendisidir."
+            "</div>"
+            f'<div style="color:{sec};">'
+            "Aynı AES · farklı mod: yukarıdaki çıktı tek-blok ECB'dir (eğitim için). "
+            "Programın gerçek mesaj şifrelemesi aynı AES-256'yı GCM modunda kullanır, "
+            "bu yüzden gönderilen şifreli metin bundan farklıdır."
             "</div>"
         )
         self._match_lbl.setTextFormat(Qt.TextFormat.RichText)

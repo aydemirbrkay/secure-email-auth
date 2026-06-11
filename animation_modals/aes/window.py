@@ -538,85 +538,50 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._matrix_pair.show_final(mat)
 
         # ── Final state matrisi → şifreli metin byte sırası ──
-        # AES, state matrisini sütun-öncelikli (column-major) okur
-        col_bytes: list[list[str]] = [
-            [mat[r][c] for r in range(4)] for c in range(4)
-        ]
-        hex_out = "".join("".join(col) for col in col_bytes)
+        # AES, state matrisini sütun-öncelikli (column-major) okur. Matrisin
+        # kendisi yukarıda gerçek widget'la (show_final) gösterildiği için
+        # burada matrisi METİN olarak TEKRAR ÇİZMİYORUZ; yalnızca matristen
+        # çıkan 32 haneli hex sonucu ve kısa bir kavram özeti veriyoruz.
+        hex_out = "".join(
+            mat[r][c] for c in range(4) for r in range(4)
+        )
         assert len(hex_out) == 32, f"Unexpected hex_out length: {len(hex_out)}"
 
-        col_lines = []
-        for c in range(4):
-            vals = " ".join(col_bytes[c])
-            col_lines.append(f"  Sütun {c+1}: [{vals}]")
+        sec = ANIM_COLORS["text_secondary"]
+        muted = ANIM_COLORS["text_muted"]
+        yellow = ANIM_COLORS["accent_yellow"]
+        green = ANIM_COLORS["accent_green"]
+        mono = "font-family:'Courier New',monospace;"
 
-        lines = [
-            "━━  14 ROUND TAMAMLANDI  ━━",
-            "",
-            "Final State Matrisi (Round 14 çıkışı):",
-            "  ┌────────────────────────┐",
-        ]
-        for r in range(4):
-            lines.append(f"  │  {' '.join(mat[r])}  │")
-        lines += [
-            "  └────────────────────────┘",
-            "",
-            "━━  MATRİS → ŞİFRELİ ÇIKIŞ  ━━",
-            "",
-            "AES, matrisi sütun-öncelikli okur (Column-Major):",
-            "",
-        ]
-        lines += col_lines
-        lines += [
-            "",
-            "Birleştirme: Sütun1 ‖ Sütun2 ‖ Sütun3 ‖ Sütun4",
-            f"  → {hex_out[:16]}",
-            f"     {hex_out[16:32]}",
-            "",
-            "━━  GCM MODU  ━━",
-            "",
-            "AES-256-GCM'de bu 16-byte blok doğrudan şifreli metin değil,",
-            "CTR sayacının şifrelenmiş halidir (keystream).",
-            "",
-            "keystream ⊕ plaintext = ciphertext",
-            "",
-            "GHASH fonksiyonu da ayrıca kimlik doğrulama etiketi üretir.",
-            "",
-            "AAD (protokol etiketi + gönderen parmak izi + Unix zaman damgası)",
-            "tag hesabına dahil edilir; zaman damgası tazelik/replay kontrolüne",
-            "(bob_receive katmanı) temel oluşturur.",
-            "",
-            "─" * 54,
-            f"Animasyon çıktısı (AES-ECB blok dönüşümü):  {self._final_block_hex}",
-            f"crypto_core AES-GCM çıktısı — ct(‖tag) ilk 32 byte kesiti:  {self._expected_ct_hex}",
-            "",
-        ]
-
-        # Build HTML for the label so the ⚠ warning line can be colored
-        # differently (yellow) from the ✅ success line (green via stylesheet).
-        warning_line = (
-            f'<span style="color:{ANIM_COLORS["accent_yellow"]}; font-weight:bold;">'
-            "⚠  Bu iki değer farklıdır — bu beklenen bir durumdur:"
-            "</span>"
+        # Kısa, okunması kolay özet (eski uzun teknik metin yerine).
+        html_body = (
+            f'<div style="color:{sec};">'
+            "Matris sütun-öncelikli (column-major) okunarak 16 byte sıraya dizilir:"
+            "</div>"
+            f'<div style="{mono} color:{ANIM_COLORS["text_primary"]}; font-weight:bold;">'
+            f"&nbsp;&nbsp;{hex_out[:16]}<br>&nbsp;&nbsp;{hex_out[16:32]}"
+            "</div>"
+            "<br>"
+            f'<div style="color:{sec};">'
+            "AES-256-GCM'de bu blok doğrudan şifreli metin değildir; bir keystream'dir:"
+            f'<br><span style="{mono} color:{yellow};">'
+            "&nbsp;&nbsp;ciphertext = keystream ⊕ plaintext</span>"
+            "<br>Ayrıca GHASH, kimlik doğrulama etiketini (tag) üretir."
+            "</div>"
+            "<br>"
+            f'<div style="color:{muted}; font-size:11px;">'
+            "⚠ Animasyon çıktısı (tek blok AES-ECB) ile gerçek GCM çıktısı farklıdır — "
+            "bu beklenen bir durumdur (GCM farklı IV/sayaç kullanır)."
+            "</div>"
+            "<br>"
+            f'<div style="color:{green}; font-weight:bold;">'
+            "✅ AES-256-GCM şifreleme doğru çalıştı."
+            "</div>"
         )
-        plain_lines = [
-            "",
-            "  Animasyon: plaintext'in 14 round AES-ECB çıktısı (tek blok, tag yok)",
-            "  GCM modu:  CTR sayacı şifrelenir → plaintext ⊕ keystream → ciphertext",
-            "             ardından GHASH ile 16 byte kimlik doğrulama etiketi (tag)",
-            "             ciphertext'in sonuna eklenir.",
-            "             Aynı anahtar, farklı IV ve counter → farklı çıktı",
-            "",
-            "  Not: Yukarıdaki \"GCM çıktısı\" tam şifreli metin değil, yalnızca",
-            "  ciphertext‖tag değerinin ilk 32 byte'ının hex ÖNİZLEMESİDİR.",
-            "  Kısa mesajlarda bu önizleme tag baytlarını da içerir.",
-            "",
-            "✅  AES-256-GCM Şifreleme Doğru Çalıştı",
-        ]
-        html_body = "<br>".join(lines) + "<br>" + warning_line + "<br>" + "<br>".join(plain_lines)
         self._match_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._match_lbl.setText(html_body)
-        self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        # Gövde rengi nötr (text_primary); vurgular HTML span'lerinde verilir.
+        self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_primary']};")
 
     # showEvent override — intro başlatılmış, timer başlatma
     def showEvent(self, event) -> None:  # type: ignore[override]

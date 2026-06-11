@@ -577,6 +577,46 @@ class TestSHAMatchBadge(unittest.TestCase):
         self.assertIn("❌", text)
 
 
+class TestSHARealFirstWord(unittest.TestCase):
+    """Adım 5'te gösterilen ilk-kelime toplaması GERÇEK crypto_core çıktısının
+    başını üretmeli (Alt kategori: BİRİM — saf aritmetik + render).
+
+    _first_word_modular_sum(önceki H0, A) = final_hash'in ilk 8 hanesi; bu,
+    kullanıcının ekranda gördüğü değerin gerçek hash olduğunu kanıtlar."""
+
+    def test_first_word_sum_equals_real_hash_prefix(self):
+        """Alt tür: BİRİM (pozitif — gerçek değer bağı).
+        Birkaç mesaj için (önceki H0 + A) mod 2³² sonucu, hem sha256_steps
+        final_hash'inin hem de hashlib.sha256'nın ilk 8 hanesine eşit olmalı."""
+        import hashlib
+        from animation_modals.sha256_pure import sha256_steps
+        from animation_modals.sha256.match_widget import _MatchAssemblyWidget
+        for msg in (b"", b"a", b"asdasdasd", b"merhaba dunya 123"):
+            d = sha256_steps(msg)
+            bd = _MatchAssemblyWidget._first_word_modular_sum(
+                d["pre_final_h"][0], d["final_working"][0])
+            real = hashlib.sha256(msg).hexdigest()
+            self.assertEqual(bd["result"], real[:8], f"{msg!r}: gerçek ilk 8")
+            self.assertEqual(bd["result"], d["final_hash"][:8])
+
+    def test_first_word_sum_handles_overflow(self):
+        """Alt tür: BİRİM (negatif/kenar — 33. bit taşması).
+        Toplam 2³²'yi aşarsa overflow True olmalı ve sonuç düşük 32 bit
+        (mod 2³²) olmalı. Örn. ffffffff + 00000002 = 1_00000001."""
+        from animation_modals.sha256.match_widget import _MatchAssemblyWidget
+        bd = _MatchAssemblyWidget._first_word_modular_sum("ffffffff", "00000002")
+        self.assertTrue(bd["overflow"], "2³² aşımı overflow=True olmalı")
+        self.assertEqual(bd["result"], "00000001", "sonuç düşük 32 bit")
+
+    def test_no_overflow_flag_when_fits(self):
+        """Alt tür: BİRİM (pozitif — taşma yok durumu).
+        Toplam 32 bite sığıyorsa overflow False ve sonuç ham toplama eşit."""
+        from animation_modals.sha256.match_widget import _MatchAssemblyWidget
+        bd = _MatchAssemblyWidget._first_word_modular_sum("6a09e667", "00000001")
+        self.assertFalse(bd["overflow"])
+        self.assertEqual(bd["result"], "6a09e668")
+
+
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
     (Alt kategori: SMOKE — class attribute kontratı)."""

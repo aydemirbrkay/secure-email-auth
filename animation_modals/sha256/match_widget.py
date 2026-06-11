@@ -51,7 +51,7 @@ class _MatchAssemblyWidget(QWidget):
         # stack height'ini büyütmez; scroll içinde gerekirse dikey kaydırılır.
         # (Önceki 460 değeri kartı kırpıyordu — kullanıcı en alttaki yeşil
         # 'Eşleşme: Başarılı' kutusunu göremiyordu.)
-        self.setMinimumHeight(510)
+        self.setMinimumHeight(620)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._pre_h: list[str] = ["--------"] * 8
         self._working: list[str] = ["--------"] * 8
@@ -110,6 +110,9 @@ class _MatchAssemblyWidget(QWidget):
         # Faz 4: Eşleşme doğrulaması — t >= T_F3_END
         if t >= self._T_F3_END:
             self._draw_phase4(p, W, H, t - self._T_F3_END)
+            # Gerçek değerin başı: crypto_core çıktısının ilk 8 hanesini, son
+            # bloğun toplama adımıyla (önceki H0 + A) kullanıcı önünde türet.
+            self._draw_real_first_word(p, W, H, t - self._T_F3_END)
 
         p.end()
 
@@ -265,6 +268,99 @@ class _MatchAssemblyWidget(QWidget):
             text = self._match_badge_text(match_all)
             p.drawText(QRect(card_x, card_y, card_w, card_h),
                        Qt.AlignmentFlag.AlignCenter, text)
+
+    @staticmethod
+    def _first_word_modular_sum(pre_hex: str, working_hex: str) -> dict:
+        """Final hash'in İLK 32-bit kelimesini hesaplar: (önceki H0 + A) mod 2³².
+
+        SHA-256'da her bloğun sonunda H[i] = (H[i] + working[i]) mod 2³²
+        yapılır. final_hash'in ilk 8 hex hanesi = H[0]'ın bu toplama sonucudur.
+        Bu yardımcı, animasyonda gösterilen değerin GERÇEK crypto_core
+        çıktısının başı olduğunu kanıtlamak için aynı aritmetiği saf biçimde
+        yeniden üretir.
+
+        Parametreler:
+          pre_hex     : önceki H0 (8 hane hex; tek blokta SHA-256 sabiti
+                        6a09e667, çok blokta biriken chaining değeri).
+          working_hex : son bloğun A register'ı (64. round çıkışı, 8 hane hex).
+
+        Dönüş: ``{'pre','working','raw_hex','result','overflow'}``. result 8
+        hane hex (mod 2³² sonucu); overflow True ise 33. bit (taşma) atıldı.
+        """
+        pre_i = int(pre_hex, 16)
+        w_i = int(working_hex, 16)
+        raw = pre_i + w_i
+        result = raw & 0xFFFFFFFF
+        return {
+            "pre": pre_hex,
+            "working": working_hex,
+            "raw_hex": f"{raw:08x}",
+            "result": f"{result:08x}",
+            "overflow": raw > 0xFFFFFFFF,
+        }
+
+    def _draw_real_first_word(self, p: QPainter, W: int, H_total: int, t: int) -> None:
+        """Adım 5'i zenginleştirir: crypto_core çıktısının İLK 8 hanesini, son
+        bloğun (önceki H0 + A) mod 2³² toplamasıyla kullanıcı önünde türetir.
+
+        Amaç: kullanıcı, ekranda beliren hash'in gerçekten hesaplanmış gerçek
+        değer olduğunu görsün ('kendini dahil etme'). Satırlar Faz 4'teki
+        karakter açılımıyla eşzamanlı (chars_revealed) kademeli belirir; ilk 8
+        karakter göründüğünde sonuç da tamamlanır. SHA adımlarının genel yapısı
+        DEĞİŞMEZ — yalnızca eşleşme adımına gerçek-değer kanıtı eklenir.
+        """
+        chars_revealed = min(64, t * 4)
+        if chars_revealed < 1:
+            return
+        bd = self._first_word_modular_sum(self._pre_h[0], self._working[0])
+
+        y = 496
+        p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(0, y, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "Gerçek hash'in ilk 8 hanesini birlikte hesaplayalım "
+                   "(son blok toplaması):")
+        y += 20
+
+        cx = W // 2
+        col_l = cx - 150
+        mono = QFont("Courier New", 10)
+        p.setFont(mono)
+        # Operandlar
+        p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+        p.drawText(QRect(col_l, y, 300, 16),
+                   Qt.AlignmentFlag.AlignLeft,
+                   f"  önceki H0      = {bd['pre']}")
+        y += 17
+        p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
+        p.drawText(QRect(col_l, y, 300, 16),
+                   Qt.AlignmentFlag.AlignLeft,
+                   f"+ A (64. round)  = {bd['working']}")
+        y += 17
+        if chars_revealed >= 4:
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(col_l, y, 300, 16),
+                       Qt.AlignmentFlag.AlignLeft, "  ───────────────")
+            y += 16
+            if bd["overflow"]:
+                note = (f"  toplam = 1·{bd['result']}  →  (mod 2³²) "
+                        f"en soldaki taşma biti atılır")
+            else:
+                note = (f"  toplam = {bd['result']}  "
+                        f"(32 bit'e sığar; mod 2³² aynı)")
+            p.drawText(QRect(col_l, y, 360, 16),
+                       Qt.AlignmentFlag.AlignLeft, note)
+            y += 18
+        if chars_revealed >= 8:
+            match8 = (self._expected[:8] == bd["result"])
+            col = (ANIM_COLORS["accent_green"] if match8
+                   else ANIM_COLORS["accent_peach"])
+            p.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
+            p.setPen(QColor(col))
+            tail = "  (crypto_core ilk 8 hane ile aynı)" if match8 else "  (?)"
+            p.drawText(QRect(col_l, y, 380, 16),
+                       Qt.AlignmentFlag.AlignLeft,
+                       f"= {bd['result']}{tail}")
 
     @staticmethod
     def _match_badge_text(match_all: bool) -> str:

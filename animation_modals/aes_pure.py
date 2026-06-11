@@ -299,3 +299,36 @@ def aes256_encrypt_with_rounds(key: bytes, plaintext: bytes) -> dict:
         "blocks_total": blocks_total,
         "state_matrix": state_matrix,
     }
+
+
+# ---------------------------------------------------------------------------
+# GCM çekirdeği (eğitim amaçlı): ilk keystream bloğu
+# ---------------------------------------------------------------------------
+# Uygulamanın gerçek mesaj şifrelemesi AES-256-GCM kullanır. GCM, AES blok
+# şifrelemesini DÜZ METNE değil bir SAYAÇ bloğuna uygular; çıkan keystream'i
+# veriyle XOR'lar. 12-byte nonce'ta sayaç bloğu J0 = nonce ‖ 0x00000001'dir;
+# ilk VERİ keystream bloğu inc32(J0) = nonce ‖ 0x00000002 kullanır. Bu blok
+# AES-256 ile şifrelenince GCM'in ürettiği gerçek ilk keystream elde edilir
+# (PyCA AESGCM çıktısının ilk 16 byte'ıyla birebir eşleşir — testle doğrulandı).
+
+def gcm_first_keystream_block(session_key: bytes, nonce: bytes) -> bytes:
+    """GCM'in ilk veri keystream bloğunu (16 byte) gerçek anahtarla üretir.
+
+    Sayaç bloğu ``nonce ‖ 0x00000002`` (16 byte) kurulur ve gerçek session
+    anahtarıyla AES-256 blok şifrelemesinden geçirilir. Sonuç, AES-256-GCM'in
+    veriyle XOR'ladığı ilk keystream bloğudur; ``keystream ⊕ plaintext`` o
+    bloğun gerçek ciphertext'ini verir. Eğitim animasyonu bu çekirdeği gösterir.
+
+    Parametreler:
+      session_key : 32 byte AES-256 oturum anahtarı (K_S)
+      nonce       : 12 byte GCM nonce
+
+    Dönüş: 16 byte keystream bloğu.
+    """
+    if len(session_key) != 32:
+        raise ValueError("GCM keystream için 32 byte oturum anahtarı gerekli")
+    if len(nonce) != 12:
+        raise ValueError("GCM keystream için 12 byte nonce gerekli")
+    counter_block = nonce + (2).to_bytes(4, "big")  # inc32(J0)
+    result = aes256_encrypt_with_rounds(session_key, counter_block)
+    return bytes.fromhex(result["final_block_hex"])

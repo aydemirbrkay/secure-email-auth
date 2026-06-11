@@ -190,9 +190,12 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         self.assertIs(a._prep_stack.currentWidget(), a._plaintext_prep_scroll)
         self.assertFalse(a._plaintext_widget._is_gcm)
         self.assertTrue(a._gcm_prep_widget._is_gcm)
+        self.assertEqual(a._plaintext_widget._pp_title.text(), "AES blok şifreleyici")
+        self.assertEqual(a._plaintext_widget._txt_lbl.text(), 'Plaintext: "mesaj"')
 
         a._switch_to_gcm_prep()
-        self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_scroll)
+        self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_page)
+        self.assertTrue(hasattr(a, "_gcm_prep_keystream_btn"))
 
         a._switch_to_rounds_only()
         self.assertIs(a._stack.currentWidget(), a._round_page)
@@ -232,6 +235,7 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
             bytes(keystream[i] ^ message[i] for i in range(len(message))),
         )
         self.assertTrue(hasattr(a, "_keystream_btn"))
+        self.assertIs(a._keystream_btn.parentWidget(), a._gcm_xor_widget)
         self.assertFalse(hasattr(a, "_gcm_widget"))
 
         a._switch_from_gcm_xor_to_match()
@@ -677,6 +681,15 @@ class TestSHARealFirstWord(unittest.TestCase):
         bd = _MatchAssemblyWidget._first_word_modular_sum("6a09e667", "00000001")
         self.assertFalse(bd["overflow"])
         self.assertEqual(bd["result"], "6a09e668")
+
+    def test_modulus_exponent_is_written_readably(self):
+        """Dar Courier görünümünde üst simge yerine açık '2 üzeri 32' metni kullanılmalı."""
+        from animation_modals.sha256.match_widget import _MatchAssemblyWidget
+
+        text = _MatchAssemblyWidget._modulus_label()
+
+        self.assertEqual(text, "mod 2 üzeri 32")
+        self.assertNotIn("³", text)
 
 
 class TestSHADiagramRoundConsistency(unittest.TestCase):

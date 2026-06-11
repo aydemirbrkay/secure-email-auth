@@ -208,12 +208,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             mode="ecb",
         )
         if self._gcm_mode:
-            self._plaintext_widget._pp_title.setText("AES blok şifreleyici (temel)")
-            self._plaintext_widget._txt_lbl.setText(
-                "AES bir blok şifreleyicidir: 16 byte blok + 256-bit anahtar → "
-                "14 round → 16 byte blok. GİRDİ = mesajınızın ilk bloğu."
-            )
-            self._plaintext_widget._txt_lbl.setWordWrap(True)
+            self._plaintext_widget._pp_title.setText("AES blok şifreleyici")
         self._plaintext_prep_scroll = QScrollArea()
         self._plaintext_prep_scroll.setWidget(self._plaintext_widget)
         self._plaintext_prep_scroll.setWidgetResizable(True)
@@ -221,6 +216,18 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._prep_stack.addWidget(self._plaintext_prep_scroll)
 
         if self._gcm_mode:
+            gcm_page = QWidget()
+            gcm_page_layout = QVBoxLayout(gcm_page)
+            gcm_page_layout.setContentsMargins(0, 0, 0, 0)
+            gcm_top_row = QHBoxLayout()
+            gcm_top_row.addStretch(1)
+            self._gcm_prep_keystream_btn = QPushButton("keystream")
+            self._gcm_prep_keystream_btn.setFixedHeight(28)
+            self._gcm_prep_keystream_btn.setStyleSheet(self._reference_button_style())
+            self._gcm_prep_keystream_btn.clicked.connect(self._show_keystream_reference)
+            gcm_top_row.addWidget(self._gcm_prep_keystream_btn)
+            gcm_page_layout.addLayout(gcm_top_row)
+
             self._gcm_prep_widget = _AESPlaintextPrepWidget(
                 plaintext_text=self._plaintext_text_str,
                 plaintext_bytes=self._plaintext_bytes_data,
@@ -237,7 +244,9 @@ class AESAnimationWindow(CryptoAnimationWindow):
             self._gcm_prep_scroll.setWidget(self._gcm_prep_widget)
             self._gcm_prep_scroll.setWidgetResizable(True)
             self._gcm_prep_scroll.setStyleSheet("background: transparent; border: none;")
-            self._prep_stack.addWidget(self._gcm_prep_scroll)
+            gcm_page_layout.addWidget(self._gcm_prep_scroll)
+            self._gcm_prep_page = gcm_page
+            self._prep_stack.addWidget(gcm_page)
         return w
 
     def _make_round_page(self) -> QWidget:
@@ -452,7 +461,6 @@ class AESAnimationWindow(CryptoAnimationWindow):
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(8)
 
-        top_row = QHBoxLayout()
         self._gcm_xor_title = QLabel("GCM son adımı: mesaj bloğu ⊕ keystream bloğu")
         self._gcm_xor_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
@@ -460,20 +468,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         self._gcm_xor_title.setMinimumWidth(180)
-        top_row.addWidget(self._gcm_xor_title, stretch=1)
-        self._keystream_btn = QPushButton("keystream")
-        self._keystream_btn.setFixedHeight(28)
-        self._keystream_btn.setStyleSheet(
-            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
-            f"color: {ANIM_COLORS['accent_yellow']}; "
-            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
-            "border-radius: 5px; padding: 4px 10px; font-weight: bold; }}"
-        )
-        self._keystream_btn.clicked.connect(self._show_keystream_reference)
-        top_row.addWidget(self._keystream_btn)
-        layout.addLayout(top_row)
+        layout.addWidget(self._gcm_xor_title)
 
         self._gcm_xor_widget = _GCMRealEncryptWidget(parent=page)
+        self._keystream_btn = self._gcm_xor_widget._keystream_btn
+        self._keystream_btn.clicked.connect(self._show_keystream_reference)
         scroll = QScrollArea()
         scroll.setWidget(self._gcm_xor_widget)
         scroll.setWidgetResizable(True)
@@ -484,6 +483,16 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._xor_continue_btn.clicked.connect(self._switch_from_gcm_xor_to_match)
         layout.addWidget(self._xor_continue_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return page
+
+    @staticmethod
+    def _reference_button_style() -> str:
+        """S-Box referans düğmesiyle aynı görsel dili kullanan stil döndürür."""
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['accent_yellow']}; "
+            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
+            "border-radius: 5px; padding: 4px 10px; font-weight: bold; }}"
+        )
 
     def _show_keystream_reference(self) -> None:
         """Round sonucundaki gerçek keystream ve nonce ile GCM referans diyaloğunu açar."""
@@ -518,7 +527,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         if not self._gcm_mode:
             self._switch_to_rounds_only()
             return
-        self._prep_stack.setCurrentWidget(self._gcm_prep_scroll)
+        self._prep_stack.setCurrentWidget(self._gcm_prep_page)
         self._gcm_prep_widget.start()
 
     def _switch_to_rounds_only(self) -> None:
@@ -620,6 +629,9 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
         self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        self._keystream_btn.setStyleSheet(self._reference_button_style())
+        if hasattr(self, "_gcm_prep_keystream_btn"):
+            self._gcm_prep_keystream_btn.setStyleSheet(self._reference_button_style())
         # QLabel tabanlı sayfa widget'ları
         for w in (
             getattr(self, "_intro", None),

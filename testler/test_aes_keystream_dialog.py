@@ -68,6 +68,24 @@ class TestKeystreamReferenceDialog(unittest.TestCase):
         )
         self.assertEqual(window._keystream_dialog.nonce, self.nonce)
 
+    def test_gcm_prep_keystream_button_opens_same_reference(self):
+        """GCM hazırlık ekranındaki S-Box tarzı düğme de aynı gerçek referansı açmalı."""
+        from animation_modals import AESAnimationWindow
+
+        window = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"mesaj",
+            expected_ct_hex="00" * 5,
+            nonce=self.nonce,
+        )
+
+        window._gcm_prep_keystream_btn.click()
+
+        self.assertEqual(
+            window._keystream_dialog.keystream,
+            bytes.fromhex(window._final_block_hex),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

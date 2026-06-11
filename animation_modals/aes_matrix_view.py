@@ -951,6 +951,28 @@ class _GCMRealEncryptWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._advance)
+        self._keystream_btn = QPushButton("keystream", self)
+        self._keystream_btn.setFixedHeight(28)
+        self._keystream_btn.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['accent_yellow']}; "
+            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
+            "border-radius: 5px; padding: 4px 10px; font-weight: bold; }}"
+        )
+        self._keystream_btn.adjustSize()
+        self._position_keystream_button()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        """Keystream referans düğmesini S-Box düğmesi gibi sağ üstte sabit tutar."""
+        self._position_keystream_button()
+        super().resizeEvent(event)
+
+    def _position_keystream_button(self) -> None:
+        """Keystream düğmesini XOR çiziminin sağ üst köşesine yerleştirir."""
+        self._keystream_btn.move(
+            max(8, self.width() - self._keystream_btn.width() - 8),
+            self._TOP,
+        )
 
     # ------------------------------------------------------------------
     # Genel API

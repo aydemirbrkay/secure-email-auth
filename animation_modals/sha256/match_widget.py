@@ -343,11 +343,11 @@ class _MatchAssemblyWidget(QWidget):
                        Qt.AlignmentFlag.AlignLeft, "  ───────────────")
             y += 16
             if bd["overflow"]:
-                note = (f"  toplam = 1·{bd['result']}  →  (mod 2³²) "
+                note = (f"  toplam = 1·{bd['result']}  →  ({self._modulus_label()}) "
                         f"en soldaki taşma biti atılır")
             else:
                 note = (f"  toplam = {bd['result']}  "
-                        f"(32 bit'e sığar; mod 2³² aynı)")
+                        f"(32 bit'e sığar; {self._modulus_label()} aynı)")
             p.drawText(QRect(col_l, y, 360, 16),
                        Qt.AlignmentFlag.AlignLeft, note)
             y += 18
@@ -361,6 +361,11 @@ class _MatchAssemblyWidget(QWidget):
             p.drawText(QRect(col_l, y, 380, 16),
                        Qt.AlignmentFlag.AlignLeft,
                        f"= {bd['result']}{tail}")
+
+    @staticmethod
+    def _modulus_label() -> str:
+        """Dar çizim alanında üst simgeyi kaybetmeden 32-bit modülüsünü açık yazar."""
+        return "mod 2 üzeri 32"
 
     @staticmethod
     def _match_badge_text(match_all: bool) -> str:

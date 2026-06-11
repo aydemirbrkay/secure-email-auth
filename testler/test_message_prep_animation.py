@@ -328,28 +328,46 @@ class TestPaddingBreakdown(unittest.TestCase):
 
 
 class TestSHAPrepExplanationPacing(unittest.TestCase):
-    """SHA hazırlık açıklamalarının okunabilir süre ve içerik sözleşmesini sınar."""
+    """SHA hazırlık ekranlarının hız ve kullanıcı kontrollü açıklama sözleşmesini sınar."""
 
-    def test_phase_dwell_is_at_least_four_and_half_seconds(self):
-        """Her açıklama fazı normal hızda en az 4,5 saniye görünür kalmalı."""
-        from animation_modals.sha256.prep_widget import (
-            _SHAMessagePrepWidget,
-            _SHA256PaddingWidget,
-        )
+    def test_message_prep_restores_fast_byte_strip_timing(self):
+        """Tüm byte'lar şeridi önceki akıştaki gibi yaklaşık iki saniyede görünmeli."""
+        from animation_modals.sha256.prep_widget import _SHAMessagePrepWidget
 
-        for widget_type in (_SHAMessagePrepWidget, _SHA256PaddingWidget):
-            dwell_ms = widget_type._PHASE_DWELL_TICKS * widget_type._TICK_MS
-            self.assertGreaterEqual(dwell_ms, 4500)
+        widget = _SHAMessagePrepWidget("asd", b"asd")
+        self.assertEqual(widget._TICK_MS, 45)
+        for _ in range(40):
+            widget._on_tick()
+        self.assertFalse(widget._strip.isHidden())
+        while widget._tick < 52:
+            widget._on_tick()
+        self.assertTrue(widget._finished)
 
-    def test_length_phase_explains_why_last_eight_bytes_are_at_end(self):
-        """Uzunluk fazı son 8 baytın konumunu ve amacını açıkça gerekçelendirmeli."""
+    def test_padding_explanations_are_click_driven_not_timed(self):
+        """Padding bilgileri otomatik akmamalı; seçilen bileşenin açıklaması açılmalı."""
         widget = TestPaddingBreakdown._make(b"abcdef")
 
-        text = widget._phase_label_text(3)
+        self.assertTrue(widget._detail_explanation.isHidden())
+        self.assertFalse(hasattr(widget, "_info_lbl"))
+        self.assertFalse(hasattr(widget, "_phase_lbl"))
+        self.assertFalse(hasattr(widget, "_bitlen_lbl"))
 
-        self.assertIn("Neden sonda?", text)
+        widget._explanation_buttons["length"].click()
+
+        self.assertFalse(widget._detail_explanation.isHidden())
+        self.assertIn("compression", widget._detail_explanation.text())
+        self.assertIn("son 8 byte", widget._detail_explanation.text())
+        self.assertIn("00 00 00 00 00 00 00 30", widget._detail_explanation.text())
+
+    def test_length_phase_explains_why_last_eight_bytes_are_at_end(self):
+        """Uzunluk açıklaması son 8 baytın nerede kullanıldığını gerekçelendirmeli."""
+        widget = TestPaddingBreakdown._make(b"abcdef")
+
+        text = widget._component_explanation("length")
+
+        self.assertIn("compression", text)
         self.assertIn("64 byte", text)
-        self.assertIn("GERÇEK uzunluğunu", text)
+        self.assertIn("orijinal mesaj uzunluğunu", text)
         self.assertIn("00 00 00 00 00 00 00 30", text)
 
 

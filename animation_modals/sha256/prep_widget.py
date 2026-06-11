@@ -31,8 +31,7 @@ class _SHAMessagePrepWidget(QWidget):
     Boş mesaj: faz 1-2-3 atlanır, doğrudan faz 4'e geçilir.
     """
 
-    _TICK_MS = 60
-    _PHASE_DWELL_TICKS = 83
+    _TICK_MS = 45
 
     def __init__(
         self,
@@ -182,24 +181,22 @@ class _SHAMessagePrepWidget(QWidget):
         self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def _on_tick(self) -> None:
-        """Açıklama fazlarını yaklaşık beş saniyelik okunma aralıklarıyla ilerletir."""
+        """Mesaj byte görsellerini önceki kısa zaman çizelgesiyle sırayla açar."""
         self._tick += 1
         if self._is_empty:
             # Boş mesaj: kısa bir bekleme sonrası doğrudan faz 4'e
-            if self._tick >= self._PHASE_DWELL_TICKS:
+            if self._tick >= 12:
                 self._jump_to_final()
             return
 
-        # Normal akış: her faz açıklaması okunabilecek kadar ekranda kalır.
-        dwell = self._PHASE_DWELL_TICKS
-        if self._tick == dwell:
+        if self._tick == 8:
             self._phase = 1
-        elif self._tick == dwell * 2:
+        elif self._tick == 26:
             self._phase = 2
-        elif self._tick == dwell * 3:
+        elif self._tick == 40:
             self._phase = 3
             self._strip.setVisible(True)
-        elif self._tick >= dwell * 4:
+        elif self._tick >= 52:
             self._jump_to_final()
 
     def _jump_to_final(self) -> None:
@@ -224,20 +221,12 @@ class _SHA256PaddingWidget(QWidget):
     Strip her zaman TÜM 64 byte'ı (tam padded blok) gösterir. Kullanıcının
     mesaj byte'ları normal renkli kareler, padding byte'ları (0x80 + 0x00
     dolgu + 8 byte length) beyaz 1px border + alpha 0.7 ile ayrışır.
-    Fazlar yalnızca açıklayıcı etiketi günceller; veri başından sonuna
-    aynı görünür ki kullanıcı "yazdığım yazı şurada, padding şurada başlıyor"
-    ilişkisini anında görsün.
-
-    Fazlar (etiket güncellemeleri):
-      0: "Kullanıcının metni soldaki renkli kareler; geri kalan padding"
-      1: "0x80 ayracı — padding başlangıç byte'ı"
-      2: "0x00 dolgusu — 56 byte'a tamamlanır"
-      3: "Son 8 byte — mesaj uzunluğu (big-endian)"
-      4: "Padding tamamlandı — N byte / K blok"
+    Veri başından sonuna aynı görünür. Mesaj, 0x80 ayracı, 0x00 dolgusu ve
+    son 8 byte açıklamaları otomatik akmaz; kullanıcı ilgili düğmeye tıklayarak
+    kendi okuma hızında tek ayrıntı alanında açar.
     """
 
     _TICK_MS = 60
-    _PHASE_DWELL_TICKS = 83
 
     def __init__(
         self,
@@ -290,28 +279,6 @@ class _SHA256PaddingWidget(QWidget):
         self._msg_lbl.setWordWrap(True)
         lay.addWidget(self._msg_lbl)
 
-        # Info etiketi — padding bileşenlerinin SAYILARIYLA (kaç 0x80, kaç
-        # 0x00, kaç uzunluk baytı) gösterilir ki kullanıcı '0x00 dolgu'nun
-        # somut olarak kaç sıfır bayt olduğunu görsün.
-        bd = self._padding_breakdown()
-        if len(message_bytes) == 0:
-            info_text = (
-                f"Boş mesaj → padding: 1 byte ayraç (0x80) + {bd['zeros']} byte "
-                f"sıfır (0x00) + 8 byte uzunluk = {bd['total']} byte (1 blok)"
-            )
-        else:
-            info_text = (
-                f"Padding: {bd['msg']} byte mesaj + 1 byte ayraç (0x80) + "
-                f"{bd['zeros']} byte sıfır (0x00) + 8 byte uzunluk = "
-                f"{bd['total']} byte ({blocks_count} blok)"
-            )
-        self._info_lbl = QLabel(info_text)
-        self._info_lbl.setFont(QFont("IBM Plex Sans", 10))
-        self._info_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_secondary']};")
-        self._info_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._info_lbl.setWordWrap(True)
-        lay.addWidget(self._info_lbl)
-
         # Blok navigasyon butonları — eskiden burada başlıkla grid arasındaydı;
         # kullanıcı geri bildirimi: yatay scrollbar'ın hemen ÜSTÜNDE, sol-alt
         # köşede küçük butonlar olsun. Buton oluşturuluyor ama lay'e burada
@@ -339,14 +306,6 @@ class _SHA256PaddingWidget(QWidget):
             self._btn_next_block.setMaximumWidth(82)
             self._btn_next_block.clicked.connect(self._next_block)
             self._btn_next_block.setEnabled(blocks_count > 1)
-
-        # Faz etiketi — kullanıcıya hangi padding bileşeninin vurgulandığını söyler
-        self._phase_lbl = QLabel(self._phase_label_text(0))
-        self._phase_lbl.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
-        self._phase_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
-        self._phase_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._phase_lbl.setWordWrap(True)
-        lay.addWidget(self._phase_lbl)
 
         # 64 byte detay grid'i — TÜM padded blok karakter/ASCII/hex/binary
         # satırları halinde gösterilir. Mesaj byte'ları normal renkli; padding
@@ -388,6 +347,34 @@ class _SHA256PaddingWidget(QWidget):
         lay.addWidget(grid_scroll)
         self._grid_scroll = grid_scroll
 
+        # Padding bileşenleri otomatik akan metin yerine kullanıcının seçimiyle
+        # açıklanır. Düğmeler, ilgili bileşenlerin altında tek satırda durur.
+        explanation_row = QHBoxLayout()
+        explanation_row.setContentsMargins(0, 0, 0, 0)
+        explanation_row.setSpacing(6)
+        self._explanation_buttons: dict[str, QPushButton] = {}
+        for key, text in (
+            ("message", "Mesaj"),
+            ("separator", "0x80 ayraç"),
+            ("zeros", "0x00 dolgu"),
+            ("length", "Son 8 byte"),
+        ):
+            button = QPushButton(text)
+            button.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+            button.clicked.connect(
+                lambda _checked=False, component=key: self._show_component_explanation(component)
+            )
+            explanation_row.addWidget(button, stretch=1)
+            self._explanation_buttons[key] = button
+        lay.addLayout(explanation_row)
+
+        self._detail_explanation = QLabel()
+        self._detail_explanation.setFont(QFont("IBM Plex Sans", 9))
+        self._detail_explanation.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._detail_explanation.setWordWrap(True)
+        self._detail_explanation.setVisible(False)
+        lay.addWidget(self._detail_explanation)
+
         # Blok navigasyon satırı — grid scroll'un HEMEN ALTINA, sol-alta küçük
         # butonlar olarak yerleştirilir (kullanıcı isteği). Sağ tarafta esnek
         # boşluk → tek mesajda nav row dahil edilmez.
@@ -400,19 +387,6 @@ class _SHA256PaddingWidget(QWidget):
             nav_row.addWidget(self._btn_next_block)
             nav_row.addStretch(1)   # geri kalan boşluğu sağa it
             lay.addLayout(nav_row)
-
-        # Bit length etiketi — son 8 byte'ın GERÇEK değeri (big-endian 64-bit
-        # mesaj uzunluğu) gösterilir; kullanıcı 'son 8 byte'ın ne olduğunu
-        # ve değerinin bilindiğini (mesaj uzunluğu) somut görür.
-        self._bitlen_lbl = QLabel(
-            f"Son 8 byte (uzunluk alanı): {bd['bit_len']} bit = "
-            f"{bd['last8_hex']}  (big-endian)"
-        )
-        self._bitlen_lbl.setFont(QFont("Courier New", 9))
-        self._bitlen_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
-        self._bitlen_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._bitlen_lbl.setVisible(False)
-        lay.addWidget(self._bitlen_lbl)
 
         # NOT: addStretch() çıkarıldı — sayfada gereksiz dikey boşluk yaratıyordu.
 
@@ -427,12 +401,19 @@ class _SHA256PaddingWidget(QWidget):
         msg_color = (ANIM_COLORS["text_muted"] if self._msg_is_empty
                      else ANIM_COLORS["text_secondary"])
         self._msg_lbl.setStyleSheet(f"color: {msg_color};")
-        self._info_lbl.setStyleSheet(
-            f"color: {ANIM_COLORS['text_secondary']};")
-        self._phase_lbl.setStyleSheet(
-            f"color: {ANIM_COLORS['accent_green']};")
-        self._bitlen_lbl.setStyleSheet(
-            f"color: {ANIM_COLORS['accent_yellow']};")
+        self._detail_explanation.setStyleSheet(
+            f"color: {ANIM_COLORS['text_secondary']}; "
+            f"background: {ANIM_COLORS['bg_card']}; "
+            f"border: 1px solid {ANIM_COLORS['border']}; "
+            "border-radius: 6px; padding: 8px;"
+        )
+        for button in self._explanation_buttons.values():
+            button.setStyleSheet(
+                f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+                f"color: {ANIM_COLORS['accent_yellow']}; "
+                f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
+                "border-radius: 5px; padding: 5px 8px; font-weight: bold; }}"
+            )
         if self._block_lbl is not None:
             self._block_lbl.setStyleSheet(
                 f"color: {ANIM_COLORS['accent_yellow']};")
@@ -497,63 +478,51 @@ class _SHA256PaddingWidget(QWidget):
             "last8_hex": " ".join(f"{b:02X}" for b in last8),
         }
 
-    def _phase_label_text(self, phase: int) -> str:
-        """Aktif faza göre kullanıcıya ne vurgulandığını anlatan etiket."""
-        n_msg = len(self._message_bytes)
+    def _component_explanation(self, component: str) -> str:
+        """Seçilen padding bileşeninin görevini gerçek mesaj değerleriyle açıklar."""
         bd = self._padding_breakdown()
-        if phase == 0:
-            if n_msg == 0:
-                return "Boş mesaj — tüm 64 byte padding (0x80 + 0x00 dolgu + uzunluk)"
+        if component == "message":
+            if bd["msg"] == 0:
+                return "Mesaj boş olduğu için blok doğrudan padding bileşenleriyle başlar."
             return (
-                f"Soldaki {n_msg} renkli kare = kullanıcının metni; "
-                f"geri kalan {64 - min(n_msg, 64)} kare = padding"
+                f"Mesaj: İlk {bd['msg']} byte kullanıcının gerçek verisidir. "
+                "SHA-256 bu baytları değiştirmez; padding bunların arkasına eklenir."
             )
-        if phase == 1:
-            return ("0x80 = ikili 1000 0000 — mesajın bittiğini gösteren "
-                    "zorunlu tek '1' biti (ayraç)")
-        if phase == 2:
+        if component == "separator":
+            return (
+                "0x80 ayraç: Mesajın bittiği yere zorunlu tek '1' bitini ekler "
+                "(ikili 1000 0000); ardından sıfır dolgusu başlar."
+            )
+        if component == "zeros":
             return (f"0x00 dolgusu — {bd['zeros']} adet sıfır bayt; blok 56 "
                     f"byte'a tamamlanır (sonra 8 byte uzunluk gelir)")
-        if phase == 3:
+        if component == "length":
             return (
-                "Mesaj başta, 0x80 + 0x00 dolgusu ortada, mesaj uzunluğu en "
-                f"sonda: {bd['bit_len']} bit → {bd['last8_hex']}. Neden sonda? "
-                "Blok tam 64 byte'a tamamlansın ve hash mesajın GERÇEK uzunluğunu "
-                "da içersin; böylece farklı uzunluktaki mesajlar ayırt edilsin."
+                "Son 8 byte, orijinal mesaj uzunluğunu bit cinsinden big-endian "
+                f"kodlar: {bd['bit_len']} bit → {bd['last8_hex']}. Padding sonrası "
+                "oluşan 64 byte blok, bu son 8 byte dahil, SHA-256 compression "
+                "fonksiyonuna girdi olur; uzunluk alanı da diğer baytlarla birlikte "
+                "hash sonucunu etkiler. Sonda durur çünkü standart, önce mesajı ve "
+                "dolguyu yerleştirip son 64 biti uzunluk alanına ayırır."
             )
-        return (
-            f"Padding tamamlandı — {len(self._padded_bytes)} byte / "
-            f"{self._blocks_count} blok"
-        )
+        return ""
+
+    def _show_component_explanation(self, component: str) -> None:
+        """Tıklanan padding bileşeninin açıklamasını tek ayrıntı alanında gösterir."""
+        self._detail_explanation.setText(self._component_explanation(component))
+        self._detail_explanation.setVisible(True)
 
     def _current_block_bytes(self) -> bytes:
         start = self._current_block * 64
         return self._padded_bytes[start:start + 64]
 
     def start(self) -> None:
-        self._timer.start(get_animation_tick_ms(self._TICK_MS))
+        """Padding verisi hazır olduğundan otomatik metin akıtmadan sayfayı tamamlar."""
+        self._jump_to_final()
 
     def _on_tick(self) -> None:
-        """Padding açıklamalarını yaklaşık beş saniyelik aralıklarla sırayla gösterir."""
-        # Veri görseli baştan tam — fazlar sadece açıklama etiketini günceller.
-        # Bu sayede kullanıcı "yazdığım yazı / padding" ayrımını anında görür,
-        # fazlar her bir padding bileşenini sırayla vurgular.
-        self._tick += 1
-        dwell = self._PHASE_DWELL_TICKS
-        if self._tick == dwell:
-            self._phase = 1
-            self._phase_lbl.setText(self._phase_label_text(1))
-        elif self._tick == dwell * 2:
-            self._phase = 2
-            self._phase_lbl.setText(self._phase_label_text(2))
-        elif self._tick == dwell * 3:
-            self._phase = 3
-            self._phase_lbl.setText(self._phase_label_text(3))
-            self._bitlen_lbl.setVisible(True)
-        elif self._tick >= dwell * 4:
-            self._phase = 4
-            self._phase_lbl.setText(self._phase_label_text(4))
-            self._jump_to_final()
+        """Geriye dönük timer çağrılarını otomatik açıklama değiştirmeden sonlandırır."""
+        self._jump_to_final()
 
     def _jump_to_final(self) -> None:
         if self._finished:

@@ -12,6 +12,7 @@ Danışman: Prof. Dr. Serkan ÖZTÜRK
 from __future__ import annotations
 
 import hashlib
+import logging
 import sys
 from typing import Optional
 
@@ -54,6 +55,8 @@ from arayuz.theme_toggle import ThemeToggle
 from arayuz.alice_panel import AlicePanel
 from arayuz.bob_panel import BobPanel
 from arayuz.toast import VerificationToast
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -519,9 +522,17 @@ class MainWindow(QMainWindow):
             w.update()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
-        """Kapanışta global tema sinyalinden ayrıl. Aksi halde kapatılmış
-        (ama henüz yok edilmemiş) pencere, sonraki tema değişiminde yarı-yıkık
-        widget ağacına erişip çökmeye yol açabilir."""
+        """Kapanışta çalışan worker'ları güvenle emekliye ayır ve global tema
+        sinyalinden ayrıl.
+
+        Çalışan bir QThread worker'ı pencereyle birlikte yok edilirse
+        "QThread: Destroyed while thread is still running" uyarısı/çökmesi
+        oluşabilir; bu yüzden reset'teki ile aynı şekilde her worker beklenerek
+        sonlandırılır. Tema sinyali de ayrılmazsa kapatılmış (ama henüz yok
+        edilmemiş) pencere sonraki tema değişiminde yarı-yıkık widget ağacına
+        erişip çökebilir."""
+        for attr in ("_keygen_worker", "_send_worker", "_receive_worker"):
+            self._finalize_worker(attr, wait=True)
         try:
             MANAGER.themeChanged.disconnect(self._on_theme_changed)
         except (TypeError, RuntimeError):
@@ -668,7 +679,15 @@ class MainWindow(QMainWindow):
             pass  # zaten bağlı değilse sessiz geç
         if wait and w.isRunning():
             w.quit()        # run() event loop kullanmaz; etkisiz ama zararsız
-            w.wait(3000)    # kripto bitene dek bekle (kısa; keygen ~1-2 sn)
+            # Kripto bitene dek bekle (kısa; keygen ~1-2 sn). Dönüş False ise
+            # timeout olmuştur; QThread güvenle zorla öldürülemediğinden
+            # deleteLater yine çağrılır (queued silme güvenli yoldur) ama sessiz
+            # kalmasın diye uyarı loglanır.
+            if not w.wait(3000):
+                logger.warning(
+                    "Worker %s 3 sn içinde bitmedi; deleteLater yine de çağrılıyor.",
+                    attr,
+                )
         w.deleteLater()
         setattr(self, attr, None)
 
@@ -691,7 +710,9 @@ class MainWindow(QMainWindow):
         self._keygen_worker.finished_ok.connect(
             lambda a, b, g=gen: self._on_keygen_done(a, b, g)
         )
-        self._keygen_worker.failed.connect(self._on_crypto_error)
+        self._keygen_worker.failed.connect(
+            lambda e, g=gen: self._on_crypto_error(e, g, "keygen")
+        )
         self._keygen_worker.start()
 
     def _on_keygen_done(self, alice_keys, bob_keys, gen: int = 0) -> None:
@@ -749,26 +770,42 @@ class MainWindow(QMainWindow):
         self._btn_next.setEnabled(True)
         self._alice_panel.show_bob_diagram()
 
-    def _on_crypto_error(self, exc: Exception) -> None:
+    def _on_crypto_error(self, exc: Exception, gen: int = 0, phase: str = "") -> None:
         """Herhangi bir kripto worker'ının failed sinyaline ortak işleyici.
 
-        Hatayı kullanıcıya anlaşılır bir mesajla gösterir ve UI'ı
-        önceki durumuna döndürür (butonları yeniden etkinleştirir).
+        ``gen`` worker başlatılırken yakalanan işlem jetonudur; güncel değilse
+        hata bayattır (araya reset/yeni işlem girmiş) ve yok sayılır — aksi
+        halde reset sonrası gelen eski bir hata yeni UI durumunu ve yeni worker
+        referanslarını bozardı. ``phase`` (keygen/send/bob) hangi akışın
+        patladığını söyler; UI yalnızca o akış için tam geri yüklenir.
         """
+        if not self._is_current_generation(gen):
+            return  # bayat hata — reset/yeni işlem araya girdi, yok say
+
         # Öğretici 3 bölümlü hata diyaloğu (özet / "bu ne demek?" / öneri).
         CryptoErrorDialog(exc, self).exec()
 
-        # Worker referansını temizle — hangi worker patladı bilmiyoruz,
-        # ama hepsini güvenle emekliye ayırabiliriz (failed sonrası run bitti).
+        # Patlayan worker'ı emekliye ayır (failed sonrası run bitti). Hepsini
+        # güvenle çağırabiliriz; yalnızca mevcut olan temizlenir.
         self._finalize_worker("_keygen_worker", wait=False)
         self._finalize_worker("_send_worker", wait=False)
         self._finalize_worker("_receive_worker", wait=False)
 
-        # Buton durumları: kullanıcı tekrar deneyebilmeli.
+        # Buton durumları: kullanıcı tekrar deneyebilmeli (mevcut davranış).
         self._btn_keygen.setEnabled(True)
         self._btn_keygen.setText("Anahtar Üret")
         self._btn_next.setEnabled(True)
         self._btn_next.setText("Sonraki Adım")
+
+        # A2: Gönderim akışı (_on_start) mesaj alanını read-only yapıp başlat
+        # butonunu kapatmıştı; hata sonrası bunlar geri alınmıyordu, kullanıcı
+        # Reset'siz tekrar deneyemiyordu. Yalnızca send fazında geri yükle
+        # (keygen fazında anahtar yok → başlat disabled kalmalı; msg_input
+        # zaten kilitli değildi).
+        if phase == "send":
+            self._alice_panel.msg_input.setReadOnly(False)
+            self._btn_start.setEnabled(True)
+            self._btn_start.setText("Şifreleme Başlat")
 
     def _on_start(self) -> None:
         # Defansif guard: önceki gönderim worker'ı hâlâ koşuyorsa bekle.
@@ -794,7 +831,9 @@ class MainWindow(QMainWindow):
         self._send_worker.finished_ok.connect(
             lambda p, s, g=gen: self._on_send_done(p, s, g)
         )
-        self._send_worker.failed.connect(self._on_crypto_error)
+        self._send_worker.failed.connect(
+            lambda e, g=gen: self._on_crypto_error(e, g, "send")
+        )
         self._send_worker.start()
 
     def _on_send_done(self, packet: EncryptedPacket, alice_steps: list, gen: int = 0) -> None:
@@ -886,7 +925,9 @@ class MainWindow(QMainWindow):
                 self._receive_worker.finished_ok.connect(
                     lambda m, v, s, g=gen: self._on_receive_done(m, v, s, g)
                 )
-                self._receive_worker.failed.connect(self._on_crypto_error)
+                self._receive_worker.failed.connect(
+                    lambda e, g=gen: self._on_crypto_error(e, g, "bob")
+                )
                 self._receive_worker.start()
 
         elif self._phase == "bob":

@@ -200,7 +200,6 @@ class _AESRoundFlowWidget(QWidget):
         matrix: list[list[str]], color: str,
     ) -> None:
         """4×4 hex matrisi (x, y) konumuna çizer."""
-        cell = self._CELL_W // 4
         # Çerçeve
         bg = QColor(color)
         bg.setAlpha(45)
@@ -208,14 +207,21 @@ class _AESRoundFlowWidget(QWidget):
         p.setPen(QPen(QColor(color), 1))
         p.drawRoundedRect(x, y, self._CELL_W, self._CELL_H, 4, 4)
 
+        # Hücre boyutu kutudan BAĞIMSIZ hesaplanır: genişlik ve yükseklik
+        # ayrı ayrı 4'e bölünür; aksi halde kare hücre (W//4) kutu yüksekliğini
+        # taşırıp alt satırların dışarı sızmasına yol açıyordu.
+        pad = 3
+        cell_w = (self._CELL_W - 2 * pad) // 4
+        cell_h = (self._CELL_H - 2 * pad) // 4
+
         # Hex değerler — sütun-yönlü AES gösterimi (matris[row][col])
         p.setFont(self._BYTE_FONT)
         p.setPen(QColor(ANIM_COLORS["text_primary"]))
         for r in range(4):
             for c in range(4):
-                cx = x + c * cell
-                cy = y + r * cell
-                p.drawText(QRect(cx, cy, cell, cell),
+                cx = x + pad + c * cell_w
+                cy = y + pad + r * cell_h
+                p.drawText(QRect(cx, cy, cell_w, cell_h),
                            Qt.AlignmentFlag.AlignCenter, matrix[r][c])
 
     def _draw_empty(

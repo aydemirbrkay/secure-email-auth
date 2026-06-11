@@ -9,7 +9,11 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 from ..base import CryptoAnimationWindow, ANIM_COLORS
-from ..aes_matrix_view import _AESStateCompareWidget, _ColumnMajorLinearizeWidget
+from ..aes_matrix_view import (
+    _AESStateCompareWidget,
+    _ColumnMajorLinearizeWidget,
+    _GCMRealEncryptWidget,
+)
 from ..aes_pure import aes256_encrypt_with_rounds
 from .constants import _COLORS_OP
 from .intro_widget import _AESIntroWidget
@@ -369,10 +373,22 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
         cl = QVBoxLayout(card)
         cl.setContentsMargins(20, 16, 20, 16)
-        # Önce: final matris + column-major dizilim animasyonu (görsel).
+        cl.setSpacing(10)
+        # 1) Eğitim: final matris + column-major dizilim animasyonu (ECB blok).
         self._linearize_widget = _ColumnMajorLinearizeWidget(parent=card)
         cl.addWidget(self._linearize_widget)
-        # Sonra: kısa sözel özet.
+        # 2) Köprü: programın GERÇEK GCM şifrelemesinin çekirdeği (gerçek K_S+nonce).
+        self._gcm_sep = QLabel(
+            "──  Peki program gerçekte ne yapıyor?  ──"
+        )
+        self._gcm_sep.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._gcm_sep.setStyleSheet(
+            f"color: {ANIM_COLORS['text_secondary']}; font-weight: bold;"
+        )
+        cl.addWidget(self._gcm_sep)
+        self._gcm_widget = _GCMRealEncryptWidget(parent=card)
+        cl.addWidget(self._gcm_widget)
+        # 3) Sonra: kısa dürüst sözel özet.
         cl.addWidget(self._match_lbl)
         from PyQt6.QtWidgets import QScrollArea
         scroll = QScrollArea()
@@ -551,6 +567,16 @@ class AESAnimationWindow(CryptoAnimationWindow):
         # Kullanıcının istediği "önce matris → sütun-öncelikli diziliş" burada oynar.
         self._linearize_widget.set_state(mat)
         self._linearize_widget.start()
+
+        # Köprü: programın gerçek GCM şifrelemesi (gerçek nonce varsa).
+        self._gcm_widget.set_inputs(
+            self._key, self._nonce, self._plaintext, self._expected_ct_hex
+        )
+        has_real = self._gcm_widget.has_inputs()
+        self._gcm_sep.setVisible(has_real)
+        self._gcm_widget.setVisible(has_real)
+        if has_real:
+            self._gcm_widget.start()
 
         # RSA panelindeki "aynı matematik · farklı boyut" üslubuyla, bu çıktının
         # programın GERÇEK şifrelemesiyle ilişkisini dürüstçe belirtiyoruz:

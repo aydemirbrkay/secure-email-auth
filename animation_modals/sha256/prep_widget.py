@@ -286,14 +286,20 @@ class _SHA256PaddingWidget(QWidget):
         self._msg_lbl.setWordWrap(True)
         lay.addWidget(self._msg_lbl)
 
-        # Info etiketi — boş mesaj durumunda özel mesaj
+        # Info etiketi — padding bileşenlerinin SAYILARIYLA (kaç 0x80, kaç
+        # 0x00, kaç uzunluk baytı) gösterilir ki kullanıcı '0x00 dolgu'nun
+        # somut olarak kaç sıfır bayt olduğunu görsün.
+        bd = self._padding_breakdown()
         if len(message_bytes) == 0:
-            info_text = "Boş mesaj — padding tek 64 byte blok oluşturur"
+            info_text = (
+                f"Boş mesaj → padding: 1 byte ayraç (0x80) + {bd['zeros']} byte "
+                f"sıfır (0x00) + 8 byte uzunluk = {bd['total']} byte (1 blok)"
+            )
         else:
             info_text = (
-                f"Padding: {len(message_bytes)} byte mesaj + 0x80 + "
-                f"0x00 dolgu + 64-bit uzunluk = "
-                f"{len(padded_bytes)} byte ({blocks_count} blok)"
+                f"Padding: {bd['msg']} byte mesaj + 1 byte ayraç (0x80) + "
+                f"{bd['zeros']} byte sıfır (0x00) + 8 byte uzunluk = "
+                f"{bd['total']} byte ({blocks_count} blok)"
             )
         self._info_lbl = QLabel(info_text)
         self._info_lbl.setFont(QFont("IBM Plex Sans", 10))
@@ -391,9 +397,13 @@ class _SHA256PaddingWidget(QWidget):
             nav_row.addStretch(1)   # geri kalan boşluğu sağa it
             lay.addLayout(nav_row)
 
-        # Bit length etiketi
-        bit_len = len(message_bytes) * 8
-        self._bitlen_lbl = QLabel(f"Mesaj uzunluğu: {bit_len} bit (son 8 byte)")
+        # Bit length etiketi — son 8 byte'ın GERÇEK değeri (big-endian 64-bit
+        # mesaj uzunluğu) gösterilir; kullanıcı 'son 8 byte'ın ne olduğunu
+        # ve değerinin bilindiğini (mesaj uzunluğu) somut görür.
+        self._bitlen_lbl = QLabel(
+            f"Son 8 byte (uzunluk alanı): {bd['bit_len']} bit = "
+            f"{bd['last8_hex']}  (big-endian)"
+        )
         self._bitlen_lbl.setFont(QFont("Courier New", 9))
         self._bitlen_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._bitlen_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -460,9 +470,33 @@ class _SHA256PaddingWidget(QWidget):
             labels.append("")
         return labels[:64]
 
+    def _padding_breakdown(self) -> dict:
+        """Padding bileşenlerini SAYILARIYLA döndürür (açıklama etiketleri için).
+
+        SHA-256 padding'i: mesaj baytları + 1 byte ayraç (0x80) + N byte sıfır
+        (0x00) + 8 byte mesaj-uzunluğu (big-endian, bit cinsinden). Bu yardımcı
+        her bileşenin kaç bayt olduğunu ve son 8 baytın gerçek değerini verir.
+
+        Dönüş: ``{'msg','zeros','total','bit_len','last8_hex'}``. zeros =
+        toplam − mesaj − 1 (0x80) − 8 (uzunluk); last8_hex son 8 baytın
+        boşlukla ayrılmış 2-hane hex'i (uzunluk alanının gerçek değeri).
+        """
+        n = len(self._message_bytes)
+        total = len(self._padded_bytes)
+        zeros = total - n - 1 - 8  # mesaj + 1 ayraç(0x80) + zeros + 8 uzunluk
+        last8 = self._padded_bytes[-8:]
+        return {
+            "msg": n,
+            "zeros": zeros,
+            "total": total,
+            "bit_len": n * 8,
+            "last8_hex": " ".join(f"{b:02X}" for b in last8),
+        }
+
     def _phase_label_text(self, phase: int) -> str:
         """Aktif faza göre kullanıcıya ne vurgulandığını anlatan etiket."""
         n_msg = len(self._message_bytes)
+        bd = self._padding_breakdown()
         if phase == 0:
             if n_msg == 0:
                 return "Boş mesaj — tüm 64 byte padding (0x80 + 0x00 dolgu + uzunluk)"
@@ -471,11 +505,14 @@ class _SHA256PaddingWidget(QWidget):
                 f"geri kalan {64 - min(n_msg, 64)} kare = padding"
             )
         if phase == 1:
-            return "0x80 ayracı — padding'in ilk byte'ı (mesajdan hemen sonra)"
+            return ("0x80 = ikili 1000 0000 — mesajın bittiğini gösteren "
+                    "zorunlu tek '1' biti (ayraç)")
         if phase == 2:
-            return "0x00 dolgusu — blok 56 byte'a tamamlanır"
+            return (f"0x00 dolgusu — {bd['zeros']} adet sıfır bayt; blok 56 "
+                    f"byte'a tamamlanır (sonra 8 byte uzunluk gelir)")
         if phase == 3:
-            return "Son 8 byte — mesaj uzunluğu (big-endian, bit cinsinden)"
+            return (f"Son 8 byte = mesaj uzunluğu, big-endian 64-bit: "
+                    f"{bd['bit_len']} bit → {bd['last8_hex']}")
         return (
             f"Padding tamamlandı — {len(self._padded_bytes)} byte / "
             f"{self._blocks_count} blok"

@@ -281,5 +281,51 @@ class TestEmptyMessageHandling(unittest.TestCase):
         self.assertEqual(result["blocks_total"], 1)
 
 
+class TestPaddingBreakdown(unittest.TestCase):
+    """_SHA256PaddingWidget._padding_breakdown padding bileşenlerini SAYILARIYLA
+    doğru vermeli (Alt kategori: BİRİM — açıklama verisi doğruluğu).
+
+    Kullanıcı geri bildirimi: padding metni '0x00 dolgu' diyordu ama kaç sıfır
+    bayt eklendiği ve son 8 baytın değeri belirsizdi. breakdown bunları açar."""
+
+    @staticmethod
+    def _make(msg: bytes):
+        from animation_modals.sha256_pure import sha256_steps
+        from animation_modals.sha256.prep_widget import _SHA256PaddingWidget
+        d = sha256_steps(msg)
+        return _SHA256PaddingWidget(
+            d["message_bytes"], d["padded_bytes"], d["blocks_count"],
+            d["message_text"])
+
+    def test_components_sum_to_total(self):
+        """Alt tür: BİRİM (pozitif — bileşen toplamı).
+        mesaj + 1 (0x80) + zeros + 8 (uzunluk) = toplam padded uzunluk;
+        her mesaj boyutunda (tek/çok blok, sınır) tutmalı."""
+        for msg in (b"merhab", b"", b"x" * 56, b"x" * 130):
+            bd = self._make(msg)._padding_breakdown()
+            self.assertEqual(bd["msg"] + 1 + bd["zeros"] + 8, bd["total"],
+                             f"{len(msg)} bayt: bileşenler toplama eşit olmalı")
+            self.assertGreaterEqual(bd["zeros"], 0)
+
+    def test_six_byte_message_matches_known_values(self):
+        """Alt tür: BİRİM (pozitif — bilinen değer / kullanıcı örneği).
+        6 byte mesaj → 64 byte blok, 49 sıfır bayt, 48 bit uzunluk; son 8
+        byte big-endian '00 00 00 00 00 00 00 30' (0x30 = 48)."""
+        bd = self._make(b"abcdef")._padding_breakdown()
+        self.assertEqual(bd["total"], 64)
+        self.assertEqual(bd["zeros"], 49)
+        self.assertEqual(bd["bit_len"], 48)
+        self.assertEqual(bd["last8_hex"], "00 00 00 00 00 00 00 30")
+
+    def test_last8_encodes_bit_length_big_endian(self):
+        """Alt tür: BİRİM (negatif/kenar — uzunluk alanı kodlaması).
+        Son 8 baytın big-endian tamsayı değeri = mesaj bit uzunluğu. Çok
+        baytlı uzunlukta da (örn. 56 byte → 448 bit = 0x01C0) doğru olmalı."""
+        bd = self._make(b"x" * 56)._padding_breakdown()
+        self.assertEqual(bd["bit_len"], 448)
+        last8_int = int(bd["last8_hex"].replace(" ", ""), 16)
+        self.assertEqual(last8_int, bd["bit_len"])
+
+
 if __name__ == "__main__":
     unittest.main()

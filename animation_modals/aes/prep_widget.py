@@ -31,7 +31,7 @@ class _AESPlaintextPrepWidget(QWidget):
 
     _TICK_MS = 60
     _MATRIX_START_TICK = 96
-    _MATRIX_TICKS_PER_COLUMN = 8
+    _MATRIX_TICKS_PER_COLUMN = 3  # Sütun başına dolum hızı (önceki 8'den hızlandırıldı).
     _MATRIX_COLUMN_COUNT = 4
     _FINISH_TICK = (
         _MATRIX_START_TICK

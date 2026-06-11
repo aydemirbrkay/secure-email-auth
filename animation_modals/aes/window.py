@@ -17,6 +17,7 @@ from ..aes_matrix_view import (
 from ..aes_pure import aes256_encrypt_with_rounds
 from .constants import _COLORS_OP
 from .intro_widget import _AESIntroWidget
+from .keystream_dialog import _KeystreamReferenceDialog
 from .prep_widget import _AESPlaintextPrepWidget
 from .steps import _build_steps
 from .round_flow import _AESRoundFlowWidget
@@ -468,6 +469,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
             "border-radius: 5px; padding: 4px 10px; font-weight: bold; }}"
         )
+        self._keystream_btn.clicked.connect(self._show_keystream_reference)
         top_row.addWidget(self._keystream_btn)
         layout.addLayout(top_row)
 
@@ -482,6 +484,18 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._xor_continue_btn.clicked.connect(self._switch_from_gcm_xor_to_match)
         layout.addWidget(self._xor_continue_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return page
+
+    def _show_keystream_reference(self) -> None:
+        """Round sonucundaki gerçek keystream ve nonce ile GCM referans diyaloğunu açar."""
+        dialog = _KeystreamReferenceDialog(
+            bytes.fromhex(self._final_block_hex),
+            self._nonce,
+            self,
+        )
+        self._keystream_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     # ------------------------------------------------------------------
     # Navigasyon yardımcıları

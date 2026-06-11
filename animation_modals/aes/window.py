@@ -455,6 +455,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._gcm_xor_title = QLabel("GCM son adımı: mesaj bloğu ⊕ keystream bloğu")
         self._gcm_xor_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        self._gcm_xor_title.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        self._gcm_xor_title.setMinimumWidth(180)
         top_row.addWidget(self._gcm_xor_title, stretch=1)
         self._keystream_btn = QPushButton("keystream")
         self._keystream_btn.setFixedHeight(28)

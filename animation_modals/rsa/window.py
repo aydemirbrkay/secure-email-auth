@@ -60,18 +60,19 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         parent: QWidget | None = None,
         on_close: Callable[[], None] | None = None,
     ) -> None:
-        # Her açılışta rastgele farklı bir (p, q, e, d) seç — kullanıcı
-        # her demo'da farklı sayılar görür. Widget'lar __init__ sırasında
-        # cari modül sabitlerini okuduğu için bu çağrı SUPER ÇAĞRISINDAN
-        # ÖNCE yapılmalıdır (super → _init_content → widget'lar).
+        # Her açılışta rastgele farklı bir (p, q, e, d) seç — kullanıcı küçük
+        # eğitsel sayı adımlarında (asal eleği, aritmetik) her demo'da farklı
+        # sayılar görür. Widget'lar __init__ sırasında cari modül sabitlerini
+        # okuduğu için bu çağrı SUPER ÇAĞRISINDAN ÖNCE yapılmalıdır
+        # (super → _init_content → widget'lar).
         H._reseed_demo()
-        # Alice b64: RSA panelinde eğitim amaçlı her açılışta (p,q,n,e)
-        # seed'ine göre farklı görünür — kullanıcı 'her RSA üretimi farklı'
-        # gerçeğini panel anahtarında doğrudan gözlemler.
-        # Bob b64: main_gui'den gelen GERÇEK 2048-bit anahtardır; oturum
-        # boyunca sabit kalır ve email sekmesindeki AES/oturum anahtarı
-        # şifrelemesiyle birebir aynıdır (kriptografik tutarlılık).
-        self._alice_b64 = H._generate_demo_b64(H._N * 31 + H._E) or alice_pub_b64
+        # Alice/Bob b64: main_gui'den gelen GERÇEK 2048-bit açık anahtar
+        # önizlemeleridir. der_widget "Aşama B" ve key_match bunları "Alice'in
+        # gerçek anahtarı" diye sunduğu için DEMO değil GERÇEK değer kullanılır
+        # (aksi halde gösterilen değerle etiket çelişirdi). Gerçek anahtar yoksa
+        # (standalone/test) demo b64'e düşülür. Küçük sayı demoları yukarıdaki
+        # _reseed_demo ile yine her açılışta değişir.
+        self._alice_b64 = alice_pub_b64 or H._generate_demo_b64(H._N * 31 + H._E)
         self._bob_b64 = bob_pub_b64
         super().__init__(
             "RSA-2048 Anahtar Üretimi",

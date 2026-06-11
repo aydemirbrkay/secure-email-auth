@@ -279,6 +279,17 @@ class TestDERByteFlowAnimation(unittest.TestCase):
         w._tick = w._t_end
         w.render(QPixmap(640, 860))  # istisna fırlatırsa fail
 
+    def test_base64_label_clearance_prevents_overlap(self):
+        """Alt tür: BİRİM (yerleşim regresyonu — üst üste binme).
+        Base64 bölümünde 'bayt N' etiketli kutu satırı, bölüm başlığıyla
+        çakışmamalı. Etiket kutunun _LABEL_DY px üstüne yazıldığından, satır
+        öncesi ayrılan boşluk (_LABEL_CLEARANCE) bunu KARŞILAMALI."""
+        w = self._make()
+        self.assertGreaterEqual(
+            w._LABEL_CLEARANCE, w._LABEL_DY,
+            "Etiketli satır boşluğu, etiketin kutu üstüne çıkışını örtmeli",
+        )
+
     def test_tick_pacing_is_followable(self):
         """Alt tür: BİRİM (pozitif — temponun takip edilebilirliği).
         Kutu açılış temposu (_TICK_MS) en az 60 ms olmalı ki öğrenci her

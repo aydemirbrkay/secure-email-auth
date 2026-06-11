@@ -39,6 +39,8 @@ class _DERByteFlowWidget(QWidget):
     _TICK_MS = 80                 # kutu açılış temposu (AES 60'tan biraz yavaş)
     _TICKS_PER_BOX = 2            # bir kutunun açılması kaç tick sürer
     _GAP = 4                     # aşamalar arası tick boşluğu
+    _LABEL_DY = 13               # _byte_box etiketinin kutu üstüne çıkış payı (px)
+    _LABEL_CLEARANCE = 14        # etiketli satır öncesi ayrılan dikey boşluk (≥ _LABEL_DY)
 
     def __init__(
         self, alice_b64: str, parent: QWidget | None = None,
@@ -134,7 +136,7 @@ class _DERByteFlowWidget(QWidget):
         if label:
             p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
             p.setPen(QColor(label_color or ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(x - 6, y - 13, w + 12, 12),
+            p.drawText(QRect(x - 6, y - self._LABEL_DY, w + 12, 12),
                        Qt.AlignmentFlag.AlignCenter, label)
         qc = QColor(fill_hex)
         p.setBrush(QBrush(qc))
@@ -324,6 +326,10 @@ class _DERByteFlowWidget(QWidget):
         indices = [int(g, 2) for g in groups]
         chars = b64[:4]
         byte_cols = [_palette_6()[0], _palette_6()[3], _palette_6()[4]]
+
+        # Kutuların üstündeki "bayt N" etiketi (_byte_box label'ı kutunun 13 px
+        # üstüne yazar) bölüm başlığıyla çakışmasın diye satırı aşağı it.
+        y += self._LABEL_CLEARANCE
 
         # --- 3 kaynak baytı (hex kutuları, byte renkleriyle) ---
         bw, gap = 36, 6

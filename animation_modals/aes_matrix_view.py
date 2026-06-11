@@ -703,12 +703,28 @@ class _ColumnMajorLinearizeWidget(QWidget):
     _COL_GAP_TICKS = 3          # Sütunlar arası kısa duraklama.
     _OUTRO_TICKS = 24           # Hex çıktı + final bekleme.
 
+    # Dikey yerleşim sabitleri (paintEvent ile birebir aynı; min yükseklik
+    # bunlardan türetilir, böylece şerit + hex çıktı asla kırpılmaz).
+    _TITLE_TOP = 2
+    _MAT_OY = 26                 # Matrisin üst kenarı.
+    _STRIP_GAP = 26              # Matris altı ile şerit arası (etiket dahil).
+    _HEX_GAP = 8                 # Şerit altı ile hex çıktı arası.
+    _HEX_H = 22                  # Hex çıktı satır yüksekliği.
+    _BOTTOM_PAD = 10
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._state: list[list[str]] = [["00"] * 4 for _ in range(4)]
         self._tick = 0
         self._total_ticks = self._compute_total()
-        self.setMinimumSize(360, 230)
+        mat_h = 4 * self._M_CELL + 3 * self._M_GAP
+        # Toplam içerik yüksekliği: matris + şerit + hex çıktı + paylar.
+        content_h = (
+            self._MAT_OY + mat_h + self._STRIP_GAP + self._S_CELL_H
+            + self._HEX_GAP + self._HEX_H + self._BOTTOM_PAD
+        )
+        min_w = 16 * self._S_CELL_W + 15 * self._S_GAP + 12
+        self.setMinimumSize(min_w, content_h)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._advance)
@@ -804,7 +820,7 @@ class _ColumnMajorLinearizeWidget(QWidget):
         # Matris yerleşimi (üstte, ortalanmış).
         mat_w = 4 * self._M_CELL + 3 * self._M_GAP
         mat_ox = (W - mat_w) // 2
-        mat_oy = 26
+        mat_oy = self._MAT_OY
         flying = self._flying()
         active_col = flying[0] if flying else self._current_active_col()
 
@@ -820,7 +836,7 @@ class _ColumnMajorLinearizeWidget(QWidget):
         # Alt şerit.
         strip_w = 16 * self._S_CELL_W + 15 * self._S_GAP
         strip_ox = max(6, (W - strip_w) // 2)
-        strip_oy = mat_oy + 4 * (self._M_CELL + self._M_GAP) + 26
+        strip_oy = mat_oy + 4 * (self._M_CELL + self._M_GAP) + self._STRIP_GAP
 
         p.setFont(cached_font("IBM Plex Sans", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
@@ -856,7 +872,7 @@ class _ColumnMajorLinearizeWidget(QWidget):
             hex_out = self.hex_output()
             p.setFont(cached_font("Courier New", 13, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["accent_green"]))
-            p.drawText(QRect(0, strip_oy + self._S_CELL_H + 8, W, 22),
+            p.drawText(QRect(0, strip_oy + self._S_CELL_H + self._HEX_GAP, W, self._HEX_H),
                        Qt.AlignmentFlag.AlignCenter, hex_out)
         p.end()
 

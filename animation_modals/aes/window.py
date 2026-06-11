@@ -546,50 +546,18 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._linearize_widget.set_state(mat)
         self._linearize_widget.start()
 
-        # ── Final state matrisi → şifreli metin byte sırası ──
-        # Matris ve column-major diziliş yukarıdaki animasyon widget'ında
-        # gösterildiği için burada matrisi METİN olarak TEKRAR ÇİZMİYORUZ;
-        # yalnızca matristen
-        # çıkan 32 haneli hex sonucu ve kısa bir kavram özeti veriyoruz.
-        hex_out = "".join(
-            mat[r][c] for c in range(4) for r in range(4)
-        )
-        assert len(hex_out) == 32, f"Unexpected hex_out length: {len(hex_out)}"
-
-        sec = ANIM_COLORS["text_secondary"]
-        muted = ANIM_COLORS["text_muted"]
-        yellow = ANIM_COLORS["accent_yellow"]
+        # Matris ve column-major diziliş + 32 haneli hex çıktı yukarıdaki
+        # animasyon widget'ında gösterildiği için burada uzun teknik açıklama
+        # YOK; yalnızca bu çıktının programın AES sonucu olduğunu tek satırda
+        # belirtiyoruz (kullanıcı geri bildirimi: fazla metin gereksiz).
         green = ANIM_COLORS["accent_green"]
-        mono = "font-family:'Courier New',monospace;"
-
-        # Kısa, okunması kolay özet (eski uzun teknik metin yerine).
         html_body = (
-            f'<div style="color:{sec};">'
-            "Matris sütun-öncelikli (column-major) okunarak 16 byte sıraya dizilir:"
-            "</div>"
-            f'<div style="{mono} color:{ANIM_COLORS["text_primary"]}; font-weight:bold;">'
-            f"&nbsp;&nbsp;{hex_out[:16]}<br>&nbsp;&nbsp;{hex_out[16:32]}"
-            "</div>"
-            "<br>"
-            f'<div style="color:{sec};">'
-            "AES-256-GCM'de bu blok doğrudan şifreli metin değildir; bir keystream'dir:"
-            f'<br><span style="{mono} color:{yellow};">'
-            "&nbsp;&nbsp;ciphertext = keystream ⊕ plaintext</span>"
-            "<br>Ayrıca GHASH, kimlik doğrulama etiketini (tag) üretir."
-            "</div>"
-            "<br>"
-            f'<div style="color:{muted}; font-size:11px;">'
-            "⚠ Animasyon çıktısı (tek blok AES-ECB) ile gerçek GCM çıktısı farklıdır — "
-            "bu beklenen bir durumdur (GCM farklı IV/sayaç kullanır)."
-            "</div>"
-            "<br>"
             f'<div style="color:{green}; font-weight:bold;">'
-            "✅ AES-256-GCM şifreleme doğru çalıştı."
+            "✅ Yukarıdaki diziliş, programın AES-256 şifreleme sonucudur."
             "</div>"
         )
         self._match_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._match_lbl.setText(html_body)
-        # Gövde rengi nötr (text_primary); vurgular HTML span'lerinde verilir.
         self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_primary']};")
 
     # showEvent override — intro başlatılmış, timer başlatma

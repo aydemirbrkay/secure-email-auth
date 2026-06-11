@@ -604,11 +604,12 @@ class MainWindow(QMainWindow):
     def _reopen_aes(self) -> None:
         if self._aes_data is None:
             return
-        key_bytes, plaintext, ct_hex = self._aes_data
+        key_bytes, plaintext, ct_hex, nonce_bytes = self._aes_data
         win = AESAnimationWindow(
             key=key_bytes,
             plaintext=plaintext,
             expected_ct_hex=ct_hex,
+            nonce=nonce_bytes,
             on_close=self._alice_panel.hide_animation,
         )
         self._alice_panel.show_animation(win)
@@ -839,15 +840,18 @@ class MainWindow(QMainWindow):
                 elif next_step.step_type == StepType.AES_ENCRYPT:
                     key_hex = next_step.data.get("session_key_hex", "")
                     ct_preview = next_step.data.get("ciphertext_hex_preview", "")
+                    nonce_hex = next_step.data.get("nonce_hex", "")
                     key_bytes = bytes.fromhex(key_hex) if key_hex else b"\x00" * 32
+                    nonce_bytes = bytes.fromhex(nonce_hex) if nonce_hex else b""
                     plaintext = self._original_message.encode("utf-8")
-                    self._aes_data = (key_bytes, plaintext, ct_preview)
+                    self._aes_data = (key_bytes, plaintext, ct_preview, nonce_bytes)
                     self._btn_anim_aes.setEnabled(True)
                     self._update_toggle_label()
                     aes_win = AESAnimationWindow(
                         key=key_bytes,
                         plaintext=plaintext,
                         expected_ct_hex=ct_preview,
+                        nonce=nonce_bytes,
                         on_close=self._alice_panel.hide_animation,
                     )
                     self._alice_panel.show_animation(aes_win)

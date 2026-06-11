@@ -29,6 +29,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
                         önizlemedir. Kısa mesajlarda bu önizleme tag
                         baytlarını da içerebilir; uzun mesajlarda ise
                         yalnızca ciphertext'in başlangıcı görünür.
+      nonce           : programın gerçek GCM şifrelemesinde kullanılan 12 byte
+                        nonce. Verilirse final sayfada "programın gerçek AES'i"
+                        köprü aşaması (gerçek keystream) gösterilir; boş ise
+                        (eski çağrılar/testler) köprü gizlenir.
     """
 
     def __init__(
@@ -38,10 +42,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
         expected_ct_hex: str,
         parent: QWidget | None = None,
         on_close: Callable[[], None] | None = None,
+        nonce: bytes = b"",
     ) -> None:
         self._key = key
         self._plaintext = plaintext
         self._expected_ct_hex = expected_ct_hex
+        self._nonce = nonce
 
         aes_result = aes256_encrypt_with_rounds(key, plaintext)
         self._steps_data = _build_steps(aes_result["rounds_data"])

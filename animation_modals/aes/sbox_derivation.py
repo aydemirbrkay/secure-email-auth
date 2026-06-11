@@ -390,27 +390,124 @@ class _SBoxDerivationWidget(QWidget):
         self._paint_note(p, rect, note, set_pen=False)
 
     # ------------------------------------------------------------------
-    # Sahne 2 — Affine (geçici sade gösterim; Aşama 4'te bit-bit XOR olacak)
+    # Sahne 2 — Affine (bit-bit XOR akışı)
     # ------------------------------------------------------------------
 
+    # Affine dönüşümünde her çıkış biti b'_i, girdinin şu bit indekslerinin
+    # XOR'udur (aes_pure._affine_transform ile birebir): i, i+4, i+5, i+6, i+7
+    # (mod 8), artı 0x63 sabitinin i. biti.
+    _AFFINE_OFFSETS = (0, 4, 5, 6, 7)
+    _AFFINE_CONST = 0x63
+
+    def _affine_output_bit(self, inv: int, i: int) -> int:
+        """Ters byte ``inv`` için affine çıkışının ``i``. bitini hesaplar."""
+        bit = (self._AFFINE_CONST >> i) & 1
+        for off in self._AFFINE_OFFSETS:
+            bit ^= (inv >> ((i + off) % 8)) & 1
+        return bit
+
     def _paint_scene_affine(self, p: QPainter, rect: QRect) -> None:
-        """Affine dönüşümünü gösterir (bit-bit XOR akışı sonraki aşamada)."""
+        """Affine dönüşümünü bit-bit XOR akışıyla canlandırır.
+
+        Üstte ters byte'ın 8 biti, altında 0x63 sabitinin 8 biti gösterilir;
+        çıkış bitleri b'₇…b'₀ tek tek üretilir. O an üretilen bit için XOR'a
+        giren girdi bitleri ve sabit biti vurgulanır.
+        """
         d = derive_sbox_value(self._byte)
+        inv = d.inverse
+        progress = self._step_local_progress(2)
+
+        # Kaç çıkış biti üretildi? (0..8; 8 = tamamlandı.)
+        produced = min(8, max(0, int(progress * 8)))
+        # O an aktif olarak üretilen çıkış biti (MSB→LSB sırasıyla i=7..0).
+        active_out = 7 - produced if produced < 8 else -1
+        # Aktif bite katkı veren girdi bit indeksleri (vurgulama için).
+        contrib = set()
+        if active_out >= 0:
+            contrib = {(active_out + off) % 8 for off in self._AFFINE_OFFSETS}
+
+        mauve = QColor(ANIM_COLORS["accent_mauve"])
         yellow = QColor(ANIM_COLORS["accent_yellow"])
-        cy = rect.top() + 46
-        p.setFont(QFont("Courier New", 22, QFont.Weight.Bold))
-        self._paint_equation(
-            p, rect.center().x(), cy,
-            [("affine(", QColor(ANIM_COLORS["text_secondary"])),
-             (f"{d.inverse:02x}", QColor(ANIM_COLORS["accent_mauve"])),
-             (") = ", QColor(ANIM_COLORS["text_secondary"])),
-             (f"{d.result:02x}", yellow)],
-        )
-        self._paint_note(
-            p, rect,
-            f"Ters değer, bit-döndürmeli XOR ve {d.affine_const:02x} sabitiyle "
-            f"birleşerek S-Box çıktısını verir.",
-        )
+        green = QColor(ANIM_COLORS["accent_green"])
+        muted = QColor(ANIM_COLORS["text_muted"])
+
+        cell = 30
+        gap = 6
+        row_w = 8 * cell + 7 * gap
+        ox = rect.center().x() - row_w // 2
+        label_x = ox - 70
+
+        y_inv = rect.top() + 6
+        y_const = y_inv + cell + 10
+        y_out = y_const + cell + 18
+
+        # Satır etiketleri.
+        p.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        for y, text, col in (
+            (y_inv, f"ters {inv:02x}", mauve),
+            (y_const, f"sabit {self._AFFINE_CONST:02x}", QColor(ANIM_COLORS["text_secondary"])),
+            (y_out, f"çıktı {d.result:02x}", yellow),
+        ):
+            p.setPen(col)
+            p.drawText(QRect(label_x - 10, y, 76, cell),
+                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, text)
+
+        # Bitleri MSB→LSB (sol→sağ) çiz: kolon k → bit indeksi 7-k.
+        for k in range(8):
+            bit_idx = 7 - k
+            x = ox + k * (cell + gap)
+            inv_bit = (inv >> bit_idx) & 1
+            const_bit = (self._AFFINE_CONST >> bit_idx) & 1
+
+            # Ters biti (katkı veriyorsa vurgulu).
+            highlighted = bit_idx in contrib
+            self._paint_bit_cell(p, x, y_inv, cell, inv_bit,
+                                 mauve if highlighted else muted,
+                                 strong=highlighted)
+            # Sabit biti (yalnızca aktif çıkış kolonunda vurgulu).
+            const_hl = (bit_idx == active_out)
+            self._paint_bit_cell(p, x, y_const, cell, const_bit,
+                                 yellow if const_hl else muted,
+                                 strong=const_hl)
+
+            # Çıkış biti: üretildiyse değeri, aktifse vurgulu, henüz değilse boş.
+            if k < produced:
+                out_bit = self._affine_output_bit(inv, bit_idx)
+                self._paint_bit_cell(p, x, y_out, cell, out_bit, green, strong=True)
+            elif bit_idx == active_out:
+                self._paint_bit_cell(p, x, y_out, cell, None, yellow, strong=True)
+            else:
+                self._paint_bit_cell(p, x, y_out, cell, None, muted, strong=False)
+
+        # Açıklama: aktif bit varsa formülü, bittiyse sonucu göster.
+        if active_out >= 0:
+            terms = " ⊕ ".join(
+                [f"b{(active_out + off) % 8}" for off in self._AFFINE_OFFSETS]
+                + [f"c{active_out}"]
+            )
+            note = f"Çıkış biti b'{active_out} = {terms}  (her terim 0/1, XOR'lanır)"
+        else:
+            note = (
+                f"8 bitin tümü üretildi → affine sonucu {d.result:02x}. "
+                f"Her çıkış biti, ters byte'ın 5 dönük biti ve {self._AFFINE_CONST:02x} "
+                f"sabitinin XOR'udur."
+            )
+        self._paint_note(p, rect, note)
+
+    def _paint_bit_cell(self, p: QPainter, x: int, y: int, size: int,
+                        value: int | None, color: QColor, strong: bool) -> None:
+        """Tek bir bit hücresi çizer (value None ise boş/'?' gösterir)."""
+        fill = QColor(color)
+        fill.setAlpha(70 if strong else 16)
+        p.setBrush(QBrush(fill))
+        p.setPen(QPen(color if strong else QColor(ANIM_COLORS["border"]),
+                      2 if strong else 1))
+        p.drawRoundedRect(x, y, size, size, 5, 5)
+        p.setFont(QFont("Courier New", 14, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_primary"]) if (strong or value is not None)
+                 else QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(x, y, size, size), Qt.AlignmentFlag.AlignCenter,
+                   "·" if value is None else str(value))
 
     # ------------------------------------------------------------------
     # Sahne 3 — Sonuç

@@ -515,8 +515,12 @@ class _SHA256PaddingWidget(QWidget):
             return (f"0x00 dolgusu — {bd['zeros']} adet sıfır bayt; blok 56 "
                     f"byte'a tamamlanır (sonra 8 byte uzunluk gelir)")
         if phase == 3:
-            return (f"Son 8 byte = mesaj uzunluğu, big-endian 64-bit: "
-                    f"{bd['bit_len']} bit → {bd['last8_hex']}")
+            return (
+                "Mesaj başta, 0x80 + 0x00 dolgusu ortada, mesaj uzunluğu en "
+                f"sonda: {bd['bit_len']} bit → {bd['last8_hex']}. Neden sonda? "
+                "Blok tam 64 byte'a tamamlansın ve hash mesajın GERÇEK uzunluğunu "
+                "da içersin; böylece farklı uzunluktaki mesajlar ayırt edilsin."
+            )
         return (
             f"Padding tamamlandı — {len(self._padded_bytes)} byte / "
             f"{self._blocks_count} blok"

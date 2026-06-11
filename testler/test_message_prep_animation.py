@@ -341,5 +341,17 @@ class TestSHAPrepExplanationPacing(unittest.TestCase):
             dwell_ms = widget_type._PHASE_DWELL_TICKS * widget_type._TICK_MS
             self.assertGreaterEqual(dwell_ms, 4500)
 
+    def test_length_phase_explains_why_last_eight_bytes_are_at_end(self):
+        """Uzunluk fazı son 8 baytın konumunu ve amacını açıkça gerekçelendirmeli."""
+        widget = TestPaddingBreakdown._make(b"abcdef")
+
+        text = widget._phase_label_text(3)
+
+        self.assertIn("Neden sonda?", text)
+        self.assertIn("64 byte", text)
+        self.assertIn("GERÇEK uzunluğunu", text)
+        self.assertIn("00 00 00 00 00 00 00 30", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -327,5 +327,19 @@ class TestPaddingBreakdown(unittest.TestCase):
         self.assertEqual(last8_int, bd["bit_len"])
 
 
+class TestSHAPrepExplanationPacing(unittest.TestCase):
+    """SHA hazırlık açıklamalarının okunabilir süre ve içerik sözleşmesini sınar."""
+
+    def test_phase_dwell_is_at_least_four_and_half_seconds(self):
+        """Her açıklama fazı normal hızda en az 4,5 saniye görünür kalmalı."""
+        from animation_modals.sha256.prep_widget import (
+            _SHAMessagePrepWidget,
+            _SHA256PaddingWidget,
+        )
+
+        for widget_type in (_SHAMessagePrepWidget, _SHA256PaddingWidget):
+            dwell_ms = widget_type._PHASE_DWELL_TICKS * widget_type._TICK_MS
+            self.assertGreaterEqual(dwell_ms, 4500)
+
 if __name__ == "__main__":
     unittest.main()

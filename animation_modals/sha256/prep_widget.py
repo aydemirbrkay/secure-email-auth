@@ -31,7 +31,8 @@ class _SHAMessagePrepWidget(QWidget):
     Boş mesaj: faz 1-2-3 atlanır, doğrudan faz 4'e geçilir.
     """
 
-    _TICK_MS = 45
+    _TICK_MS = 60
+    _PHASE_DWELL_TICKS = 83
 
     def __init__(
         self,
@@ -181,22 +182,24 @@ class _SHAMessagePrepWidget(QWidget):
         self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def _on_tick(self) -> None:
+        """Açıklama fazlarını yaklaşık beş saniyelik okunma aralıklarıyla ilerletir."""
         self._tick += 1
         if self._is_empty:
             # Boş mesaj: kısa bir bekleme sonrası doğrudan faz 4'e
-            if self._tick >= 12:
+            if self._tick >= self._PHASE_DWELL_TICKS:
                 self._jump_to_final()
             return
 
-        # Normal akış — fazlar (hızlandırıldı)
-        if self._tick == 8:
+        # Normal akış: her faz açıklaması okunabilecek kadar ekranda kalır.
+        dwell = self._PHASE_DWELL_TICKS
+        if self._tick == dwell:
             self._phase = 1
-        elif self._tick == 26:
+        elif self._tick == dwell * 2:
             self._phase = 2
-        elif self._tick == 40:
+        elif self._tick == dwell * 3:
             self._phase = 3
             self._strip.setVisible(True)
-        elif self._tick >= 52:
+        elif self._tick >= dwell * 4:
             self._jump_to_final()
 
     def _jump_to_final(self) -> None:
@@ -234,6 +237,7 @@ class _SHA256PaddingWidget(QWidget):
     """
 
     _TICK_MS = 60
+    _PHASE_DWELL_TICKS = 83
 
     def __init__(
         self,
@@ -526,21 +530,23 @@ class _SHA256PaddingWidget(QWidget):
         self._timer.start(get_animation_tick_ms(self._TICK_MS))
 
     def _on_tick(self) -> None:
+        """Padding açıklamalarını yaklaşık beş saniyelik aralıklarla sırayla gösterir."""
         # Veri görseli baştan tam — fazlar sadece açıklama etiketini günceller.
         # Bu sayede kullanıcı "yazdığım yazı / padding" ayrımını anında görür,
         # fazlar her bir padding bileşenini sırayla vurgular.
         self._tick += 1
-        if self._tick == 26:
+        dwell = self._PHASE_DWELL_TICKS
+        if self._tick == dwell:
             self._phase = 1
             self._phase_lbl.setText(self._phase_label_text(1))
-        elif self._tick == 46:
+        elif self._tick == dwell * 2:
             self._phase = 2
             self._phase_lbl.setText(self._phase_label_text(2))
-        elif self._tick == 96:
+        elif self._tick == dwell * 3:
             self._phase = 3
             self._phase_lbl.setText(self._phase_label_text(3))
             self._bitlen_lbl.setVisible(True)
-        elif self._tick >= 126:
+        elif self._tick >= dwell * 4:
             self._phase = 4
             self._phase_lbl.setText(self._phase_label_text(4))
             self._jump_to_final()

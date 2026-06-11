@@ -219,5 +219,75 @@ class TestRSAAnimationStructure(unittest.TestCase):
         self.assertTrue(fits, "En uzun etiket adaptif punto ile kutuya sığmalı")
 
 
+class TestDERByteFlowAnimation(unittest.TestCase):
+    """Adım 6 DER/Base64 uzamsal montaj animasyonu (_DERByteFlowWidget)
+    (Alt kategori: BİRİM — runtime, conftest offscreen QApplication ile).
+
+    Bu widget tick tabanlıdır: _tick arttıkça kutular/aşamalar açılır.
+    Testler hem açılış zamanlamasının tutarlılığını hem de her tikte
+    hatasız çizimi doğrular."""
+
+    @staticmethod
+    def _make(alice_b64="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"):
+        from animation_modals.rsa.der_widget import _DERByteFlowWidget
+        w = _DERByteFlowWidget(alice_b64)
+        w.resize(640, 860)
+        return w
+
+    def test_renders_all_ticks_without_error(self):
+        """Alt tür: BİRİM (pozitif — render dayanıklılığı).
+        0'dan son tikin ötesine kadar her tikte widget hatasız boyanmalı;
+        kutu açılış mantığı (sayı→byte, DER montajı, bit-yeniden-gruplama,
+        Aşama B, anahtarlar) hiçbir ara karede istisna atmamalı."""
+        from PyQt6.QtGui import QPixmap
+        w = self._make()
+        for t in range(0, w._t_end + 3):
+            w._tick = t
+            w.render(QPixmap(640, 860))  # istisna fırlatırsa fail
+
+    def test_schedule_is_monotonic(self):
+        """Alt tür: BİRİM (invariant — zamanlama sırası).
+        Aşama başlangıç tikleri kesin artan olmalı: sayılar < n < e <
+        DER < Base64 (bit/grup) < Aşama B < anahtarlar < son. Sıra
+        bozulursa bir aşama diğerinin üstüne biner."""
+        w = self._make()
+        order = [
+            w._t_nums, w._t_n_start, w._t_e_start, w._t_der_start,
+            w._t_b64, w._t_b64_bits, w._t_b64_groups,
+            w._t_asama_b, w._t_keys, w._t_end,
+        ]
+        for a, b in zip(order, order[1:]):
+            self.assertLess(a, b, f"zamanlama artan olmalı: {order}")
+
+    def test_revealed_helper_bounds(self):
+        """Alt tür: BİRİM (pozitif+negatif — açığa çıkma sayacı).
+        _revealed(start, count): start'tan önce 0; start'tan yeterince
+        sonra tam count döndürür ve count'u asla aşmaz."""
+        w = self._make()
+        w._tick = 0
+        self.assertEqual(w._revealed(5, 4), 0, "start öncesi 0 olmalı")
+        w._tick = 5 + w._TICKS_PER_BOX * 4 + 10
+        self.assertEqual(w._revealed(5, 4), 4, "yeterince sonra tam count")
+        self.assertLessEqual(w._revealed(5, 4), 4, "count aşılmamalı")
+
+    def test_empty_alice_b64_renders(self):
+        """Alt tür: BİRİM (negatif/kenar — eksik gerçek anahtar).
+        Standalone/test bağlamında Alice b64 boş gelebilir; Aşama B 3 bayt
+        çözemese de widget son tikte hatasız boyanmalı (boş b64 düşüşü)."""
+        from PyQt6.QtGui import QPixmap
+        w = self._make(alice_b64="")
+        w._tick = w._t_end
+        w.render(QPixmap(640, 860))  # istisna fırlatırsa fail
+
+    def test_tick_pacing_is_followable(self):
+        """Alt tür: BİRİM (pozitif — temponun takip edilebilirliği).
+        Kutu açılış temposu (_TICK_MS) en az 60 ms olmalı ki öğrenci her
+        baytın yerleşmesini izleyebilsin; ayrıca kutu başına ≥2 tik ile
+        açılış 'atlamasız' olur."""
+        w = self._make()
+        self.assertGreaterEqual(w._TICK_MS, 60)
+        self.assertGreaterEqual(w._TICKS_PER_BOX, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

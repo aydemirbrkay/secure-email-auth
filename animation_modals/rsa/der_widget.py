@@ -45,8 +45,9 @@ class _DERByteFlowWidget(QWidget):
     ) -> None:
         super().__init__(parent)
         self._alice_b64 = alice_b64
-        # Kutu tabanlı kompakt yerleşim → eski 1000 px metin duvarından düşük.
-        self.setMinimumHeight(760)
+        # Kutu tabanlı yerleşim → eski 1000 px metin duvarından düşük; bit
+        # yeniden-gruplama satırları için ~860 px yeterli (kalanı scroll alanı).
+        self.setMinimumHeight(860)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._tick = 0
         self._timer = QTimer(self)
@@ -80,8 +81,11 @@ class _DERByteFlowWidget(QWidget):
         self._t_der_start = e_end + g
         der_end = self._t_der_start + per * len(self._der)
 
-        self._t_b64 = der_end + g
-        b64_end = self._t_b64 + per * 6                    # 1 grup + sonuç
+        # Base64 alt-fazları: 3 byte → 24 bit → 4×6-bit grup sütun-yönlü çözülür.
+        self._t_b64 = der_end + g                          # 3 hex byte kutusu
+        self._t_b64_bits = self._t_b64 + 2                 # 24 bit hücresi belirir
+        self._t_b64_groups = self._t_b64_bits + 2          # ilk 6-bit grup çözülür
+        b64_end = self._t_b64_groups + per * 4             # 4 grup birer birer
         self._t_asama_b = b64_end + g
         asama_b_end = self._t_asama_b + per * 6
         self._t_keys = asama_b_end + g
@@ -304,37 +308,78 @@ class _DERByteFlowWidget(QWidget):
         return y
 
     def _draw_base64(self, p: QPainter, cx: int, y: int) -> int:
-        """DEMO DER'in ilk 3 baytını alıp 4 Base64 karakterine eşler (3→4)
-        ve tam demo b64 dizisini gösterir. (Aşama 4'te bit-yeniden-gruplama
-        ayrıntısı eklenecek.)"""
+        """DEMO DER'in ilk 3 baytını 24 bite açar ve bu 24 biti 4×6-bit gruba
+        YENİDEN BÖLER; her 6-bit grup sütun-yönlü sırayla indeks → Base64
+        karakterine çözülür (3 byte → 4 karakter). Bitler, kaynak baytlarının
+        rengiyle boyanır; 6'lık yeniden gruplama köşeli ayraçlarla gösterilir
+        → 8'lik byte sınırı ile 6'lık b64 sınırının kaymasını kullanıcı görür.
+        """
         der = self._der
         b64 = H._B64_DEMO
         chunk = der[:3]
+        if len(chunk) < 3:                  # demo DER her zaman ≥3 bayt; güvenlik
+            return y
+        bits = "".join(f"{b:08b}" for b in chunk)          # 24 bit
+        groups = [bits[i:i + 6] for i in range(0, 24, 6)]  # 4 × 6-bit
+        indices = [int(g, 2) for g in groups]
         chars = b64[:4]
-        blue = _palette_6()[0]
-        green = _palette_6()[1]
+        byte_cols = [_palette_6()[0], _palette_6()[3], _palette_6()[4]]
 
-        # 3 byte kutusu  →  4 karakter kutusu
+        # --- 3 kaynak baytı (hex kutuları, byte renkleriyle) ---
         bw, gap = 36, 6
-        group_w = 3 * bw + 2 * gap
-        ox = cx - group_w - 60
+        grp3_w = 3 * bw + 2 * gap
+        ox3 = cx - grp3_w // 2
         for i, b in enumerate(chunk):
-            self._byte_box(p, ox + i * (bw + gap), y, f"{b:02X}", blue, w=bw)
-        p.setFont(QFont("Georgia", 14))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(ox + group_w + 6, y, 44, 28),
-                   Qt.AlignmentFlag.AlignCenter, "→")
-        cx2 = ox + group_w + 56
-        for i, ch in enumerate(chars):
-            self._byte_box(p, cx2 + i * (bw + gap), y, ch, green, w=bw)
-        y += 38
+            self._byte_box(p, ox3 + i * (bw + gap), y, f"{b:02X}", byte_cols[i],
+                           w=bw, label=f"bayt {i+1}", label_color=byte_cols[i])
+        y += 40
 
-        p.setFont(QFont("Georgia", 10))
-        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(8, y, self.width() - 16, 18),
-                   Qt.AlignmentFlag.AlignCenter,
-                   f"Demo Base64 ({len(b64)} karakter, temsilî): {b64}")
-        return y + 24
+        # --- 24 bit hücresi (kaynak baytın rengiyle, 8|8|8) ---
+        if self._tick < self._t_b64_bits:
+            return y
+        cw, ch = 18, 22
+        total = 24 * cw
+        ox = cx - total // 2
+        bit_y = y
+        for i, bit in enumerate(bits):
+            col = byte_cols[i // 8]
+            self._byte_box(p, ox + i * cw, bit_y, bit, col, w=cw, h=ch)
+        y += ch + 4
+
+        # --- 6'lık yeniden gruplama: köşeli ayraç + indeks → karakter ---
+        groups_shown = 0
+        if self._tick >= self._t_b64_groups:
+            groups_shown = min(4, (self._tick - self._t_b64_groups) // 2 + 1)
+        green = _palette_6()[1]
+        char_y = y + 18
+        for g in range(groups_shown):
+            xa = ox + g * 6 * cw
+            xb = ox + (g + 1) * 6 * cw
+            fresh = (g == groups_shown - 1 and
+                     self._tick < self._t_b64_groups + 2 * 4)
+            col = ANIM_COLORS["accent_yellow"] if fresh else ANIM_COLORS["border"]
+            p.setPen(QPen(QColor(col), 2 if fresh else 1))
+            p.drawLine(xa + 1, y, xb - 1, y)
+            p.drawLine(xa + 1, y, xa + 1, y + 4)
+            p.drawLine(xb - 1, y, xb - 1, y + 4)
+            # indeks etiketi
+            p.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(xa, y + 4, xb - xa, 12),
+                       Qt.AlignmentFlag.AlignCenter, f"={indices[g]}")
+            # sonuç karakter kutusu (grubun altında ortalı)
+            self._byte_box(p, (xa + xb) // 2 - 17, char_y, chars[g], green,
+                           w=34, highlight=fresh)
+        y = char_y + 34
+
+        if groups_shown >= 4:
+            p.setFont(QFont("Georgia", 10))
+            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            p.drawText(QRect(8, y, self.width() - 16, 18),
+                       Qt.AlignmentFlag.AlignCenter,
+                       f"Demo Base64 ({len(b64)} karakter, temsilî): {b64}")
+            y += 22
+        return y
 
     def _draw_asama_b(self, p: QPainter, cx: int, y: int) -> int:
         """Alice'in gerçek 2048-bit anahtarının ilk 3 baytını alıp aynı 3→4

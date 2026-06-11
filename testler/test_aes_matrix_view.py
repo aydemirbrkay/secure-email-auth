@@ -486,5 +486,37 @@ class TestAESStateCompareWidget(unittest.TestCase):
         self.assertEqual(w._curr_view._tick, 0)
 
 
+class TestGCMRealEncryptMatrixWidget(unittest.TestCase):
+    """GCM XOR adımının AddRoundKey tarzı üç matrisli sunumunu sınar."""
+
+    def test_inputs_are_exposed_as_column_major_matrices(self):
+        """Mesaj, keystream ve ciphertext 4×4 column-major matrislere dönüşmeli."""
+        from animation_modals.aes_matrix_view import _GCMRealEncryptWidget
+
+        widget = _GCMRealEncryptWidget()
+        message = bytes(range(16))
+        keystream = bytes(range(16, 32))
+        widget.set_inputs(keystream, message, "")
+
+        self.assertEqual(widget._message_matrix[0][0], "00")
+        self.assertEqual(widget._message_matrix[3][0], "03")
+        self.assertEqual(widget._message_matrix[0][1], "04")
+        self.assertEqual(widget._keystream_matrix[0][0], "10")
+        self.assertEqual(widget._cipher_matrix[0][0], "10")
+        self.assertEqual(widget._cipher_matrix[3][3], "10")
+
+    def test_short_message_keeps_unused_matrix_cells_empty(self):
+        """Kısa mesajda yalnız gerçek mesaj baytları XOR'lanmalı, diğer hücreler boş kalmalı."""
+        from animation_modals.aes_matrix_view import _GCMRealEncryptWidget
+
+        widget = _GCMRealEncryptWidget()
+        widget.set_inputs(bytes(range(16)), b"abc", "")
+
+        self.assertEqual(widget._message_matrix[0][0], "61")
+        self.assertEqual(widget._message_matrix[2][0], "63")
+        self.assertEqual(widget._message_matrix[3][0], "--")
+        self.assertEqual(widget._cipher_matrix[3][0], "--")
+
+
 if __name__ == "__main__":
     unittest.main()

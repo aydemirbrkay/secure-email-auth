@@ -37,6 +37,20 @@ class TestKeystreamReferenceDialog(unittest.TestCase):
         self.assertIn("keystream ⊕ mesaj", all_text)
         self.assertIn("AEAD", all_text)
         self.assertIn("16 byte tag", all_text)
+        self.assertEqual(dialog.generation_widget.counter_block, self.nonce + b"\x00\x00\x00\x02")
+        self.assertEqual(dialog.generation_widget.keystream, self.keystream)
+
+    def test_generation_widget_animates_counter_to_real_keystream(self):
+        """Üretim görseli gerçek sayaç bloğunu 14 round üzerinden keystream'e bağlamalı."""
+        dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
+        widget = dialog.generation_widget
+
+        widget.start()
+        for _ in range(widget._TOTAL_TICKS):
+            widget._advance()
+
+        self.assertEqual(widget._phase, 2)
+        self.assertFalse(widget._timer.isActive())
 
     def test_dialog_restyles_when_theme_changes(self):
         """Açık diyalog tema değişiminde yeni panel rengini kullanmalı."""

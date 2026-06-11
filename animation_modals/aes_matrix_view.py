@@ -943,6 +943,9 @@ class _GCMRealEncryptWidget(QWidget):
         self._message = b""           # Kullanıcının mesajı (XOR girdisi).
         self._expected_ct = b""       # Gerçek ciphertext ilk byte'ları (kanıt).
         self._cipher = b""            # keystream ⊕ mesaj (ilk N byte).
+        self._message_matrix = [["--"] * 4 for _ in range(4)]
+        self._keystream_matrix = [["--"] * 4 for _ in range(4)]
+        self._cipher_matrix = [["--"] * 4 for _ in range(4)]
         self._n = 0                   # Gösterilen byte sayısı = min(16, len(mesaj)).
         self._match: bool | None = None
         self._tick = 0
@@ -995,11 +998,17 @@ class _GCMRealEncryptWidget(QWidget):
             self._cipher = b""
             self._n = 0
             self._match = None
+            self._message_matrix = self._matrix_from_bytes(b"", 0)
+            self._keystream_matrix = self._matrix_from_bytes(b"", 0)
+            self._cipher_matrix = self._matrix_from_bytes(b"", 0)
             return
         # ÇELİŞKİ KORUMASI: yalnızca mesaj byte'ları (ilk N), 16'yı aşma.
         self._n = min(self._N, len(message_bytes))
         self._cipher = bytes(self._keystream[i] ^ message_bytes[i]
                              for i in range(self._n))
+        self._message_matrix = self._matrix_from_bytes(self._message, self._n)
+        self._keystream_matrix = self._matrix_from_bytes(self._keystream, self._n)
+        self._cipher_matrix = self._matrix_from_bytes(self._cipher, self._n)
         # Beklenen ciphertext (hex önizleme "...": kuyruğu temizle).
         clean = expected_ct_hex.replace(".", "").strip()
         try:
@@ -1012,6 +1021,15 @@ class _GCMRealEncryptWidget(QWidget):
         else:
             self._match = None
         self.update()
+
+    @staticmethod
+    def _matrix_from_bytes(data: bytes, visible_count: int) -> list[list[str]]:
+        """İlk ``visible_count`` baytı AES column-major 4×4 matrise yerleştirir."""
+        matrix = [["--"] * 4 for _ in range(4)]
+        for index, value in enumerate(data[:min(16, visible_count)]):
+            row, col = index % 4, index // 4
+            matrix[row][col] = f"{value:02x}"
+        return matrix
 
     def start(self) -> None:
         if not self.has_inputs():
@@ -1050,15 +1068,10 @@ class _GCMRealEncryptWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _min_w(self) -> int:
-        return self._N * self._CW + (self._N - 1) * self._GAP + 16
+        return 760
 
     def _min_h(self) -> int:
-        # başlık + 3 satır (keystream, mesaj, ciphertext) + kanıt satırı.
-        rows = 3
-        h = self._TOP + 20  # üst başlık
-        h += rows * (self._ROW_LABEL_H + self._CH + self._ROW_GAP)
-        h += 26  # kanıt satırı
-        return h
+        return 290
 
     # ------------------------------------------------------------------
     # Çizim
@@ -1076,36 +1089,30 @@ class _GCMRealEncryptWidget(QWidget):
             p.end()
             return
 
-        n = self._n  # gösterilecek byte sayısı = min(16, len(mesaj))
-        row_w = n * self._CW + max(0, n - 1) * self._GAP
-        ox = max(8, (W - row_w) // 2)
-
-        # Başlık.
+        n = self._n
         p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
         p.drawText(QRect(0, self._TOP, W, 18), Qt.AlignmentFlag.AlignCenter,
-                   "Son adım: keystream ⊕ mesaj = şifreli metin")
+                   "Mesaj matrisi ⊕ keystream matrisi = şifreli metin matrisi")
 
-        y = self._TOP + 22
         done = self._xor_done()
+        cell_w, cell_h, gap = 38, 32, 4
+        matrix_w = 4 * cell_w + 3 * gap
+        operator_w = 48
+        total_w = matrix_w * 3 + operator_w * 2
+        ox = max(8, (W - total_w) // 2)
+        y = self._TOP + 42
+        output_matrix = self._matrix_from_bytes(self._cipher, done)
 
-        # 1) Keystream satırı (round'ların ürettiği son blok).
-        self._row(p, ox, y, "Keystream  (14 round AES sonucu):",
-                  self._keystream[:n], active=done == 0,
-                  color="accent_blue", placeholder_n=n)
-        y += self._ROW_LABEL_H + self._CH + 6
-
-        # 2) ⊕ Mesaj satırı (kullanıcının mesajı, ilk N byte).
-        self._row(p, ox, y, f"⊕  Mesajınız (ilk {n} byte):",
-                  self._message[:n], active=False,
-                  color="accent_peach", placeholder_n=n)
-        y += self._ROW_LABEL_H + self._CH + 6
-
-        # 3) = Şifreli metin satırı (XOR sonucu, byte byte dolar).
-        self._row(p, ox, y, "=  Şifreli metin:",
-                  self._cipher[:done], active=True,
-                  color="accent_green", placeholder_n=n)
-        y += self._ROW_LABEL_H + self._CH + 8
+        self._draw_matrix(p, ox, y, "MESAJ", self._message_matrix, "accent_peach",
+                          cell_w, cell_h, gap)
+        self._draw_operator(p, ox + matrix_w, y, operator_w, "⊕")
+        self._draw_matrix(p, ox + matrix_w + operator_w, y, "KEYSTREAM",
+                          self._keystream_matrix, "accent_blue", cell_w, cell_h, gap)
+        self._draw_operator(p, ox + matrix_w * 2 + operator_w, y, operator_w, "=")
+        self._draw_matrix(p, ox + matrix_w * 2 + operator_w * 2, y, "CIPHERTEXT",
+                          output_matrix, "accent_green", cell_w, cell_h, gap)
+        y += 4 * cell_h + 3 * gap + 42
 
         # 4) Kanıt: gerçek ciphertext ile eşleşme (yalnızca mesaj byte'ları).
         if done >= n and self._match is not None:
@@ -1121,6 +1128,47 @@ class _GCMRealEncryptWidget(QWidget):
             p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
             p.drawText(QRect(0, y, W, 22), Qt.AlignmentFlag.AlignCenter, msg)
         p.end()
+
+    def _draw_matrix(
+        self,
+        p: QPainter,
+        x: int,
+        y: int,
+        title: str,
+        matrix: list[list[str]],
+        color_key: str,
+        cell_w: int,
+        cell_h: int,
+        gap: int,
+    ) -> None:
+        """AddRoundKey düzenindeki etiketli 4×4 hex matrisini çizer."""
+        width = 4 * cell_w + 3 * gap
+        p.setFont(cached_font("Georgia", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS[color_key]))
+        p.drawText(QRect(x, y - 26, width, 20), Qt.AlignmentFlag.AlignCenter, title)
+        for row in range(4):
+            for col in range(4):
+                cx = x + col * (cell_w + gap)
+                cy = y + row * (cell_h + gap)
+                value = matrix[row][col]
+                dim = value == "--"
+                base = QColor(ANIM_COLORS["bg_input"] if dim else ANIM_COLORS[color_key])
+                bg = QColor(base)
+                if not dim:
+                    bg.setAlphaF(0.20)
+                p.setBrush(QBrush(bg))
+                p.setPen(QPen(QColor(ANIM_COLORS["border"] if dim else ANIM_COLORS[color_key]), 2))
+                p.drawRoundedRect(cx, cy, cell_w, cell_h, 4, 4)
+                p.setFont(cached_font("Courier New", 10, QFont.Weight.Bold))
+                p.setPen(QColor(ANIM_COLORS["text_muted"] if dim else ANIM_COLORS["text_primary"]))
+                p.drawText(QRect(cx, cy, cell_w, cell_h), Qt.AlignmentFlag.AlignCenter, value)
+
+    def _draw_operator(self, p: QPainter, x: int, y: int, width: int, text: str) -> None:
+        """Üç matris arasındaki XOR/eşittir operatörünü dikey ortalanmış çizer."""
+        p.setFont(cached_font("Georgia", 22, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
+        p.drawText(QRect(x, y, width, 4 * 32 + 3 * 4),
+                   Qt.AlignmentFlag.AlignCenter, text)
 
     def _row(self, p: QPainter, ox: int, y: int, label: str, data: bytes,
              *, active: bool, color: str, placeholder_n: int = 0) -> None:

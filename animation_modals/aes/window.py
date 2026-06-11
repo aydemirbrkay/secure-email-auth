@@ -176,6 +176,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._stack.addWidget(self._flow_page)
 
         # Sayfa 4 — Eşleşme sonucu
+        self._gcm_xor_page = self._make_gcm_xor_page()
+        self._stack.addWidget(self._gcm_xor_page)
+
+        # Sayfa 5 — Eşleşme sonucu
         self._match_page = self._make_match_page()
         self._stack.addWidget(self._match_page)
 
@@ -405,6 +409,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._stack.setCurrentWidget(self._round_page)
 
     def _make_match_page(self) -> QWidget:
+        """Column-major final blok gösterimi ve dürüst sözel özeti içeren son sayfayı kurar."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(16, 8, 16, 8)
@@ -427,18 +432,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
         # 1) Eğitim: final matris + column-major dizilim animasyonu (ECB blok).
         self._linearize_widget = _ColumnMajorLinearizeWidget(parent=card)
         cl.addWidget(self._linearize_widget)
-        # 2) Köprü: programın GERÇEK GCM şifrelemesinin çekirdeği (gerçek K_S+nonce).
-        self._gcm_sep = QLabel(
-            "──  Peki program gerçekte ne yapıyor?  ──"
-        )
-        self._gcm_sep.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._gcm_sep.setStyleSheet(
-            f"color: {ANIM_COLORS['text_secondary']}; font-weight: bold;"
-        )
-        cl.addWidget(self._gcm_sep)
-        self._gcm_widget = _GCMRealEncryptWidget(parent=card)
-        cl.addWidget(self._gcm_widget)
-        # 3) Sonra: kısa dürüst sözel özet.
+        # 2) Kısa dürüst sözel özet; GCM XOR artık ayrı sayfadadır.
         cl.addWidget(self._match_lbl)
         from PyQt6.QtWidgets import QScrollArea
         scroll = QScrollArea()
@@ -447,6 +441,43 @@ class AESAnimationWindow(CryptoAnimationWindow):
         scroll.setStyleSheet("background: transparent; border: none;")
         lay.addWidget(scroll)
         return w
+
+    def _make_gcm_xor_page(self) -> QWidget:
+        """Round keystream'ini mesajla XOR'layan ayrı GCM son-adım sayfasını kurar."""
+        from PyQt6.QtWidgets import QScrollArea
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
+
+        top_row = QHBoxLayout()
+        self._gcm_xor_title = QLabel("GCM son adımı: mesaj bloğu ⊕ keystream bloğu")
+        self._gcm_xor_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+        self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        top_row.addWidget(self._gcm_xor_title, stretch=1)
+        self._keystream_btn = QPushButton("keystream")
+        self._keystream_btn.setFixedHeight(28)
+        self._keystream_btn.setStyleSheet(
+            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['accent_yellow']}; "
+            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
+            "border-radius: 5px; padding: 4px 10px; font-weight: bold; }}"
+        )
+        top_row.addWidget(self._keystream_btn)
+        layout.addLayout(top_row)
+
+        self._gcm_xor_widget = _GCMRealEncryptWidget(parent=page)
+        scroll = QScrollArea()
+        scroll.setWidget(self._gcm_xor_widget)
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        layout.addWidget(scroll, stretch=1)
+
+        self._xor_continue_btn = QPushButton("Özete geç  ▶")
+        self._xor_continue_btn.clicked.connect(self._switch_from_gcm_xor_to_match)
+        layout.addWidget(self._xor_continue_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+        return page
 
     # ------------------------------------------------------------------
     # Navigasyon yardımcıları
@@ -570,6 +601,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
+        self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
         # QLabel tabanlı sayfa widget'ları
         for w in (
             getattr(self, "_intro", None),
@@ -620,6 +652,25 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
 
     def _show_match_result(self) -> None:
+        """Round bitişinde GCM XOR sayfasını, ECB'de doğrudan son özeti gösterir."""
+        if self._gcm_mode:
+            self._stack.setCurrentWidget(self._gcm_xor_page)
+            self._gcm_xor_widget.set_inputs(
+                bytes.fromhex(self._final_block_hex),
+                self._message_bytes,
+                self._expected_ct_hex,
+            )
+            self._gcm_xor_widget.start()
+            return
+        self._show_final_summary()
+
+    def _switch_from_gcm_xor_to_match(self) -> None:
+        """Ayrı GCM XOR adımını durdurup final özet sayfasına geçer."""
+        self._gcm_xor_widget.stop()
+        self._show_final_summary()
+
+    def _show_final_summary(self) -> None:
+        """Final AES state dizilimini ve moda uygun kısa sözel özeti gösterir."""
         self._stack.setCurrentWidget(self._match_page)
         self._update_round_bar(14)
         last = self._steps_data[-1]
@@ -629,21 +680,6 @@ class AESAnimationWindow(CryptoAnimationWindow):
         # Final state'in column-major dizilişi (GCM'de bu keystream'dir).
         self._linearize_widget.set_state(mat)
         self._linearize_widget.start()
-
-        # GCM köprüsü: round'ların ürettiği keystream'i mesajla XOR'la = şifreli metin.
-        # Keystream = round animasyonunun son bloğu (_final_block_hex).
-        if self._gcm_mode:
-            keystream = bytes.fromhex(self._final_block_hex)
-            self._gcm_widget.set_inputs(
-                keystream, self._message_bytes, self._expected_ct_hex
-            )
-        else:
-            self._gcm_widget.set_inputs(b"", b"", "")
-        has_real = self._gcm_widget.has_inputs()
-        self._gcm_sep.setVisible(has_real)
-        self._gcm_widget.setVisible(has_real)
-        if has_real:
-            self._gcm_widget.start()
 
         # Dürüst özet. GCM modunda: round'lar gerçek keystream'i üretti, final XOR
         # gerçek şifreli metni verdi. ECB modunda (nonce yok): eğitim amaçlı blok.

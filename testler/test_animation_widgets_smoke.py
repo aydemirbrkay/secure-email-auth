@@ -210,6 +210,33 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         self.assertEqual(a._prep_stack.count(), 1)
         self.assertFalse(hasattr(a, "_gcm_prep_widget"))
 
+    def test_gcm_rounds_finish_on_separate_xor_page_before_summary(self):
+        """GCM roundları bitince match özeti yerine önce ayrı keystream XOR sayfası açılmalı."""
+        from animation_modals import AESAnimationWindow
+
+        message = b"mesaj"
+        a = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=message,
+            expected_ct_hex="00" * len(message),
+            nonce=bytes(range(12)),
+        )
+
+        a._show_match_result()
+
+        self.assertIs(a._stack.currentWidget(), a._gcm_xor_page)
+        self.assertEqual(a._gcm_xor_widget._message, message)
+        keystream = bytes.fromhex(a._final_block_hex)
+        self.assertEqual(
+            a._gcm_xor_widget._cipher,
+            bytes(keystream[i] ^ message[i] for i in range(len(message))),
+        )
+        self.assertTrue(hasattr(a, "_keystream_btn"))
+        self.assertFalse(hasattr(a, "_gcm_widget"))
+
+        a._switch_from_gcm_xor_to_match()
+        self.assertIs(a._stack.currentWidget(), a._match_page)
+
     def test_round_zero_uses_plaintext_state_as_before_matrix(self):
         """Round 0 AddRoundKey, plaintext state ⊕ round_key = sonuç göstermeli."""
         from animation_modals import AESAnimationWindow

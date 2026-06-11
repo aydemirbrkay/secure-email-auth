@@ -223,6 +223,14 @@ _BOB_STEP_RECTS: list[QRect] = [
 _SUCCESS_FILL = QColor(78, 139, 96, 110)   # koyu yeşil dolgu (başarı)
 _FAILURE_FILL = QColor(198, 40, 40, 110)   # koyu kırmızı dolgu (başarısız)
 
+# Bir adım vurgulanırken ek olarak yanması gereken bölgeler.
+# Adım 2 (Mesaj ve İmza Ayrıştırma) deşifre çıktısından (rect 1, "b üst")
+# doğrudan beslendiği için ayrıştırma noktasıyla (rect 2, "b alt") birlikte
+# yanar; böylece "deşifre → ayrıştırma" akışı görsel olarak bütün görünür.
+_STEP_EXTRA_RECTS: dict[int, list[int]] = {
+    2: [1],
+}
+
 
 class BobDecryptDiagramWidget(QWidget):
     """Alice panelinde gösterilen bob-tarafi-sifre-cozme.png + adım vurgulama animasyonu."""
@@ -249,6 +257,15 @@ class BobDecryptDiagramWidget(QWidget):
         self._timer.setInterval(_BLINK_MS)
         self._timer.timeout.connect(self._toggle_blink)
 
+    @staticmethod
+    def _rects_for_step(idx: int) -> list[int]:
+        """Bir adımda vurgulanacak tüm bölge indekslerini döndürür.
+
+        Adımın kendi rect'ine ek olarak ``_STEP_EXTRA_RECTS`` tablosundaki
+        bölgeler de eklenir (örn. ayrıştırma adımında deşifre kutusu).
+        """
+        return [idx] + _STEP_EXTRA_RECTS.get(idx, [])
+
     def set_active_step(self, idx: int) -> None:
         self._active_step = idx
         self._blink_on = True
@@ -257,7 +274,10 @@ class BobDecryptDiagramWidget(QWidget):
         self.update()
 
     def mark_step_done(self, idx: int) -> None:
-        self._completed_steps.add(idx)
+        # Adımla birlikte vurgulanan ek bölgeler de tamamlanmış sayılır
+        # (örn. ayrıştırma adımı tamamlanınca deşifre kutusu da yeşile geçer).
+        for ri in self._rects_for_step(idx):
+            self._completed_steps.add(ri)
         self.update()
 
     def show_comparison_result(self, is_valid: bool) -> None:
@@ -325,12 +345,17 @@ class BobDecryptDiagramWidget(QWidget):
                 painter.drawRect(cmp_rect)
                 painter.setPen(Qt.PenStyle.NoPen)
 
+            # Aktif adım(lar): kendi bölgesi + varsa ek bölgeler birlikte yanar.
             if 0 <= self._active_step < len(_BOB_STEP_RECTS):
-                sr = self._scaled_rect(_BOB_STEP_RECTS[self._active_step])
-                if self._blink_on:
-                    painter.fillRect(sr, _RED_FILL)
-                painter.setPen(QPen(_RED, 3))
-                painter.drawRect(sr)
+                for ri in self._rects_for_step(self._active_step):
+                    if not (0 <= ri < len(_BOB_STEP_RECTS)):
+                        continue
+                    sr = self._scaled_rect(_BOB_STEP_RECTS[ri])
+                    if self._blink_on:
+                        painter.fillRect(sr, _RED_FILL)
+                    painter.setPen(QPen(_RED, 3))
+                    painter.drawRect(sr)
+                    painter.setPen(Qt.PenStyle.NoPen)
         finally:
             painter.end()
 

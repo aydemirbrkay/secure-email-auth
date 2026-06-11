@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBox
 
 from .base import ANIM_COLORS, cached_font, get_animation_tick_ms
 from .aes.sbox_dialog import _SBoxReferenceDialog
+from .aes_pure import gcm_first_keystream_block
 
 
 class _AESMatrixView(QWidget):
@@ -904,3 +905,257 @@ class _ColumnMajorLinearizeWidget(QWidget):
             p.setFont(cached_font("Courier New", 12, QFont.Weight.Bold))
             p.setPen(QColor(ANIM_COLORS["text_primary"]))
             p.drawText(QRect(x, y, w, h), Qt.AlignmentFlag.AlignCenter, value)
+
+
+class _GCMRealEncryptWidget(QWidget):
+    """Programın GERÇEK AES-256-GCM şifrelemesinin çekirdeğini canlandırır.
+
+    GCM, AES blok şifrelemesini düz metne değil bir SAYAÇ bloğuna uygular ve
+    çıkan keystream'i veriyle XOR'lar. Bu widget, gerçek session anahtarı (K_S)
+    ve nonce ile:
+      1) sayaç bloğunu (nonce ‖ 0x00000002) gösterir,
+      2) AES-256 ile şifreleyip gerçek keystream bloğunu üretir,
+      3) keystream ⊕ mesaj = şifreli metin adımını gösterir,
+      4) çıkan ilk byte'ların programın GERÇEK ciphertext'iyle eşleştiğini
+         yeşil onayla kanıtlar.
+    Nonce verilmezse (eğitim/test) pasif kalır.
+    """
+
+    _CW = 30           # Byte kutusu genişliği.
+    _CH = 28           # Byte kutusu yüksekliği.
+    _GAP = 3
+    _N = 16            # Satır başına byte (sayaç/keystream/ciphertext blokları).
+
+    _TICK_MS = 90
+    _T_COUNTER = 12    # Sayaç bloğu belirir.
+    _T_AES = 14        # Sayaç → AES kutusu → keystream çıkar.
+    _BYTE_TICKS = 4    # XOR'da her byte için.
+    _T_PROOF = 26      # Eşleşme onayı + bekleme.
+
+    # Dikey yerleşim sabitleri (min yükseklik bunlardan türetilir).
+    _TOP = 6
+    _ROW_LABEL_H = 18
+    _ROW_GAP = 16
+    _AES_BOX_H = 30
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._key = b""
+        self._nonce = b""
+        self._plaintext = b""
+        self._expected_ct = b""       # Gerçek ciphertext ilk byte'ları (kanıt).
+        self._counter_block = b""
+        self._keystream = b""
+        self._cipher = b""            # keystream ⊕ plaintext (ilk 16 byte).
+        self._match: bool | None = None
+        self._tick = 0
+        self._total_ticks = self._compute_total()
+        self.setMinimumSize(self._min_w(), self._min_h())
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._advance)
+
+    # ------------------------------------------------------------------
+    # Genel API
+    # ------------------------------------------------------------------
+
+    def has_inputs(self) -> bool:
+        """Gerçek anahtar+nonce verilmiş mi (köprü gösterilebilir mi)?"""
+        return len(self._key) == 32 and len(self._nonce) == 12
+
+    def set_inputs(self, session_key: bytes, nonce: bytes,
+                   plaintext: bytes, expected_ct_hex: str) -> None:
+        """Gerçek K_S, nonce, mesaj ve beklenen ciphertext önizlemesini atar.
+
+        Geçersiz/boş nonce'ta widget pasif kalır (has_inputs False).
+        """
+        self._key = session_key
+        self._nonce = nonce
+        self._plaintext = plaintext
+        self._tick = 0
+        if not self.has_inputs():
+            return
+        self._counter_block = nonce + (2).to_bytes(4, "big")
+        self._keystream = gcm_first_keystream_block(session_key, nonce)
+        n = min(self._N, len(plaintext))
+        self._cipher = bytes(self._keystream[i] ^ plaintext[i] for i in range(n))
+        # Beklenen ciphertext (hex önizleme "...": kuyruğu temizle).
+        clean = expected_ct_hex.replace(".", "").strip()
+        try:
+            self._expected_ct = bytes.fromhex(clean)
+        except ValueError:
+            self._expected_ct = b""
+        cmp_len = min(len(self._cipher), len(self._expected_ct))
+        if cmp_len > 0:
+            self._match = self._cipher[:cmp_len] == self._expected_ct[:cmp_len]
+        else:
+            self._match = None
+        self.update()
+
+    def start(self) -> None:
+        if not self.has_inputs():
+            return
+        self._tick = 0
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
+
+    def stop(self) -> None:
+        self._timer.stop()
+
+    def replay(self) -> None:
+        self.start()
+
+    # ------------------------------------------------------------------
+    # Zaman çizelgesi
+    # ------------------------------------------------------------------
+
+    def _compute_total(self) -> int:
+        return (self._T_COUNTER + self._T_AES
+                + self._N * self._BYTE_TICKS + self._T_PROOF)
+
+    def _advance(self) -> None:
+        self._tick += 1
+        if self._tick >= self._total_ticks:
+            self._tick = self._total_ticks
+            self._timer.stop()
+        self.update()
+
+    def _xor_done(self) -> int:
+        """XOR fazında tamamlanmış byte sayısı (0..16)."""
+        t = self._tick - (self._T_COUNTER + self._T_AES)
+        if t <= 0:
+            return 0
+        return min(self._N, t // self._BYTE_TICKS)
+
+    # ------------------------------------------------------------------
+    # Boyut
+    # ------------------------------------------------------------------
+
+    def _min_w(self) -> int:
+        return self._N * self._CW + (self._N - 1) * self._GAP + 16
+
+    def _min_h(self) -> int:
+        # başlık + sayaç satırı + AES kutusu + keystream + XOR(mesaj+ciphertext)
+        # + kanıt satırı; her satır etiket + kutu + boşluk.
+        rows = 4  # sayaç, keystream, mesaj, ciphertext
+        h = self._TOP + 20  # üst başlık
+        h += self._AES_BOX_H + self._ROW_GAP
+        h += rows * (self._ROW_LABEL_H + self._CH + self._ROW_GAP)
+        h += 26  # kanıt satırı
+        return h
+
+    # ------------------------------------------------------------------
+    # Çizim
+    # ------------------------------------------------------------------
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W = self.width()
+        if not self.has_inputs():
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.setFont(cached_font("IBM Plex Sans", 10))
+            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter,
+                       "Gerçek GCM verisi yok.")
+            p.end()
+            return
+
+        row_w = self._N * self._CW + (self._N - 1) * self._GAP
+        ox = max(8, (W - row_w) // 2)
+
+        # Başlık.
+        p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        p.drawText(QRect(0, self._TOP, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "Programın gerçek şifrelemesi (AES-256-GCM çekirdeği)")
+
+        y = self._TOP + 22
+        show_aes = self._tick >= self._T_COUNTER
+        show_ks = self._tick >= (self._T_COUNTER + self._T_AES)
+
+        # 1) Sayaç bloğu satırı.
+        self._row(p, ox, y, "Sayaç bloğu  (nonce ‖ 00000002):",
+                  self._counter_block, active=not show_aes,
+                  color="accent_mauve")
+        y += self._ROW_LABEL_H + self._CH + 6
+
+        # 2) AES kutusu (sayaç → AES·K_S → keystream).
+        box_w = 220
+        box_x = (W - box_w) // 2
+        lit = show_aes
+        bg = QColor(ANIM_COLORS["accent_blue"]); bg.setAlphaF(0.22 if lit else 0.10)
+        p.setBrush(QBrush(bg))
+        p.setPen(QPen(QColor(ANIM_COLORS["accent_blue"]), 2 if lit else 1))
+        p.drawRoundedRect(box_x, y, box_w, self._AES_BOX_H, 6, 6)
+        p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_primary"] if lit else ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(box_x, y, box_w, self._AES_BOX_H),
+                   Qt.AlignmentFlag.AlignCenter, "AES-256  ·  K_S  (gerçek anahtar)")
+        y += self._AES_BOX_H + self._ROW_GAP
+
+        # 3) Keystream satırı.
+        self._row(p, ox, y, "Keystream  (AES çıkışı):",
+                  self._keystream if show_ks else b"",
+                  active=show_ks and self._xor_done() == 0,
+                  color="accent_blue", placeholder_n=self._N)
+        y += self._ROW_LABEL_H + self._CH + 6
+
+        # 4) XOR: mesaj satırı.
+        done = self._xor_done()
+        self._row(p, ox, y, "⊕  Mesaj (m ‖ imza, ilk 16 byte):",
+                  self._plaintext[:self._N], active=False,
+                  color="accent_peach", placeholder_n=self._N)
+        y += self._ROW_LABEL_H + self._CH + 6
+
+        # 5) Ciphertext satırı (XOR sonucu, byte byte dolar).
+        self._row(p, ox, y, "=  Şifreli metin (keystream ⊕ mesaj):",
+                  self._cipher[:done], active=True,
+                  color="accent_green", placeholder_n=self._N)
+        y += self._ROW_LABEL_H + self._CH + 8
+
+        # 6) Kanıt: gerçek ciphertext ile eşleşme.
+        if done >= min(self._N, len(self._cipher)) and self._match is not None:
+            if self._match:
+                p.setPen(QColor(ANIM_COLORS["accent_green"]))
+                msg = "✓ Bu, programın gönderdiği gerçek şifreli metnin ta kendisidir."
+            else:
+                p.setPen(QColor(ANIM_COLORS["accent_red"]))
+                msg = "Çıktı, beklenen ciphertext ile eşleşmedi."
+            p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
+            p.drawText(QRect(0, y, W, 22), Qt.AlignmentFlag.AlignCenter, msg)
+        p.end()
+
+    def _row(self, p: QPainter, ox: int, y: int, label: str, data: bytes,
+             *, active: bool, color: str, placeholder_n: int = 0) -> None:
+        """Etiketli bir byte satırı çizer (nonce/keystream/mesaj/ciphertext)."""
+        p.setFont(cached_font("IBM Plex Sans", 9))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(ox, y, self._N * (self._CW + self._GAP), self._ROW_LABEL_H),
+                   Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, label)
+        ry = y + self._ROW_LABEL_H
+        n = placeholder_n if placeholder_n else len(data)
+        for i in range(n):
+            x = ox + i * (self._CW + self._GAP)
+            if i < len(data):
+                val = f"{data[i]:02x}"
+                self._draw_byte(p, x, ry, val, color, active and i == len(data) - 1)
+            else:
+                self._draw_byte(p, x, ry, "", color, False, dim=True)
+
+    def _draw_byte(self, p: QPainter, x: int, y: int, val: str, color_key: str,
+                   accent: bool, dim: bool = False) -> None:
+        if dim:
+            bg = QColor(ANIM_COLORS["bg_input"])
+            border = QColor(ANIM_COLORS["border"]); bw = 1
+        else:
+            base = QColor(ANIM_COLORS[color_key])
+            bg = QColor(base); bg.setAlphaF(0.30 if accent else 0.16)
+            border = QColor(base); border.setAlphaF(1.0 if accent else 0.6)
+            bw = 2 if accent else 1
+        p.setBrush(QBrush(bg))
+        p.setPen(QPen(border, bw))
+        p.drawRoundedRect(x, y, self._CW, self._CH, 4, 4)
+        if val:
+            p.setFont(cached_font("Courier New", 11, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_primary"]))
+            p.drawText(QRect(x, y, self._CW, self._CH),
+                       Qt.AlignmentFlag.AlignCenter, val)

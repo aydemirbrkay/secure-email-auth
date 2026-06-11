@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 from ..base import CryptoAnimationWindow, ANIM_COLORS
-from ..aes_matrix_view import _AESStateCompareWidget
+from ..aes_matrix_view import _AESStateCompareWidget, _ColumnMajorLinearizeWidget
 from ..aes_pure import aes256_encrypt_with_rounds
 from .constants import _COLORS_OP
 from .intro_widget import _AESIntroWidget
@@ -363,6 +363,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
         cl = QVBoxLayout(card)
         cl.setContentsMargins(20, 16, 20, 16)
+        # Önce: final matris + column-major dizilim animasyonu (görsel).
+        self._linearize_widget = _ColumnMajorLinearizeWidget(parent=card)
+        cl.addWidget(self._linearize_widget)
+        # Sonra: kısa sözel özet.
         cl.addWidget(self._match_lbl)
         from PyQt6.QtWidgets import QScrollArea
         scroll = QScrollArea()
@@ -535,12 +539,17 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._update_round_bar(14)
         last = self._steps_data[-1]
         mat = last["matrix"]   # 4×4 liste
-        self._matrix_pair.show_final(mat)
+        self._matrix_pair.show_final(mat)  # round sayfasını günceller (match'te görünmez)
+
+        # Match sayfasındaki görsel: final matris + column-major dizilim animasyonu.
+        # Kullanıcının istediği "önce matris → sütun-öncelikli diziliş" burada oynar.
+        self._linearize_widget.set_state(mat)
+        self._linearize_widget.start()
 
         # ── Final state matrisi → şifreli metin byte sırası ──
-        # AES, state matrisini sütun-öncelikli (column-major) okur. Matrisin
-        # kendisi yukarıda gerçek widget'la (show_final) gösterildiği için
-        # burada matrisi METİN olarak TEKRAR ÇİZMİYORUZ; yalnızca matristen
+        # Matris ve column-major diziliş yukarıdaki animasyon widget'ında
+        # gösterildiği için burada matrisi METİN olarak TEKRAR ÇİZMİYORUZ;
+        # yalnızca matristen
         # çıkan 32 haneli hex sonucu ve kısa bir kavram özeti veriyoruz.
         hex_out = "".join(
             mat[r][c] for c in range(4) for r in range(4)

@@ -675,3 +675,216 @@ class _AESStateCompareWidget(QWidget):
 
     def _on_replay(self) -> None:
         self._curr_view.replay()
+
+
+class _ColumnMajorLinearizeWidget(QWidget):
+    """Final AES state matrisinin column-major (sütun-öncelikli) sıraya
+    dizilişini canlandırır.
+
+    Üstte 4×4 final matris, altında 16 hücrelik yatay "çıktı şeridi" çizilir.
+    Animasyon sütun sütun (c0→c3) ilerler: aktif sütun matriste vurgulanır ve o
+    sütunun byte'ları (r0..r3) tek tek, kaynak hücreden şeritteki ``c*4+r``
+    konumuna uçarak yerleşir. 16 byte dizildikten sonra 32 haneli hex çıktı
+    belirir. AES'in matrisi neden sütun-öncelikli okuduğunu görsel anlatır.
+    """
+
+    # Üst matris hücre boyutları (kompakt; _AESMatrixView'dan bağımsız tutuldu).
+    _M_CELL = 38
+    _M_GAP = 4
+    # Alt şerit hücre boyutları (16 byte yatay).
+    _S_CELL_W = 30
+    _S_CELL_H = 30
+    _S_GAP = 3
+
+    # Tempo (tick). Timer get_animation_tick_ms ile ölçeklenir.
+    _TICK_MS = 90
+    _INTRO_TICKS = 14            # Matris belirip sabitlenir.
+    _BYTE_TICKS = 5             # Her byte'ın uçuş süresi.
+    _COL_GAP_TICKS = 3          # Sütunlar arası kısa duraklama.
+    _OUTRO_TICKS = 24           # Hex çıktı + final bekleme.
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._state: list[list[str]] = [["00"] * 4 for _ in range(4)]
+        self._tick = 0
+        self._total_ticks = self._compute_total()
+        self.setMinimumSize(360, 230)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._advance)
+
+    # ------------------------------------------------------------------
+    # Genel API
+    # ------------------------------------------------------------------
+
+    def set_state(self, matrix: list[list[str]]) -> None:
+        """Gösterilecek 4×4 final matrisi atar ve animasyonu başa sarar."""
+        self._state = [row[:] for row in matrix]
+        self._tick = 0
+        self.update()
+
+    def hex_output(self) -> str:
+        """Matristen column-major (c, sonra r) okunan 32 haneli hex çıktı."""
+        return "".join(
+            self._state[r][c] for c in range(4) for r in range(4)
+        )
+
+    def start(self) -> None:
+        """Animasyonu baştan başlatır."""
+        self._tick = 0
+        self._timer.start(get_animation_tick_ms(self._TICK_MS))
+
+    def stop(self) -> None:
+        self._timer.stop()
+
+    def replay(self) -> None:
+        self.start()
+
+    # ------------------------------------------------------------------
+    # Zaman çizelgesi
+    # ------------------------------------------------------------------
+
+    def _compute_total(self) -> int:
+        per_col = 4 * self._BYTE_TICKS + self._COL_GAP_TICKS
+        return self._INTRO_TICKS + 4 * per_col + self._OUTRO_TICKS
+
+    def _advance(self) -> None:
+        self._tick += 1
+        if self._tick >= self._total_ticks:
+            self._tick = self._total_ticks  # Son karede sabit kal (döngü yok).
+            self._timer.stop()
+        self.update()
+
+    def _placed_count(self) -> int:
+        """Şu ana kadar şeride yerleşmiş (uçuşu tamamlanmış) byte sayısı (0..16)."""
+        t = self._tick - self._INTRO_TICKS
+        if t <= 0:
+            return 0
+        per_col = 4 * self._BYTE_TICKS + self._COL_GAP_TICKS
+        placed = 0
+        for col in range(4):
+            col_start = col * per_col
+            for r in range(4):
+                # Bu byte'ın uçuşu col_start + r*_BYTE_TICKS'te başlar,
+                # +_BYTE_TICKS'te tamamlanır.
+                if t >= col_start + (r + 1) * self._BYTE_TICKS:
+                    placed += 1
+        return min(16, placed)
+
+    def _flying(self) -> tuple[int, int, float] | None:
+        """O an uçuşta olan byte varsa (sütun, satır, ilerleme[0,1]) döndürür."""
+        t = self._tick - self._INTRO_TICKS
+        if t <= 0:
+            return None
+        per_col = 4 * self._BYTE_TICKS + self._COL_GAP_TICKS
+        for col in range(4):
+            col_start = col * per_col
+            for r in range(4):
+                fly_start = col_start + r * self._BYTE_TICKS
+                fly_end = fly_start + self._BYTE_TICKS
+                if fly_start <= t < fly_end:
+                    return col, r, (t - fly_start) / self._BYTE_TICKS
+        return None
+
+    # ------------------------------------------------------------------
+    # Çizim
+    # ------------------------------------------------------------------
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        W = self.width()
+
+        # Üst başlık.
+        p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(0, 2, W, 18), Qt.AlignmentFlag.AlignCenter,
+                   "AES son state → sütun-öncelikli (column-major) okunur")
+
+        # Matris yerleşimi (üstte, ortalanmış).
+        mat_w = 4 * self._M_CELL + 3 * self._M_GAP
+        mat_ox = (W - mat_w) // 2
+        mat_oy = 26
+        flying = self._flying()
+        active_col = flying[0] if flying else self._current_active_col()
+
+        for r in range(4):
+            for c in range(4):
+                x = mat_ox + c * (self._M_CELL + self._M_GAP)
+                y = mat_oy + r * (self._M_CELL + self._M_GAP)
+                lit = (c == active_col)
+                self._draw_box(p, x, y, self._M_CELL, self._M_CELL,
+                               self._state[r][c],
+                               accent=lit, dim=False)
+
+        # Alt şerit.
+        strip_w = 16 * self._S_CELL_W + 15 * self._S_GAP
+        strip_ox = max(6, (W - strip_w) // 2)
+        strip_oy = mat_oy + 4 * (self._M_CELL + self._M_GAP) + 26
+
+        p.setFont(cached_font("IBM Plex Sans", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(0, strip_oy - 18, W, 16), Qt.AlignmentFlag.AlignCenter,
+                   "Çıktı sırası (16 byte):")
+
+        placed = self._placed_count()
+        for idx in range(16):
+            sx = strip_ox + idx * (self._S_CELL_W + self._S_GAP)
+            if idx < placed:
+                c, r = idx // 4, idx % 4
+                self._draw_box(p, sx, strip_oy, self._S_CELL_W, self._S_CELL_H,
+                               self._state[r][c], accent=False, dim=False)
+            else:
+                # Boş yer-tutucu.
+                self._draw_box(p, sx, strip_oy, self._S_CELL_W, self._S_CELL_H,
+                               "", accent=False, dim=True)
+
+        # Uçuştaki byte (kaynak hücre → hedef şerit kutusu, lineer).
+        if flying is not None:
+            c, r, prog = flying
+            src_x = mat_ox + c * (self._M_CELL + self._M_GAP)
+            src_y = mat_oy + r * (self._M_CELL + self._M_GAP)
+            dst_idx = c * 4 + r
+            dst_x = strip_ox + dst_idx * (self._S_CELL_W + self._S_GAP)
+            fx = int(src_x + (dst_x - src_x) * prog)
+            fy = int(src_y + (strip_oy - src_y) * prog)
+            self._draw_box(p, fx, fy, self._S_CELL_W, self._S_CELL_H,
+                           self._state[r][c], accent=True, dim=False)
+
+        # Tüm byte'lar dizildiyse 32 hane hex çıktı.
+        if placed >= 16:
+            hex_out = self.hex_output()
+            p.setFont(cached_font("Courier New", 13, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["accent_green"]))
+            p.drawText(QRect(0, strip_oy + self._S_CELL_H + 8, W, 22),
+                       Qt.AlignmentFlag.AlignCenter, hex_out)
+        p.end()
+
+    def _current_active_col(self) -> int:
+        """Uçuş yokken vurgulanacak sütun: bir sonraki dolacak veya -1."""
+        placed = self._placed_count()
+        if placed >= 16 or self._tick <= self._INTRO_TICKS:
+            return -1
+        return min(3, placed // 4)
+
+    def _draw_box(self, p: QPainter, x: int, y: int, w: int, h: int,
+                  value: str, *, accent: bool, dim: bool) -> None:
+        """Tek bir kutu çizer (matris hücresi veya şerit kutusu)."""
+        if dim:
+            bg = QColor(ANIM_COLORS["bg_input"])
+            border = QColor(ANIM_COLORS["border"])
+            bw = 1
+        elif accent:
+            bg = QColor(ANIM_COLORS["accent_blue"]); bg.setAlphaF(0.30)
+            border = QColor(ANIM_COLORS["accent_blue"]); bw = 2
+        else:
+            bg = QColor(ANIM_COLORS["accent_blue"]); bg.setAlphaF(0.14)
+            border = QColor(ANIM_COLORS["accent_blue"]); border.setAlphaF(0.6)
+            bw = 1
+        p.setBrush(QBrush(bg))
+        p.setPen(QPen(border, bw))
+        p.drawRoundedRect(x, y, w, h, 4, 4)
+        if value:
+            p.setFont(cached_font("Courier New", 12, QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_primary"]))
+            p.drawText(QRect(x, y, w, h), Qt.AlignmentFlag.AlignCenter, value)

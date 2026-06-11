@@ -52,16 +52,29 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._plaintext = plaintext
         self._expected_ct_hex = expected_ct_hex
         self._nonce = nonce
+        # GCM modu: nonce verildiyse AES round'ları gerçek GCM'in yaptığı gibi
+        # SAYAÇ BLOĞUNU (nonce ‖ 0x00000002) şifreler; çıkan son blok keystream'dir.
+        # Mesaj AES'ten geçmez, finalde keystream ile XOR'lanır (bkz. match sayfası).
+        # ECB modu: nonce yoksa (eski/standalone) eskisi gibi mesaj bloğu şifrelenir.
+        self._gcm_mode = len(nonce) == 12
+        self._message_bytes = plaintext  # XOR ve mesaj-izi için ayrı tutulur.
+        if self._gcm_mode:
+            aes_input = nonce + (2).to_bytes(4, "big")  # GCM sayaç bloğu (inc32(J0))
+        else:
+            aes_input = plaintext
 
-        aes_result = aes256_encrypt_with_rounds(key, plaintext)
+        aes_result = aes256_encrypt_with_rounds(key, aes_input)
         self._steps_data = _build_steps(aes_result["rounds_data"])
+        # GCM modunda final blok = keystream; ECB modunda = şifreli blok.
         self._final_block_hex = aes_result["final_block_hex"]
-        # Round flow widget için ek veri
+        # Round flow widget için ek veri (girdi bloğunun round'ları)
         self._rounds_data = aes_result["rounds_data"]
         self._round_keys_hex = aes_result["round_keys_hex"]
         self._initial_state_hex = aes_result["initial_state_hex"]
 
-        # Plaintext Hazırlığı sayfası için yeni alanlar (aes_pure'dan gelir)
+        # Hazırlık sayfası alanları. GCM modunda state_matrix/first_block SAYAÇ
+        # bloğunu temsil eder (AES'in gerçek girdisi); mesaj ayrı gösterilir.
+        self._counter_block_data = aes_input if self._gcm_mode else b""
         self._plaintext_text_str = aes_result.get("plaintext_text", "")
         self._plaintext_bytes_data = aes_result.get("plaintext_bytes", b"")
         self._padded_plaintext_data = aes_result.get("padded_plaintext", b"")

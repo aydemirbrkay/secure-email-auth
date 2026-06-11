@@ -12,7 +12,7 @@ def _build_steps(rounds_data: list[dict]) -> list[dict]:
                 "round": 0, "operation": "AddRoundKey",
                 "matrix": rd["after_add_round_key"],
                 "color": _COLORS_OP["AddRoundKey"],
-                "description": "Round 0 — Initial AddRoundKey\nPlaintext, ilk round anahtarı ile XOR'landı.",
+                "description": "Round 0 — Initial AddRoundKey\nGirdi bloğu, ilk round anahtarı ile XOR'landı.",
             })
         elif rnd <= 13:
             for op, key, desc in [

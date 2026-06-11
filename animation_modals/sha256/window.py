@@ -512,11 +512,20 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         # Mevcut register değerleri (bu snapshot'taki çıkış)
         regs_out = snap["registers"]
 
-        # Bir önceki snapshot'tan giriş değerleri (veya H0 sabitleri)
-        if snap_idx > 0 and snap_idx % _SNAPS_PER_BLOCK != 0:
+        # Giriş register'ları: blok içindeyse önceki snapshot çıkışı; bloğun
+        # İLK snapshot'ında ise o bloğun başlangıç chaining değeri. Önceden her
+        # bloğun ilk snapshot'ı H0 sabitlerini gösteriyordu — blok 2+ için
+        # yanlıştı (chaining yerine H0). block_initial_states[blok] doğru değeri
+        # verir (blok 0 → H0, blok N → önceki blokların biriktirdiği hash).
+        if snap_idx % _SNAPS_PER_BLOCK != 0:
             regs_in = self._snaps[snap_idx - 1]["registers"]
         else:
-            regs_in = self._data["initial_h"]
+            block_idx = snap_idx // _SNAPS_PER_BLOCK
+            states = self._data.get("block_initial_states") or []
+            if block_idx < len(states):
+                regs_in = states[block_idx]
+            else:
+                regs_in = self._data["initial_h"]  # güvenli geri-düşüş
 
         self._diag_widget.set_data(
             regs_in=regs_in,

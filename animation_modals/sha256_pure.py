@@ -74,6 +74,11 @@ def sha256_steps(message: bytes) -> dict:
 
     h = list(H0)
     round_snapshots: list[dict] = []
+    # Her bloğun BAŞLANGIÇ chaining değeri (round'lar başlamadan önceki h).
+    # Blok 0 → H0; blok N → önceki blokların biriktirdiği hash. Diyagram, her
+    # bloğun ilk round'unun girişini bu değerden okur (yoksa yanlışlıkla hep H0
+    # gösterilirdi).
+    block_initial_states: list[list[str]] = []
 
     w_expansion_sample: list[dict] | None = None
 
@@ -100,6 +105,10 @@ def sha256_steps(message: bytes) -> dict:
                     "result": f"{w[i]:08x}",
                 })
 
+        # Bu bloğun çalışma değişkenleri mevcut chaining değeri h'tan başlar
+        # (blok 0'da H0, sonraki bloklarda biriken hash). Snapshot'lar round
+        # ÇIKIŞLARINI tuttuğu için bloğun GİRİŞ state'ini ayrıca saklıyoruz.
+        block_initial_states.append([f"{v:08x}" for v in h])
         a, b, c, d, e, f, g, hh = h
 
         for i in range(64):  # 64 sıkıştırma round'u (FIPS 180-4 §6.2.2)
@@ -144,6 +153,7 @@ def sha256_steps(message: bytes) -> dict:
         "padded_len": len(padded),
         "blocks_count": len(blocks),
         "initial_h": [f"{v:08x}" for v in H0],
+        "block_initial_states": block_initial_states,
         "round_snapshots": round_snapshots,
         "w_expansion": w_expansion_sample,
         "final_hash": final_hash,

@@ -37,32 +37,46 @@ _RESULT_TICKS = 12    # Adım 3: sonuç + S[satır,sütun] şeması.
 _TRANSITION_TICKS = 5  # Adımlar arası "uçan byte" kaydırma süresi.
 _HOLD_TICKS = 12      # Son adımdan sonra, sonraki byte'a geçmeden bekleme.
 
-# Adım süreleri ve aralarındaki geçişler tek bir zaman çizelgesine dizilir:
-#   [intro] (geçiş) [inverse] (geçiş) [affine] (geçiş) [result] [hold]
-_STEP_TICKS = [_INTRO_TICKS, _INV_TICKS, _AFFINE_TICKS, _RESULT_TICKS]
+# Her adımın içeriği bittikten sonra, sonucu ekranda sabit tutan bekleme.
+# Timer ~120ms/tick olduğundan 25 tick ≈ 3 sn: kullanıcı her adımın sonucunu
+# (ters doğrulaması, affine'in 8 biti, sonuç) rahatça görür.
+_STEP_HOLD_TICKS = 25
+
+# Adımların İÇERİK süreleri (animasyonun aktif aktığı kısım). Her adım penceresi
+# bu içerik süresine _STEP_HOLD_TICKS eklenerek uzatılır; hold boyunca o adımın
+# tamamlanmış hâli (progress=1.0) sabit kalır.
+_STEP_CONTENT_TICKS = [_INTRO_TICKS, _INV_TICKS, _AFFINE_TICKS, _RESULT_TICKS]
 
 
-def _build_timeline() -> tuple[list[tuple[int, int]], list[tuple[int, int]], int]:
-    """Adım ve geçiş pencerelerini kümülatif tick aralıklarına çevirir.
+def _build_timeline() -> tuple[
+    list[tuple[int, int]], list[int], list[tuple[int, int]], int
+]:
+    """Adım/hold/geçiş pencerelerini kümülatif tick aralıklarına çevirir.
 
-    Dönüş: (adım_aralıkları, geçiş_aralıkları, toplam_tick). Her aralık
-    ``(başlangıç, bitiş)`` yarı-açık tick penceresidir. Adım i bittikten
-    sonra (son adım hariç) bir geçiş penceresi gelir.
+    Dönüş: ``(adım_pencereleri, içerik_bitiş_tickleri, geçiş_pencereleri,
+    toplam_tick)``. ``adım_pencereleri`` her adımın TAM penceresidir
+    (içerik + hold); ``içerik_bitiş_tickleri[i]`` o adımda animasyonun bittiği
+    (hold'un başladığı) tick'tir — ilerleme bu noktaya göre 1.0'a ulaşır.
+    Adım i bittikten sonra (son adım hariç) bir geçiş penceresi gelir.
     """
     step_bounds: list[tuple[int, int]] = []
+    content_ends: list[int] = []
     transition_bounds: list[tuple[int, int]] = []
     cursor = 0
-    for i, dur in enumerate(_STEP_TICKS):
-        step_bounds.append((cursor, cursor + dur))
-        cursor += dur
+    for i, content in enumerate(_STEP_CONTENT_TICKS):
+        start = cursor
+        content_ends.append(start + content)
+        window = content + _STEP_HOLD_TICKS  # içerik + ~3 sn bekleme
+        step_bounds.append((start, start + window))
+        cursor += window
         if i < _STEP_COUNT - 1:
             transition_bounds.append((cursor, cursor + _TRANSITION_TICKS))
             cursor += _TRANSITION_TICKS
-    cursor += _HOLD_TICKS  # Son adımdan sonra bekleme.
-    return step_bounds, transition_bounds, cursor
+    cursor += _HOLD_TICKS  # Son adımdan sonra (sonraki byte'a geçmeden) bekleme.
+    return step_bounds, content_ends, transition_bounds, cursor
 
 
-_STEP_BOUNDS, _TRANSITION_BOUNDS, _CYCLE_TICKS = _build_timeline()
+_STEP_BOUNDS, _STEP_CONTENT_ENDS, _TRANSITION_BOUNDS, _CYCLE_TICKS = _build_timeline()
 
 
 class _SBoxDerivationWidget(QWidget):
@@ -160,13 +174,19 @@ class _SBoxDerivationWidget(QWidget):
         return _STEP_COUNT - 1
 
     def _step_local_progress(self, step: int) -> float:
-        """Verilen adımın kendi içindeki ilerlemeyi [0,1] aralığında döndürür."""
-        start, end = _STEP_BOUNDS[step]
+        """Verilen adımın kendi içindeki ilerlemeyi [0,1] aralığında döndürür.
+
+        İlerleme adımın İÇERİK süresine göre hesaplanır; içerik bitince
+        (hold penceresi boyunca) 1.0'da sabit kalır — böylece adımın
+        tamamlanmış hâli ~3 sn ekranda durur.
+        """
+        start = _STEP_BOUNDS[step][0]
+        content_end = _STEP_CONTENT_ENDS[step]
         if self._tick <= start:
             return 0.0
-        if self._tick >= end:
+        if self._tick >= content_end:
             return 1.0
-        return (self._tick - start) / max(1, end - start)
+        return (self._tick - start) / max(1, content_end - start)
 
     def _active_transition(self) -> tuple[int, float] | None:
         """Bir geçiş penceresindeysek (kaynak_adım, ilerleme) döndürür, değilse None."""

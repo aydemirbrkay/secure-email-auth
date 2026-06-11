@@ -186,7 +186,15 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
 
     def _make_msgprep_page(self) -> QWidget:
         """Yeni Mesaj Hazırlığı sayfası — _SHAMessagePrepWidget içerir.
-        Widget üste hizalanır ki büyük pencerelerde alt boşluk olmasın."""
+
+        Widget byte ızgarası uzun mesajlarda yükselir ve sayfanın tercih
+        yüksekliğini büyütüyordu; gömülü modda (alice/bob paneli) tüm
+        animasyon dış _anim_scroll içinde olduğu için bu, alt navigasyon
+        (◀ Geri / İleri ▶) butonlarını ekrandan AŞAĞI itiyordu (görsel 5).
+        Diğer SHA sayfalarındaki kalıba uyularak widget kendi dikey
+        QScrollArea'sına sarılır → sayfanın doğal yüksekliği ~260 px'te
+        kalır, içerik gerekirse sayfa içinde kayar, nav butonları SABİT
+        kalır."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -195,7 +203,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             message_bytes=self._data["message_bytes"],
             on_finished=self._on_msgprep_finished,
         )
-        lay.addWidget(self._msgprep_widget, alignment=Qt.AlignmentFlag.AlignTop)
+        msgprep_scroll = QScrollArea()
+        msgprep_scroll.setWidget(self._msgprep_widget)
+        msgprep_scroll.setWidgetResizable(True)
+        msgprep_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        msgprep_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        msgprep_scroll.setStyleSheet("background: transparent; border: none;")
+        msgprep_scroll.setMinimumHeight(260)
+        lay.addWidget(msgprep_scroll, stretch=1)
         return w
 
     def _on_msgprep_finished(self) -> None:
@@ -206,7 +223,13 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
 
     def _make_padding_page(self) -> QWidget:
         """Yeni padding sayfası — _SHA256PaddingWidget içerir.
-        Outer QScrollArea kaldırıldı: widget zaten kompakt, scroll gerekmez."""
+
+        Padding ızgarası (mesaj + 0x80 + 0x00 dolgu + uzunluk eki) çok
+        baytlı mesajlarda yükselir; gömülü modda sayfanın tercih yüksekliği
+        büyüyünce dış _anim_scroll alt navigasyon butonlarını ekrandan
+        aşağı itiyordu (görsel 6). Diğer SHA sayfaları gibi widget kendi
+        dikey QScrollArea'sına sarılır → sayfa ~260 px'te kalır, nav
+        butonları SABİT kalır."""
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -217,7 +240,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             blocks_count=self._data["blocks_count"],
             message_text=self._data["message_text"],
         )
-        lay.addWidget(self._padding_widget, alignment=Qt.AlignmentFlag.AlignTop)
+        padding_scroll = QScrollArea()
+        padding_scroll.setWidget(self._padding_widget)
+        padding_scroll.setWidgetResizable(True)
+        padding_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        padding_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        padding_scroll.setStyleSheet("background: transparent; border: none;")
+        padding_scroll.setMinimumHeight(260)
+        lay.addWidget(padding_scroll, stretch=1)
         return w
 
     def _make_wexpand_page(self) -> QWidget:

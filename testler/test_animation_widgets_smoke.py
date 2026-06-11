@@ -375,6 +375,78 @@ class TestAESOpensLikeSHA(unittest.TestCase):
         )
 
 
+class TestEmbeddedSHANavigationFixed(unittest.TestCase):
+    """SHA Mesaj Hazırlığı (adım 0) ve Padding (adım 1) sayfaları, içeriğini iç
+    dikey QScrollArea'da tutarak yüksekliğini SINIRLI kılmalı; böylece gömülü
+    modda (alice/bob paneli) dış _anim_scroll bu sayfalar yüzünden büyümez ve
+    alt navigasyon (◀ Geri / İleri ▶) butonları ekrandan AŞAĞI itilmez
+    (Alt kategori: BİRİM — yerleşim regresyonu).
+
+    Regresyon koruması: Bu iki sayfa eskiden iç scroll'a sarılmıyordu; ham
+    içerik widget'ı (~390-411 px) QStackedWidget'in tercih yüksekliğini
+    domine edip butonları görselden dışarı itiyordu (görsel 5 ve 6). İç
+    scroll'a sarılınca sayfa doğal yüksekliği ~260 px tabanına iner.
+
+    NOT: Eşik (330) bilinçli olarak ham widget yüksekliklerinin (374/395)
+    ALTINDA seçildi → sarma kaldırılırsa test kesin kırılır; ama bağlamasız
+    iç scroll tabanından (260 + kenar boşlukları, ~304) güvenle YÜKSEKTE."""
+
+    _BOUND = 330
+
+    def _make_window(self):
+        """Uzun (çok-bloklu) mesajlı SHA penceresi üretir; QApplication
+        conftest tarafından sağlanır, pencere standalone kurulur."""
+        import hashlib
+        from animation_modals import SHA256AnimationWindow
+        msg = "a" * 120  # padding'i çok-bloklu yapacak kadar uzun
+        return SHA256AnimationWindow(
+            message=msg,
+            expected_hash=hashlib.sha256(msg.encode()).hexdigest(),
+        )
+
+    def test_msgprep_page_height_is_bounded(self):
+        """Alt tür: BİRİM (pozitif — adım 0 / Mesaj Hazırlığı).
+        Sayfanın tercih yüksekliği iç scroll sayesinde eşik altında kalır;
+        ham widget bundan yüksek olsa bile sayfa onu domine etmez."""
+        w = self._make_window()
+        self.assertLessEqual(
+            w._page_msgprep.sizeHint().height(), self._BOUND,
+            "Mesaj Hazırlığı sayfası iç scroll ile sınırlı kalmalı",
+        )
+
+    def test_padding_page_height_is_bounded(self):
+        """Alt tür: BİRİM (pozitif — adım 1 / Padding).
+        Padding sayfası da iç scroll ile eşik altında kalmalı."""
+        w = self._make_window()
+        self.assertLessEqual(
+            w._page_padding.sizeHint().height(), self._BOUND,
+            "Padding sayfası iç scroll ile sınırlı kalmalı",
+        )
+
+    def test_pages_are_scroll_wrapped(self):
+        """Alt tür: BİRİM (negatif/yapısal — kalıbın korunması).
+        İçerik widget'ı (prep/padding) DOĞRUDAN bir QScrollArea'nın
+        widget'ı olmalı. Prep widget'ın kendi iç scroll'ları (byte
+        ızgarası/şerit) sayılmaz; bu yüzden 'sarmalayan' scroll'un
+        .widget()'ı tam olarak içerik widget'ı mı diye bakılır. Sarma
+        kaldırılırsa (eski hata: widget AlignTop ile çıplak eklenirdi)
+        bu test kırılır."""
+        from PyQt6.QtWidgets import QScrollArea
+        w = self._make_window()
+        cases = (
+            (w._page_msgprep, w._msgprep_widget),
+            (w._page_padding, w._padding_widget),
+        )
+        for page, content in cases:
+            wrapped = any(
+                sa.widget() is content
+                for sa in page.findChildren(QScrollArea)
+            )
+            self.assertTrue(
+                wrapped, "İçerik widget'ı sarmalayan QScrollArea içinde olmalı",
+            )
+
+
 class TestColoredByteGridAdaptiveWidth(unittest.TestCase):
     """_ColoredByteGridWidget adaptif genişlik davranışı (Alt kategori: BİRİM —
     runtime, conftest.py'nin offscreen QApplication'ı ile koşar).

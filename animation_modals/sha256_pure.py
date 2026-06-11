@@ -50,8 +50,11 @@ def sha256_steps(message: bytes) -> dict:
       initial_h       : H0-H7 başlangıç değerleri (hex string listesi)
       round_snapshots : her blok için 9 snapshot — round
                         1, 9, 17, 25, 33, 41, 49, 57 ve 64'teki
-                        A-H register değerleri ve ara terimler
-                        (W, K, T1, T2)
+                        A-H register değerleri (registers = çıkış,
+                        registers_in = o round'un GİRİŞİ) ve ara
+                        terimler (W, K, T1, T2). registers_in sayesinde
+                        diyagram tek round'u tutarlı çizer: gösterilen
+                        girişten gösterilen T1/T2 ve çıkış türetilebilir.
       w_expansion     : ilk blok için W[16..31] tablosu — her satırda
                         operand (W[i-15], W[i-2]) ve σ0/σ1 sonuçları
                         ayrı alanlar olarak döner
@@ -112,6 +115,12 @@ def sha256_steps(message: bytes) -> dict:
         a, b, c, d, e, f, g, hh = h
 
         for i in range(64):  # 64 sıkıştırma round'u (FIPS 180-4 §6.2.2)
+            # Bu round'un GİRİŞ state'i (güncellemeden ÖNCE). Round diyagramı
+            # tek round dönüşümünü çizdiği için, snapshot'ın T1/T2 ve çıkış
+            # register'larının HER zaman bu girişten türetilebilmesi gerekir;
+            # aksi halde seyrek snapshot'larda (R9, R17…) gösterilen giriş 8
+            # round eski kalıp animasyonu tutarsız yapıyordu.
+            regs_in = [a, b, c, d, e, f, g, hh]
             s1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
             ch = ((e & f) ^ (~e & g)) & 0xFFFFFFFF
             temp1 = (hh + s1 + ch + K[i] + w[i]) & 0xFFFFFFFF
@@ -136,6 +145,7 @@ def sha256_steps(message: bytes) -> dict:
                     "a": f"{a:08x}",
                     "e": f"{e:08x}",
                     "registers": [f"{v:08x}" for v in [a, b, c, d, e, f, g, hh]],
+                    "registers_in": [f"{v:08x}" for v in regs_in],
                     "w": f"{w[i]:08x}",
                     "k": f"{K[i]:08x}",
                     "t1": f"{temp1:08x}",

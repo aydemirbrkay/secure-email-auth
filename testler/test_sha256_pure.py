@@ -132,6 +132,45 @@ class TestSHA256Pure(unittest.TestCase):
         # üretmesi beklenir (aksi hâlde operand/sonuç ayrımı kaybolmuştur).
         self.assertTrue(any(row["w_i15"] != row["s0"] for row in exp))
 
+    def test_snapshots_are_self_consistent_single_round(self):
+        """Alt tür: BİRİM (DOĞRULUK — diyagram tutarlılığı, regresyon).
+        Round diyagramı tek bir round'un dönüşümünü çizer: gösterilen GİRİŞ
+        register'larından (registers_in), gösterilen K/W ile, gösterilen
+        T1/T2 ve ÇIKIŞ register'ları (registers) türetilebilmeli.
+
+        Önceden diyagram giriş olarak 'bir önceki snapshot çıkışını' (8 round
+        eski) gösteriyordu; R9, R17… için T1 gösterilen girişten hesaplanamıyor,
+        animasyon matematiksel olarak tutarsız kalıyordu. registers_in alanı bu
+        boşluğu kapatır: her snapshot KENDİ round'unun gerçek girişini taşır."""
+        from animation_modals.sha256_pure import _rotr
+
+        def sig0(a): return _rotr(a, 2) ^ _rotr(a, 13) ^ _rotr(a, 22)
+        def sig1(e): return _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
+        def ch(e, f, g): return ((e & f) ^ (~e & g)) & 0xFFFFFFFF
+        def maj(a, b, c): return (a & b) ^ (a & c) ^ (b & c)
+
+        # Tek + çok bloklu mesaj (chaining'i de kapsa)
+        for msg in (b"asdasdasd", b"x" * 130):
+            result = sha256_steps(msg)
+            for snap in result["round_snapshots"]:
+                self.assertIn("registers_in", snap,
+                              "snapshot kendi round girişini taşımalı")
+                a, b, c, d, e, f, g, h = (int(x, 16) for x in snap["registers_in"])
+                w = int(snap["w"], 16)
+                k = int(snap["k"], 16)
+                t1 = (h + sig1(e) + ch(e, f, g) + k + w) & 0xFFFFFFFF
+                t2 = (sig0(a) + maj(a, b, c)) & 0xFFFFFFFF
+                self.assertEqual(f"{t1:08x}", snap["t1"],
+                                 f"R{snap['round']}: T1 girişten türetilebilmeli")
+                self.assertEqual(f"{t2:08x}", snap["t2"],
+                                 f"R{snap['round']}: T2 girişten türetilebilmeli")
+                # Çıkış: A'=T1+T2, E'=D+T1, diğerleri bir sağa kaydırılır
+                out = [(t1 + t2) & 0xFFFFFFFF, a, b, c,
+                       (d + t1) & 0xFFFFFFFF, e, f, g]
+                self.assertEqual([f"{v:08x}" for v in out], snap["registers"],
+                                 f"R{snap['round']}: çıkış girişten türetilebilmeli")
+
+
 class TestSHA256AnimationStructure(unittest.TestCase):
     """sha256_animation modülünün yeni widget yapısını doğrular
     (Alt kategori: SMOKE — animasyon sınıf varlığı)."""

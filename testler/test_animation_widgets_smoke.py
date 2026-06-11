@@ -617,6 +617,42 @@ class TestSHARealFirstWord(unittest.TestCase):
         self.assertEqual(bd["result"], "6a09e668")
 
 
+class TestSHADiagramRoundConsistency(unittest.TestCase):
+    """Round diyagramına window tarafından beslenen verinin tek round'da
+    TUTARLI olduğunu doğrular (Alt kategori: BİRİM — wiring/doğruluk).
+
+    Diyagram giriş register'larından (._regs_in), gösterilen K/W ile,
+    gösterilen T1 (._t1) türetilebilmeli — R9/R17 gibi seyrek snapshot'larda
+    da. Regresyon: eskiden window giriş olarak 'önceki snapshot çıkışını'
+    (8 round eski) besliyordu, tutarsızdı."""
+
+    def _derive_t1(self, regs_in, w_hex, k_hex):
+        from animation_modals.sha256_pure import _rotr
+        a, b, c, d, e, f, g, h = (int(x, 16) for x in regs_in)
+        sig1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
+        ch = ((e & f) ^ (~e & g)) & 0xFFFFFFFF
+        return (h + sig1 + ch + int(k_hex, 16) + int(w_hex, 16)) & 0xFFFFFFFF
+
+    def test_diagram_input_derives_shown_values(self):
+        """Alt tür: BİRİM (pozitif — wiring tutarlılığı).
+        R1, R9, R17 sample round'ları için diyagrama beslenen giriş
+        register'larından gösterilen T1 türetilebilmeli."""
+        import hashlib
+        from animation_modals import SHA256AnimationWindow
+        msg = "asdasdasd"
+        win = SHA256AnimationWindow(
+            msg, hashlib.sha256(msg.encode()).hexdigest())
+        # step_idx 3 → R1, 4 → R9, 5 → R17 (snap_idx = step_idx - 3)
+        for step_idx, expected_round in ((3, 1), (4, 9), (5, 17)):
+            win._render_step(step_idx)
+            dw = win._diag_widget
+            self.assertEqual(dw._round_no, expected_round)
+            t1 = self._derive_t1(dw._regs_in, dw._w, dw._k)
+            self.assertEqual(
+                f"{t1:08x}", dw._t1,
+                f"R{expected_round}: diyagram girişinden T1 türetilebilmeli")
+
+
 class TestSHAStepCount(unittest.TestCase):
     """SHA penceresi 5 mantıksal adımlı olmalı — Mesaj Hazırlığı dahil
     (Alt kategori: SMOKE — class attribute kontratı)."""

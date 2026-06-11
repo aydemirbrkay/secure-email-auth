@@ -544,20 +544,16 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         # Mevcut register değerleri (bu snapshot'taki çıkış)
         regs_out = snap["registers"]
 
-        # Giriş register'ları: blok içindeyse önceki snapshot çıkışı; bloğun
-        # İLK snapshot'ında ise o bloğun başlangıç chaining değeri. Önceden her
-        # bloğun ilk snapshot'ı H0 sabitlerini gösteriyordu — blok 2+ için
-        # yanlıştı (chaining yerine H0). block_initial_states[blok] doğru değeri
-        # verir (blok 0 → H0, blok N → önceki blokların biriktirdiği hash).
-        if snap_idx % _SNAPS_PER_BLOCK != 0:
-            regs_in = self._snaps[snap_idx - 1]["registers"]
-        else:
-            block_idx = snap_idx // _SNAPS_PER_BLOCK
-            states = self._data.get("block_initial_states") or []
-            if block_idx < len(states):
-                regs_in = states[block_idx]
-            else:
-                regs_in = self._data["initial_h"]  # güvenli geri-düşüş
+        # Giriş register'ları: bu round'un GERÇEK girişi (snapshot'ın taşıdığı
+        # registers_in). Diyagram tek round dönüşümünü (giriş → T1/T2 → çıkış)
+        # çizdiği için giriş, gösterilen T1/T2'yi türetebilmeli. Önceden giriş
+        # 'önceki snapshot çıkışı' (8 round eski) gösteriliyordu → R9, R17… için
+        # T1 gösterilen girişten hesaplanamıyor, animasyon tutarsız kalıyordu.
+        # registers_in, bloğun ilk snapshot'ında o bloğun başlangıç chaining
+        # değerine (blok 0 → H0, blok N → biriken hash) eşittir.
+        regs_in = snap.get("registers_in")
+        if regs_in is None:  # eski veri yapısı için güvenli geri-düşüş
+            regs_in = self._data["initial_h"]
 
         self._diag_widget.set_data(
             regs_in=regs_in,

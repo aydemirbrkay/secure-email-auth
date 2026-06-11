@@ -26,14 +26,16 @@ _STEP_TITLES = ["Girdi", "Çarpımsal Ters", "Affine Dönüşüm", "Sonuç"]
 _STEP_COLOR_KEYS = ["accent_blue", "accent_mauve", "accent_yellow", "accent_green"]
 _STEP_COUNT = 4
 
-# Her adımın tick bütçesi (sade tempo; hareket azaltma ile ölçeklenir).
-_INTRO_TICKS = 6     # Adım 0: girdi belirir.
-_INV_TICKS = 16      # Adım 1: ters kavramı + a·x=01 doğrulaması.
-_BIT_TICKS = 2       # Affine'de her çıkış biti için alt-tick.
-_AFFINE_TICKS = 8 * _BIT_TICKS  # Adım 2: 8 çıkış biti tek tek.
-_RESULT_TICKS = 8    # Adım 3: sonuç + S[satır,sütun] şeması.
-_TRANSITION_TICKS = 3  # Adımlar arası "uçan byte" kaydırma süresi.
-_HOLD_TICKS = 8      # Son adımdan sonra, sonraki byte'a geçmeden bekleme.
+# Her adımın tick bütçesi (sakin tempo; her adım rahat takip edilsin, hareket
+# azaltma ile ayrıca ölçeklenir). Affine bitleri tek tek görünür kalsın diye
+# _BIT_TICKS bilhassa yüksek tutulur.
+_INTRO_TICKS = 8      # Adım 0: girdi belirir.
+_INV_TICKS = 22       # Adım 1: ters kavramı + a·x=01 doğrulaması.
+_BIT_TICKS = 5        # Affine'de her çıkış biti için alt-tick (okunaklı tempo).
+_AFFINE_TICKS = 8 * _BIT_TICKS  # Adım 2: 8 çıkış biti tek tek (8×5=40 tick).
+_RESULT_TICKS = 12    # Adım 3: sonuç + S[satır,sütun] şeması.
+_TRANSITION_TICKS = 5  # Adımlar arası "uçan byte" kaydırma süresi.
+_HOLD_TICKS = 12      # Son adımdan sonra, sonraki byte'a geçmeden bekleme.
 
 # Adım süreleri ve aralarındaki geçişler tek bir zaman çizelgesine dizilir:
 #   [intro] (geçiş) [inverse] (geçiş) [affine] (geçiş) [result] [hold]
@@ -127,7 +129,7 @@ class _SBoxDerivationWidget(QWidget):
 
     def start(self) -> None:
         """Animasyon zamanlayıcısını başlatır (sayfa görünür olunca)."""
-        self._timer.start(get_animation_tick_ms(90))
+        self._timer.start(get_animation_tick_ms(120))
 
     def stop(self) -> None:
         """Animasyon zamanlayıcısını durdurur (sayfa gizlenince/kapanınca)."""

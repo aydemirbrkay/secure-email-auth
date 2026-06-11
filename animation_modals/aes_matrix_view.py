@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBox
 
 from .base import ANIM_COLORS, cached_font, get_animation_tick_ms
 from .aes.sbox_dialog import _SBoxReferenceDialog
-from .aes_pure import gcm_first_keystream_block
 
 
 class _AESMatrixView(QWidget):
@@ -908,45 +907,43 @@ class _ColumnMajorLinearizeWidget(QWidget):
 
 
 class _GCMRealEncryptWidget(QWidget):
-    """Programın GERÇEK AES-256-GCM şifrelemesinin çekirdeğini canlandırır.
+    """Keystream'i kullanıcının mesajıyla XOR'layıp şifreli metni üreten köprü.
 
-    GCM, AES blok şifrelemesini düz metne değil bir SAYAÇ bloğuna uygular ve
-    çıkan keystream'i veriyle XOR'lar. Bu widget, gerçek session anahtarı (K_S)
-    ve nonce ile:
-      1) sayaç bloğunu (nonce ‖ 0x00000002) gösterir,
-      2) AES-256 ile şifreleyip gerçek keystream bloğunu üretir,
-      3) keystream ⊕ mesaj = şifreli metin adımını gösterir,
-      4) çıkan ilk byte'ların programın GERÇEK ciphertext'iyle eşleştiğini
-         yeşil onayla kanıtlar.
-    Nonce verilmezse (eğitim/test) pasif kalır.
+    AES'in 14 round'luk hesabı (sayaç bloğunu şifreleyip keystream üretmesi)
+    artık round/flow sayfalarında GERÇEK olarak gösterildiği için bu widget o
+    kısmı TEKRARLAMAZ. Round'lardan gelen keystream'i alır ve GCM'in son adımını
+    canlandırır:
+      keystream ⊕ mesaj = şifreli metin
+    Çıkan ilk byte'lar programın GERÇEK ciphertext'iyle eşleştirilip yeşil onayla
+    kanıtlanır.
+
+    ÇELİŞKİ KORUMASI: XOR ve eşleşme YALNIZCA mesajın kendi byte'ları için yapılır
+    (min(16, len(mesaj))). Gerçek ciphertext mesaj‖imza'dan gelir; animasyona
+    yalnızca mesaj eriştiğinden 16-byte tam eşleşme iddia edilmez, "ilk N byte"
+    denir. Keystream verilmezse pasif kalır.
     """
 
     _CW = 30           # Byte kutusu genişliği.
     _CH = 28           # Byte kutusu yüksekliği.
     _GAP = 3
-    _N = 16            # Satır başına byte (sayaç/keystream/ciphertext blokları).
+    _N = 16            # Satır başına byte (keystream/mesaj/ciphertext blokları).
 
     _TICK_MS = 90
-    _T_COUNTER = 12    # Sayaç bloğu belirir.
-    _T_AES = 14        # Sayaç → AES kutusu → keystream çıkar.
-    _BYTE_TICKS = 4    # XOR'da her byte için.
+    _BYTE_TICKS = 5    # XOR'da her byte için (okunaklı tempo).
     _T_PROOF = 26      # Eşleşme onayı + bekleme.
 
     # Dikey yerleşim sabitleri (min yükseklik bunlardan türetilir).
     _TOP = 6
     _ROW_LABEL_H = 18
     _ROW_GAP = 16
-    _AES_BOX_H = 30
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._key = b""
-        self._nonce = b""
-        self._plaintext = b""
+        self._keystream = b""         # Round'lardan gelen ilk keystream bloğu.
+        self._message = b""           # Kullanıcının mesajı (XOR girdisi).
         self._expected_ct = b""       # Gerçek ciphertext ilk byte'ları (kanıt).
-        self._counter_block = b""
-        self._keystream = b""
-        self._cipher = b""            # keystream ⊕ plaintext (ilk 16 byte).
+        self._cipher = b""            # keystream ⊕ mesaj (ilk N byte).
+        self._n = 0                   # Gösterilen byte sayısı = min(16, len(mesaj)).
         self._match: bool | None = None
         self._tick = 0
         self._total_ticks = self._compute_total()
@@ -960,25 +957,27 @@ class _GCMRealEncryptWidget(QWidget):
     # ------------------------------------------------------------------
 
     def has_inputs(self) -> bool:
-        """Gerçek anahtar+nonce verilmiş mi (köprü gösterilebilir mi)?"""
-        return len(self._key) == 32 and len(self._nonce) == 12
+        """Keystream + mesaj verilmiş mi (köprü gösterilebilir mi)?"""
+        return len(self._keystream) == 16 and len(self._message) > 0
 
-    def set_inputs(self, session_key: bytes, nonce: bytes,
-                   plaintext: bytes, expected_ct_hex: str) -> None:
-        """Gerçek K_S, nonce, mesaj ve beklenen ciphertext önizlemesini atar.
+    def set_inputs(self, keystream: bytes, message_bytes: bytes,
+                   expected_ct_hex: str) -> None:
+        """Round'lardan gelen keystream, mesaj ve beklenen ciphertext'i atar.
 
-        Geçersiz/boş nonce'ta widget pasif kalır (has_inputs False).
+        Keystream boş/eksikse veya mesaj boşsa widget pasif kalır.
         """
-        self._key = session_key
-        self._nonce = nonce
-        self._plaintext = plaintext
+        self._keystream = keystream
+        self._message = message_bytes
         self._tick = 0
         if not self.has_inputs():
+            self._cipher = b""
+            self._n = 0
+            self._match = None
             return
-        self._counter_block = nonce + (2).to_bytes(4, "big")
-        self._keystream = gcm_first_keystream_block(session_key, nonce)
-        n = min(self._N, len(plaintext))
-        self._cipher = bytes(self._keystream[i] ^ plaintext[i] for i in range(n))
+        # ÇELİŞKİ KORUMASI: yalnızca mesaj byte'ları (ilk N), 16'yı aşma.
+        self._n = min(self._N, len(message_bytes))
+        self._cipher = bytes(self._keystream[i] ^ message_bytes[i]
+                             for i in range(self._n))
         # Beklenen ciphertext (hex önizleme "...": kuyruğu temizle).
         clean = expected_ct_hex.replace(".", "").strip()
         try:
@@ -1009,8 +1008,7 @@ class _GCMRealEncryptWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _compute_total(self) -> int:
-        return (self._T_COUNTER + self._T_AES
-                + self._N * self._BYTE_TICKS + self._T_PROOF)
+        return self._N * self._BYTE_TICKS + self._T_PROOF
 
     def _advance(self) -> None:
         self._tick += 1
@@ -1020,11 +1018,10 @@ class _GCMRealEncryptWidget(QWidget):
         self.update()
 
     def _xor_done(self) -> int:
-        """XOR fazında tamamlanmış byte sayısı (0..16)."""
-        t = self._tick - (self._T_COUNTER + self._T_AES)
-        if t <= 0:
+        """XOR'da tamamlanmış byte sayısı (0..N)."""
+        if self._tick <= 0:
             return 0
-        return min(self._N, t // self._BYTE_TICKS)
+        return min(self._n, self._tick // self._BYTE_TICKS)
 
     # ------------------------------------------------------------------
     # Boyut
@@ -1034,11 +1031,9 @@ class _GCMRealEncryptWidget(QWidget):
         return self._N * self._CW + (self._N - 1) * self._GAP + 16
 
     def _min_h(self) -> int:
-        # başlık + sayaç satırı + AES kutusu + keystream + XOR(mesaj+ciphertext)
-        # + kanıt satırı; her satır etiket + kutu + boşluk.
-        rows = 4  # sayaç, keystream, mesaj, ciphertext
+        # başlık + 3 satır (keystream, mesaj, ciphertext) + kanıt satırı.
+        rows = 3
         h = self._TOP + 20  # üst başlık
-        h += self._AES_BOX_H + self._ROW_GAP
         h += rows * (self._ROW_LABEL_H + self._CH + self._ROW_GAP)
         h += 26  # kanıt satırı
         return h
@@ -1059,64 +1054,45 @@ class _GCMRealEncryptWidget(QWidget):
             p.end()
             return
 
-        row_w = self._N * self._CW + (self._N - 1) * self._GAP
+        n = self._n  # gösterilecek byte sayısı = min(16, len(mesaj))
+        row_w = n * self._CW + max(0, n - 1) * self._GAP
         ox = max(8, (W - row_w) // 2)
 
         # Başlık.
         p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
         p.drawText(QRect(0, self._TOP, W, 18), Qt.AlignmentFlag.AlignCenter,
-                   "Programın gerçek şifrelemesi (AES-256-GCM çekirdeği)")
+                   "Son adım: keystream ⊕ mesaj = şifreli metin")
 
         y = self._TOP + 22
-        show_aes = self._tick >= self._T_COUNTER
-        show_ks = self._tick >= (self._T_COUNTER + self._T_AES)
-
-        # 1) Sayaç bloğu satırı.
-        self._row(p, ox, y, "Sayaç bloğu  (nonce ‖ 00000002):",
-                  self._counter_block, active=not show_aes,
-                  color="accent_mauve")
-        y += self._ROW_LABEL_H + self._CH + 6
-
-        # 2) AES kutusu (sayaç → AES·K_S → keystream).
-        box_w = 220
-        box_x = (W - box_w) // 2
-        lit = show_aes
-        bg = QColor(ANIM_COLORS["accent_blue"]); bg.setAlphaF(0.22 if lit else 0.10)
-        p.setBrush(QBrush(bg))
-        p.setPen(QPen(QColor(ANIM_COLORS["accent_blue"]), 2 if lit else 1))
-        p.drawRoundedRect(box_x, y, box_w, self._AES_BOX_H, 6, 6)
-        p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
-        p.setPen(QColor(ANIM_COLORS["text_primary"] if lit else ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(box_x, y, box_w, self._AES_BOX_H),
-                   Qt.AlignmentFlag.AlignCenter, "AES-256  ·  K_S  (gerçek anahtar)")
-        y += self._AES_BOX_H + self._ROW_GAP
-
-        # 3) Keystream satırı.
-        self._row(p, ox, y, "Keystream  (AES çıkışı):",
-                  self._keystream if show_ks else b"",
-                  active=show_ks and self._xor_done() == 0,
-                  color="accent_blue", placeholder_n=self._N)
-        y += self._ROW_LABEL_H + self._CH + 6
-
-        # 4) XOR: mesaj satırı.
         done = self._xor_done()
-        self._row(p, ox, y, "⊕  Mesaj (m ‖ imza, ilk 16 byte):",
-                  self._plaintext[:self._N], active=False,
-                  color="accent_peach", placeholder_n=self._N)
+
+        # 1) Keystream satırı (round'ların ürettiği son blok).
+        self._row(p, ox, y, "Keystream  (14 round AES sonucu):",
+                  self._keystream[:n], active=done == 0,
+                  color="accent_blue", placeholder_n=n)
         y += self._ROW_LABEL_H + self._CH + 6
 
-        # 5) Ciphertext satırı (XOR sonucu, byte byte dolar).
-        self._row(p, ox, y, "=  Şifreli metin (keystream ⊕ mesaj):",
+        # 2) ⊕ Mesaj satırı (kullanıcının mesajı, ilk N byte).
+        self._row(p, ox, y, f"⊕  Mesajınız (ilk {n} byte):",
+                  self._message[:n], active=False,
+                  color="accent_peach", placeholder_n=n)
+        y += self._ROW_LABEL_H + self._CH + 6
+
+        # 3) = Şifreli metin satırı (XOR sonucu, byte byte dolar).
+        self._row(p, ox, y, "=  Şifreli metin:",
                   self._cipher[:done], active=True,
-                  color="accent_green", placeholder_n=self._N)
+                  color="accent_green", placeholder_n=n)
         y += self._ROW_LABEL_H + self._CH + 8
 
-        # 6) Kanıt: gerçek ciphertext ile eşleşme.
-        if done >= min(self._N, len(self._cipher)) and self._match is not None:
+        # 4) Kanıt: gerçek ciphertext ile eşleşme (yalnızca mesaj byte'ları).
+        if done >= n and self._match is not None:
             if self._match:
                 p.setPen(QColor(ANIM_COLORS["accent_green"]))
-                msg = "✓ Bu, programın gönderdiği gerçek şifreli metnin ta kendisidir."
+                msg = (
+                    f"✓ İlk {n} byte, programın gönderdiği gerçek şifreli metinle "
+                    "birebir aynı."
+                )
             else:
                 p.setPen(QColor(ANIM_COLORS["accent_red"]))
                 msg = "Çıktı, beklenen ciphertext ile eşleşmedi."
@@ -1126,7 +1102,7 @@ class _GCMRealEncryptWidget(QWidget):
 
     def _row(self, p: QPainter, ox: int, y: int, label: str, data: bytes,
              *, active: bool, color: str, placeholder_n: int = 0) -> None:
-        """Etiketli bir byte satırı çizer (nonce/keystream/mesaj/ciphertext)."""
+        """Etiketli bir byte satırı çizer (keystream/mesaj/ciphertext)."""
         p.setFont(cached_font("IBM Plex Sans", 9))
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(ox, y, self._N * (self._CW + self._GAP), self._ROW_LABEL_H),

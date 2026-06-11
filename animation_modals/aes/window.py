@@ -575,41 +575,54 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._stack.setCurrentWidget(self._match_page)
         self._update_round_bar(14)
         last = self._steps_data[-1]
-        mat = last["matrix"]   # 4×4 liste
+        mat = last["matrix"]   # 4×4 liste — GCM'de keystream bloğu, ECB'de şifreli blok.
         self._matrix_pair.show_final(mat)  # round sayfasını günceller (match'te görünmez)
 
-        # Match sayfasındaki görsel: final matris + column-major dizilim animasyonu.
-        # Kullanıcının istediği "önce matris → sütun-öncelikli diziliş" burada oynar.
+        # Final state'in column-major dizilişi (GCM'de bu keystream'dir).
         self._linearize_widget.set_state(mat)
         self._linearize_widget.start()
 
-        # Köprü: programın gerçek GCM şifrelemesi (gerçek nonce varsa).
-        self._gcm_widget.set_inputs(
-            self._key, self._nonce, self._plaintext, self._expected_ct_hex
-        )
+        # GCM köprüsü: round'ların ürettiği keystream'i mesajla XOR'la = şifreli metin.
+        # Keystream = round animasyonunun son bloğu (_final_block_hex).
+        if self._gcm_mode:
+            keystream = bytes.fromhex(self._final_block_hex)
+            self._gcm_widget.set_inputs(
+                keystream, self._message_bytes, self._expected_ct_hex
+            )
+        else:
+            self._gcm_widget.set_inputs(b"", b"", "")
         has_real = self._gcm_widget.has_inputs()
         self._gcm_sep.setVisible(has_real)
         self._gcm_widget.setVisible(has_real)
         if has_real:
             self._gcm_widget.start()
 
-        # RSA panelindeki "aynı matematik · farklı boyut" üslubuyla, bu çıktının
-        # programın GERÇEK şifrelemesiyle ilişkisini dürüstçe belirtiyoruz:
-        # AES-256 algoritması gerçektir (FIPS-197 doğrulanmış), ama burada
-        # gösterilen tek-blok ECB çıktısıdır; programın asıl mesaj şifrelemesi
-        # aynı AES'i GCM modunda (sayaç + kimlik etiketi) kullanır, çıktı farklıdır.
+        # Dürüst özet. GCM modunda: round'lar gerçek keystream'i üretti, final XOR
+        # gerçek şifreli metni verdi. ECB modunda (nonce yok): eğitim amaçlı blok.
         green = ANIM_COLORS["accent_green"]
         sec = ANIM_COLORS["text_secondary"]
-        html_body = (
-            f'<div style="color:{green}; font-weight:bold;">'
-            "✅ Algoritma gerçektir: bu, FIPS-197 standardına uygun AES-256'nın ta kendisidir."
-            "</div>"
-            f'<div style="color:{sec};">'
-            "Aynı AES · farklı mod: yukarıdaki çıktı tek-blok ECB'dir (eğitim için). "
-            "Programın gerçek mesaj şifrelemesi aynı AES-256'yı GCM modunda kullanır, "
-            "bu yüzden gönderilen şifreli metin bundan farklıdır."
-            "</div>"
-        )
+        if self._gcm_mode:
+            html_body = (
+                f'<div style="color:{green}; font-weight:bold;">'
+                "✅ Bu, programın gerçek AES-256-GCM şifrelemesidir."
+                "</div>"
+                f'<div style="color:{sec};">'
+                "Yukarıdaki 14 round, GCM'in sayaç bloğunu gerçek oturum anahtarıyla "
+                "(K_S) şifreleyip keystream üretişidir; keystream mesajınızla XOR'lanınca "
+                "gönderilen şifreli metin elde edilir. Tam ciphertext'e ayrıca mesaja "
+                "eklenen imza ve GCM kimlik doğrulama etiketi (tag) de dahildir."
+                "</div>"
+            )
+        else:
+            html_body = (
+                f'<div style="color:{green}; font-weight:bold;">'
+                "✅ Algoritma gerçektir: bu, FIPS-197 standardına uygun AES-256'nın ta kendisidir."
+                "</div>"
+                f'<div style="color:{sec};">'
+                "Aynı AES · farklı mod: yukarıdaki çıktı tek-blok ECB'dir (eğitim için). "
+                "Programın gerçek mesaj şifrelemesi aynı AES-256'yı GCM modunda kullanır."
+                "</div>"
+            )
         self._match_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._match_lbl.setText(html_body)
         self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_primary']};")

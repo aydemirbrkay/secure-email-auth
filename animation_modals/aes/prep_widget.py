@@ -48,6 +48,8 @@ class _AESPlaintextPrepWidget(QWidget):
         state_matrix: list[list[str]],
         on_continue=None,
         parent: QWidget | None = None,
+        mode: str = "ecb",
+        message_bytes: bytes = b"",
     ) -> None:
         super().__init__(parent)
         from PyQt6.QtWidgets import QScrollArea
@@ -56,6 +58,12 @@ class _AESPlaintextPrepWidget(QWidget):
             _ByteStripWidget,
         )
 
+        # GCM modunda first_block/state_matrix SAYAÇ BLOĞUNU temsil eder (AES'in
+        # gerçek girdisi); message_bytes ise kullanıcının mesajıdır (AES'ten
+        # geçmez, finalde keystream ile XOR'lanır). ECB modunda eski davranış.
+        self._mode = mode
+        self._is_gcm = mode == "gcm"
+        self._message_bytes = message_bytes
         self._plaintext_text = plaintext_text
         self._plaintext_bytes = plaintext_bytes
         self._padded_plaintext = padded_plaintext
@@ -72,14 +80,42 @@ class _AESPlaintextPrepWidget(QWidget):
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(6)
 
-        self._pp_title = QLabel("Plaintext Hazırlığı — Metin → 4×4 State Matrix")
+        title_text = (
+            "Hazırlık — Mesaj ve Sayaç Bloğu (AES-256-GCM)"
+            if self._is_gcm
+            else "Plaintext Hazırlığı — Metin → 4×4 State Matrix"
+        )
+        self._pp_title = QLabel(title_text)
         self._pp_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._pp_title.setStyleSheet(f"color: {ANIM_COLORS['accent_blue']};")
         self._pp_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._pp_title)
 
-        # Plaintext label
-        if self._is_empty:
+        # Mesaj izi: kullanıcının mesajı (GCM'de AES'ten GEÇMEZ, finalde XOR'lanır).
+        if self._is_gcm:
+            msg_preview = (
+                self._message_bytes.decode("utf-8", errors="replace")[:60]
+                if self._message_bytes else ""
+            )
+            msg_preview += "…" if len(self._message_bytes) > 60 else ""
+            self._msg_track_lbl = QLabel(
+                f"Mesajınız: \"{msg_preview}\"  —  bu veri AES'ten GEÇMEZ; "
+                "sonunda keystream ile XOR'lanır."
+            )
+            self._msg_track_lbl.setFont(QFont("IBM Plex Sans", 9))
+            self._msg_track_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_peach']};")
+            self._msg_track_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._msg_track_lbl.setWordWrap(True)
+            lay.addWidget(self._msg_track_lbl)
+
+        # Plaintext label (ECB) / Sayaç bloğu açıklaması (GCM)
+        if self._is_gcm:
+            label_text = (
+                "AES gerçekte şunu şifreler → Sayaç bloğu "
+                "(nonce ‖ 0x00000002), 16 byte:"
+            )
+            label_color = ANIM_COLORS["accent_blue"]
+        elif self._is_empty:
             label_text = "<i>(boş mesaj)</i>"
             label_color = ANIM_COLORS["text_muted"]
         else:
@@ -93,15 +129,25 @@ class _AESPlaintextPrepWidget(QWidget):
         self._txt_lbl.setTextFormat(Qt.TextFormat.RichText)
         lay.addWidget(self._txt_lbl)
 
-        # Detail grid (ilk 16 byte = first_block)
-        self._detail_lbl = QLabel("İlk blok (16 byte) — PKCS#7 padding dahil:")
+        # Detail grid (ilk 16 byte = first_block). GCM: sayaç bloğu (padding yok).
+        detail_text = (
+            "Sayaç bloğu (16 byte) — sabit, padding yok:"
+            if self._is_gcm
+            else "İlk blok (16 byte) — PKCS#7 padding dahil:"
+        )
+        self._detail_lbl = QLabel(detail_text)
         self._detail_lbl.setFont(QFont("IBM Plex Sans", 9))
         self._detail_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         lay.addWidget(self._detail_lbl)
-        # Padding mask: orijinal plaintext byte'larından sonrası PKCS#7
-        n_orig = min(len(plaintext_bytes), 16)
-        padding_mask = [False] * n_orig + [True] * (16 - n_orig)
-        padding_labels = [""] * n_orig + ["pad"] * (16 - n_orig)
+        # Padding mask: orijinal plaintext byte'larından sonrası PKCS#7.
+        # GCM'de girdi sayaç bloğudur — padding yok, tüm 16 byte gerçek.
+        if self._is_gcm:
+            padding_mask = [False] * 16
+            padding_labels = [""] * 16
+        else:
+            n_orig = min(len(plaintext_bytes), 16)
+            padding_mask = [False] * n_orig + [True] * (16 - n_orig)
+            padding_labels = [""] * n_orig + ["pad"] * (16 - n_orig)
         self._grid = _ColoredByteGridWidget(
             first_block,
             max_cells=16,
@@ -126,11 +172,16 @@ class _AESPlaintextPrepWidget(QWidget):
         grid_scroll.setMinimumHeight(self._grid.minimumHeight() + 18)
         lay.addWidget(grid_scroll)
 
-        # Byte strip (tüm padded plaintext) — scroll
-        self._strip_lbl = QLabel(
-            f"Tüm byte'lar (toplam {len(padded_plaintext)} byte, "
-            f"blok sayısı: {blocks_total}):"
-        )
+        # Byte strip (tüm padded plaintext) — scroll. GCM'de tek 16-byte
+        # sayaç bloğu (padding yok, tek blok).
+        if self._is_gcm:
+            strip_text = "Sayaç bloğu byte'ları (16 byte, tek blok):"
+        else:
+            strip_text = (
+                f"Tüm byte'lar (toplam {len(padded_plaintext)} byte, "
+                f"blok sayısı: {blocks_total}):"
+            )
+        self._strip_lbl = QLabel(strip_text)
         self._strip_lbl.setFont(QFont("IBM Plex Sans", 9))
         self._strip_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_muted']};")
         lay.addWidget(self._strip_lbl)

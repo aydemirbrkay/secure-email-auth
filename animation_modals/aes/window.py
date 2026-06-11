@@ -190,6 +190,8 @@ class AESAnimationWindow(CryptoAnimationWindow):
             blocks_total=self._blocks_total_data,
             state_matrix=self._state_matrix_data,
             on_continue=self._switch_to_rounds_only,
+            mode="gcm" if self._gcm_mode else "ecb",
+            message_bytes=self._message_bytes,
         )
         scroll = QScrollArea()
         scroll.setWidget(self._plaintext_widget)

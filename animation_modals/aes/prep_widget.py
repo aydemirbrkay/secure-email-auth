@@ -133,7 +133,7 @@ class _AESPlaintextPrepWidget(QWidget):
         detail_text = (
             "Sayaç bloğu (16 byte) — sabit, padding yok:"
             if self._is_gcm
-            else "İlk blok (16 byte) — PKCS#7 padding dahil:"
+            else "İlk blok (16 byte):"
         )
         self._detail_lbl = QLabel(detail_text)
         self._detail_lbl.setFont(QFont("IBM Plex Sans", 9))

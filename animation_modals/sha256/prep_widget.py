@@ -434,6 +434,12 @@ class _SHA256PaddingWidget(QWidget):
                 f"QPushButton:checked {{ background: {ANIM_COLORS['accent_blue']}; "
                 f"color: {ANIM_COLORS['text_on_accent']}; "
                 f"border-color: {ANIM_COLORS['accent_blue']}; }}"
+                # Seçili (checked) düğmenin üzerine gelince: koyu accent_blue zemin
+                # ve açık yazı KORUNUR (yalnız hover'da açık bg_input'a düşüp açık
+                # yazıyla okunmaz hale gelmesini önler); hover ipucu sarı kenarlık.
+                f"QPushButton:checked:hover {{ background: {ANIM_COLORS['accent_blue']}; "
+                f"color: {ANIM_COLORS['text_on_accent']}; "
+                f"border-color: {ANIM_COLORS['accent_yellow']}; }}"
             )
         if self._block_lbl is not None:
             self._block_lbl.setStyleSheet(

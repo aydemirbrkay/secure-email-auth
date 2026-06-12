@@ -1,15 +1,19 @@
-"""AES-GCM keystream referans diyaloğu ve düğme bağlantısı testleri."""
+"""AES-GCM keystream sihirbazı diyaloğu ve düğme bağlantısı testleri."""
 from __future__ import annotations
 
 import unittest
 
-from animation_modals.aes.keystream_dialog import _KeystreamReferenceDialog
+from animation_modals.aes.keystream_dialog import (
+    _KeystreamReferenceDialog,
+    _TOTAL_TICKS,
+    _matrix_from_bytes,
+)
 from animation_modals.base import ANIM_COLORS
 from arayuz.theme import MANAGER
 
 
-class TestKeystreamReferenceDialog(unittest.TestCase):
-    """Keystream/GCM açıklama penceresinin gerçek değer ve tema sözleşmesini sınar."""
+class TestKeystreamWizardDialog(unittest.TestCase):
+    """Keystream sihirbazının gerçek değer, sahne akışı ve tema sözleşmesini sınar."""
 
     def setUp(self):
         self._original_theme = MANAGER.mode
@@ -19,38 +23,46 @@ class TestKeystreamReferenceDialog(unittest.TestCase):
     def tearDown(self):
         MANAGER.set_mode(self._original_theme)
 
-    def test_contains_real_keystream_and_core_gcm_explanation(self):
-        """Diyalog gerçek baytları, XOR kullanımını ve AEAD/tag açıklamasını göstermeli."""
+    def test_dialog_carries_real_keystream_counter_and_nonce(self):
+        """Diyalog gerçek keystream, nonce ve türetilmiş sayaç bloğunu taşımalı."""
         dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
-        all_text = " ".join(
-            label.text()
-            for label in (
-                dialog.keystream_hex_label,
-                dialog.generation_label,
-                dialog.usage_label,
-                dialog.gcm_label,
-            )
+
+        self.assertEqual(dialog.keystream, self.keystream)
+        self.assertEqual(dialog.nonce, self.nonce)
+        self.assertEqual(dialog.counter_block, self.nonce + b"\x00\x00\x00\x02")
+        self.assertEqual(dialog.wizard.counter_block, self.nonce + b"\x00\x00\x00\x02")
+        self.assertEqual(dialog.wizard.keystream, self.keystream)
+
+    def test_matrix_from_bytes_is_column_major(self):
+        """16 bayt AES column-major 4×4 matrise yerleşmeli (m[r][c] = data[c*4+r])."""
+        data = bytes(range(16))
+        matrix = _matrix_from_bytes(data)
+        self.assertEqual(matrix[0][0], "00")
+        self.assertEqual(matrix[1][0], "01")
+        self.assertEqual(matrix[0][1], "04")
+        self.assertEqual(matrix[3][3], "0f")
+
+    def test_wizard_runs_through_all_scenes_and_stops(self):
+        """Sihirbaz tüm tickleri tüketince son sahnede (Sonuç) durmalı."""
+        dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
+        wizard = dialog.wizard
+
+        wizard.start()
+        for _ in range(_TOTAL_TICKS + 1):
+            wizard._advance()
+
+        self.assertEqual(wizard._scene(), 3)
+        self.assertFalse(wizard._timer.isActive())
+
+    def test_wizard_uses_real_round_states_when_provided(self):
+        """rounds_data verilince üretim sahnesi gerçek round state'lerini kullanmalı."""
+        rounds = [{"round": i, "after_add_round_key": _matrix_from_bytes(
+            bytes((i + j) % 256 for j in range(16)))} for i in range(15)]
+        dialog = _KeystreamReferenceDialog(
+            self.keystream, self.nonce, rounds_data=rounds,
         )
-
-        self.assertIn(self.keystream.hex(" "), all_text)
-        self.assertIn("nonce", all_text)
-        self.assertIn("keystream ⊕ mesaj", all_text)
-        self.assertIn("AEAD", all_text)
-        self.assertIn("16 byte tag", all_text)
-        self.assertEqual(dialog.generation_widget.counter_block, self.nonce + b"\x00\x00\x00\x02")
-        self.assertEqual(dialog.generation_widget.keystream, self.keystream)
-
-    def test_generation_widget_animates_counter_to_real_keystream(self):
-        """Üretim görseli gerçek sayaç bloğunu 14 round üzerinden keystream'e bağlamalı."""
-        dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
-        widget = dialog.generation_widget
-
-        widget.start()
-        for _ in range(widget._TOTAL_TICKS):
-            widget._advance()
-
-        self.assertEqual(widget._phase, 2)
-        self.assertFalse(widget._timer.isActive())
+        # Round 5'in state'i sağlanan veriyle eşleşmeli.
+        self.assertEqual(dialog.wizard._round_state(5), rounds[5]["after_add_round_key"])
 
     def test_dialog_restyles_when_theme_changes(self):
         """Açık diyalog tema değişiminde yeni panel rengini kullanmalı."""

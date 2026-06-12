@@ -495,11 +495,14 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
 
     def _show_keystream_reference(self) -> None:
-        """Round sonucundaki gerçek keystream ve nonce ile GCM referans diyaloğunu açar."""
+        """Round sonucundaki gerçek keystream, nonce ve round verisiyle keystream sihirbazını açar."""
         dialog = _KeystreamReferenceDialog(
             bytes.fromhex(self._final_block_hex),
             self._nonce,
-            self,
+            rounds_data=self._rounds_data,
+            counter_block=self._counter_block_data,
+            initial_state_hex=self._initial_state_hex,
+            parent=self,
         )
         self._keystream_dialog = dialog
         dialog.show()

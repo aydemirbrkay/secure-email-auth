@@ -114,5 +114,49 @@ class TestKeystreamWizardDialog(unittest.TestCase):
         )
 
 
+class TestAESFullNavigation(unittest.TestCase):
+    """Sayfa-içi 'Devam ▶' kaldırıldı; tüm zincir global İleri/Geri ile gezilmeli."""
+
+    def _gcm_window(self):
+        from animation_modals import AESAnimationWindow
+        return AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"mesaj",
+            expected_ct_hex="00" * 5,
+            nonce=bytes(range(12)),
+        )
+
+    def test_gcm_page_has_no_internal_continue_button(self):
+        """GCM hazırlık sayfasında artık sayfa-içi Devam düğmesi olmamalı."""
+        window = self._gcm_window()
+        self.assertFalse(hasattr(window, "_gcm_prep_continue_btn"))
+
+    def test_ileri_traverses_full_chain_to_match(self):
+        """İleri ▶ tek başına intro → prep0 → prep1 → rounds → match gezmeli."""
+        window = self._gcm_window()
+        seen = [getattr(window, "_nav_phase", "intro")]
+        for _ in range(200):
+            if getattr(window, "_nav_phase", "intro") == "match":
+                break
+            window._advance_step()
+            seen.append(window._nav_phase)
+        self.assertEqual(window._nav_phase, "match")
+        for phase in ("prep0", "prep1", "rounds", "match"):
+            self.assertIn(phase, seen)
+
+    def test_geri_traverses_back_to_intro(self):
+        """Match'e gidildikten sonra ◀ Geri tek başına intro'ya dönebilmeli."""
+        window = self._gcm_window()
+        for _ in range(200):
+            if getattr(window, "_nav_phase", "intro") == "match":
+                break
+            window._advance_step()
+        for _ in range(200):
+            if window._nav_phase == "intro":
+                break
+            window._go_back()
+        self.assertEqual(window._nav_phase, "intro")
+
+
 if __name__ == "__main__":
     unittest.main()

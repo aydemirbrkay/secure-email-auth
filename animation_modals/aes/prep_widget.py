@@ -5,7 +5,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import Qt, QTimer, QRect, QPoint
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QPolygon
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QHBoxLayout, QLabel,
     QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 from ..base import CryptoAnimationWindow, ANIM_COLORS, get_animation_tick_ms
@@ -24,7 +24,9 @@ class _AESPlaintextPrepWidget(QWidget):
       2: PKCS#7 padding byte'ları beyaz border ile eklenir
       3: Toplam/blok bilgi şeridi
       4: 4×4 state matrix sütun sütun dolar
-      5: "Devam ▶" buton enabled
+
+    Sayfa-içi "Devam ▶" düğmesi yoktur: sayfalar arası geçiş tamamen alttaki
+    global İleri ▶ / ◀ Geri ile yapılır (bkz. window._advance_step/_go_back).
 
     Boş mesaj: faz 1 atlanır.
     """
@@ -208,14 +210,7 @@ class _AESPlaintextPrepWidget(QWidget):
         self._matrix_widget = self._build_state_matrix_widget()
         lay.addWidget(self._matrix_widget, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Devam butonu
-        self._btn_continue = QPushButton("Devam ▶")
-        self._btn_continue.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
-        self._btn_continue.setStyleSheet(self._continue_btn_style())
-        self._btn_continue.setEnabled(False)
-        self._btn_continue.clicked.connect(self._on_continue_clicked)
-        lay.addWidget(self._btn_continue, alignment=Qt.AlignmentFlag.AlignHCenter)
-
+        # Sayfa-içi "Devam ▶" düğmesi yok: geçiş global İleri ▶ ile yapılır.
         lay.addStretch()
 
         # Matrix cell etiketleri (Fazlı dolum için)
@@ -264,17 +259,6 @@ class _AESPlaintextPrepWidget(QWidget):
             f"border-radius: 3px; padding: 6px 10px; min-width: 28px;"
         )
 
-    @staticmethod
-    def _continue_btn_style() -> str:
-        return (
-            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: #FFFFFF; border: none; border-radius: 6px; "
-            f"padding: 6px 18px; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-            f"QPushButton:disabled {{ background: {ANIM_COLORS['bg_card']}; "
-            f"color: {ANIM_COLORS['text_muted']}; }}"
-        )
-
     def restyle(self) -> None:
         """Tema değişiminde QLabel/QFrame içeriğini durum bozmadan yeniden boyar.
         Byte ızgaraları (_ColoredByteGridWidget/_ByteStripWidget) QPainter'dır →
@@ -297,7 +281,6 @@ class _AESPlaintextPrepWidget(QWidget):
                 self._cell_lbls[r][c].setStyleSheet(
                     self._cell_style(self._matrix_filled[r][c])
                 )
-        self._btn_continue.setStyleSheet(self._continue_btn_style())
 
     def start(self) -> None:
         self._timer.start(get_animation_tick_ms(self._TICK_MS))
@@ -347,9 +330,10 @@ class _AESPlaintextPrepWidget(QWidget):
             return
         self._finished = True
         self._timer.stop()
-        self._btn_continue.setEnabled(True)
 
     def _on_continue_clicked(self) -> None:
+        # Geriye dönük uyumluluk: artık sayfa-içi buton yok; sayfalar arası
+        # geçiş global İleri ▶ ile yapılır. on_continue verildiyse yine çalışır.
         if self._on_continue:
             self._on_continue()
 

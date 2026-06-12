@@ -257,27 +257,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
             self._gcm_prep_scroll.setStyleSheet("background: transparent; border: none;")
             gcm_page_layout.addWidget(self._gcm_prep_scroll, stretch=1)
 
-            self._gcm_prep_continue_btn = QPushButton("Devam ▶")
-            self._gcm_prep_continue_btn.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
-            self._gcm_prep_continue_btn.setStyleSheet(self._gcm_continue_btn_style())
-            self._gcm_prep_continue_btn.clicked.connect(self._switch_to_rounds_only)
-            gcm_page_layout.addWidget(
-                self._gcm_prep_continue_btn, alignment=Qt.AlignmentFlag.AlignHCenter
-            )
-
+            # Sayfa-içi "Devam ▶" düğmesi yok: alttaki global İleri ▶ zaten
+            # tüm zinciri (prep1 → rounds) gezer (bkz. _advance_step).
             self._gcm_prep_page = gcm_page
             self._prep_stack.addWidget(gcm_page)
         return w
-
-    @staticmethod
-    def _gcm_continue_btn_style() -> str:
-        """GCM hazırlık sayfasındaki 'Devam ▶' düğmesinin birincil stili."""
-        return (
-            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: {ANIM_COLORS['text_on_accent']}; border: none; "
-            "border-radius: 6px; padding: 6px 18px; font-weight: bold; }}"
-            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
-        )
 
     def _make_round_page(self) -> QWidget:
         w = QWidget()
@@ -707,8 +691,6 @@ class AESAnimationWindow(CryptoAnimationWindow):
             self._gcm_prep_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
         if hasattr(self, "_keystream_btn"):
             self._keystream_btn.setStyleSheet(self._reference_button_style())
-        if hasattr(self, "_gcm_prep_continue_btn"):
-            self._gcm_prep_continue_btn.setStyleSheet(self._gcm_continue_btn_style())
         # QLabel tabanlı sayfa widget'ları (QPainter olan _gcm_xor_widget
         # refresh_theme'deki update() ile zaten yenilenir).
         for w in (

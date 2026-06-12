@@ -15,7 +15,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
-    QApplication, QDialog, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QApplication, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ..base import ANIM_COLORS, cached_font
@@ -36,6 +36,15 @@ class _WDetailWidget(QWidget):
     def __init__(self, detail: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.detail = detail
+        # Operand indeksleri detail["i"]'den türer (drill-down dinamik W[i] çözer).
+        self._i = detail["i"]
+        self._i0 = self._i - 16   # W[i-16]
+        self._is0 = self._i - 15  # σ0 operandı W[i-15]
+        self._i7 = self._i - 7    # W[i-7]
+        self._is1 = self._i - 2   # σ1 operandı W[i-2]
+        self._titles = [
+            "Giriş", f"σ0(W[{self._is0}])", f"σ1(W[{self._is1}])", "Toplam",
+        ]
         self._scene_index = 0
         self._bits_x0, self._cell_w, self._nibble_gap = 220, 16, 6
         self.setMinimumHeight(360)
@@ -75,11 +84,10 @@ class _WDetailWidget(QWidget):
         return None
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        # Yalnızca üst şerit kutusu sahne değiştirir; gövdeye tıklamak ilerletmez.
         idx = self._strip_box_at(event.pos().x(), event.pos().y())
         if idx is not None:
             self.jump_to_scene(idx)
-            return
-        self._advance_scene()
 
     # --- Çizim ---
 
@@ -98,7 +106,7 @@ class _WDetailWidget(QWidget):
         n = _SCENE_COUNT
         gap = 6
         bw = (W - 16 - gap * (n - 1)) // n
-        for i, title in enumerate(_SCENE_TITLES):
+        for i, title in enumerate(self._titles):
             x = 8 + i * (bw + gap)
             color = QColor(ANIM_COLORS[_SCENE_COLOR_KEYS[i]])
             done = i < active
@@ -109,7 +117,8 @@ class _WDetailWidget(QWidget):
             p.setPen(QPen(color, 2 if cur else 1))
             p.drawRoundedRect(x, _STRIP_Y, bw, _STRIP_H, 7, 7)
             p.setFont(cached_font("Georgia", 9, QFont.Weight.Bold))
-            p.setPen(color if (cur or done) else QColor(ANIM_COLORS["text_muted"]))
+            p.setPen(color if (cur or done)
+                     else QColor(ANIM_COLORS["text_secondary"]))
             p.drawText(QRect(x + 2, _STRIP_Y + 3, bw - 4, 16),
                        Qt.AlignmentFlag.AlignCenter, f"{i + 1}")
             p.setFont(cached_font("IBM Plex Sans", 8, QFont.Weight.Bold))
@@ -132,7 +141,7 @@ class _WDetailWidget(QWidget):
 
     def _note(self, p: QPainter, area: QRect, y: int, text: str) -> int:
         p.setFont(cached_font("IBM Plex Sans", 9))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(area.left() + 12, y, area.width() - 24, 50),
                    Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap, text)
         return y + 52
@@ -149,14 +158,15 @@ class _WDetailWidget(QWidget):
 
     def _sc_input(self, p: QPainter, area: QRect) -> None:
         d = self.detail
-        y = self._title(p, area, f"Mesaj genişletme: W[{d['i']}] nasıl üretilir?",
+        y = self._title(p, area, f"Mesaj genişletme: W[{self._i}] nasıl üretilir?",
                         "accent_blue")
         y = self._hex_eq(p, area, y,
-                         "W[16] = σ0(W[1]) + W[9] + σ1(W[14]) + W[0]",
+                         f"W[{self._i}] = σ0(W[{self._is0}]) + W[{self._i7}] + "
+                         f"σ1(W[{self._is1}]) + W[{self._i0}]",
                          "accent_yellow")
         y += 8
-        chips = [("W[0]", d["w_i16"]), ("W[1]", d["w_i15"]),
-                 ("W[9]", d["w_i7"]), ("W[14]", d["w_i2"])]
+        chips = [(f"W[{self._i0}]", d["w_i16"]), (f"W[{self._is0}]", d["w_i15"]),
+                 (f"W[{self._i7}]", d["w_i7"]), (f"W[{self._is1}]", d["w_i2"])]
         n = len(chips)
         cw = min(150, (area.width() - 24) // n)
         ox = area.left() + (area.width() - n * cw) // 2
@@ -182,9 +192,11 @@ class _WDetailWidget(QWidget):
 
     def _sc_sigma0(self, p: QPainter, area: QRect) -> None:
         d = self.detail
-        y = self._title(p, area, "σ0(W[1]) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)",
+        y = self._title(p, area,
+                        f"σ0(W[{self._is0}]) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)",
                         "accent_mauve")
-        y += self._bit_row(p, y, "x = W[1]", d["w_i15"], ANIM_COLORS["accent_blue"])
+        y += self._bit_row(p, y, f"x = W[{self._is0}]", d["w_i15"],
+                           ANIM_COLORS["accent_blue"])
         y += self._bit_row(p, y, "ROTR(x,7)", d["x_rotr7"], ANIM_COLORS["accent_mauve"])
         y += self._bit_row(p, y, "ROTR(x,18)", d["x_rotr18"], ANIM_COLORS["accent_mauve"])
         y += self._bit_row(p, y, "SHR(x,3)", d["x_shr3"], ANIM_COLORS["accent_peach"])
@@ -197,9 +209,11 @@ class _WDetailWidget(QWidget):
 
     def _sc_sigma1(self, p: QPainter, area: QRect) -> None:
         d = self.detail
-        y = self._title(p, area, "σ1(W[14]) = ROTR(y,17) ⊕ ROTR(y,19) ⊕ SHR(y,10)",
+        y = self._title(p, area,
+                        f"σ1(W[{self._is1}]) = ROTR(y,17) ⊕ ROTR(y,19) ⊕ SHR(y,10)",
                         "accent_teal")
-        y += self._bit_row(p, y, "y = W[14]", d["w_i2"], ANIM_COLORS["accent_blue"])
+        y += self._bit_row(p, y, f"y = W[{self._is1}]", d["w_i2"],
+                           ANIM_COLORS["accent_blue"])
         y += self._bit_row(p, y, "ROTR(y,17)", d["y_rotr17"], ANIM_COLORS["accent_teal"])
         y += self._bit_row(p, y, "ROTR(y,19)", d["y_rotr19"], ANIM_COLORS["accent_teal"])
         y += self._bit_row(p, y, "SHR(y,10)", d["y_shr10"], ANIM_COLORS["accent_peach"])
@@ -212,20 +226,20 @@ class _WDetailWidget(QWidget):
 
     def _sc_total(self, p: QPainter, area: QRect) -> None:
         d = self.detail
-        y = self._title(p, area, "W[16] toplaması (mod 2³²)", "accent_green")
+        y = self._title(p, area, f"W[{self._i}] toplaması (mod 2³²)", "accent_green")
         y = self._hex_eq(p, area, y + 6,
                          f"σ0 = {d['sigma0']}     σ1 = {d['sigma1']}",
                          "accent_mauve")
         y = self._hex_eq(p, area, y + 4,
-                         f"W[16] = {d['w_i16']} + {d['sigma0']} + "
+                         f"W[{self._i}] = {d['w_i16']} + {d['sigma0']} + "
                          f"{d['w_i7']} + {d['sigma1']}",
                          "accent_yellow")
         y = self._hex_eq(p, area, y + 4, f"= {d['result']}",
                          "accent_green")
         self._note(p, area, y + 10,
-                   "İşte W[16] üretildi. Aynı formülle W[17..63] de türetilir; "
-                   "bu 64 W değeri sıkıştırma round'larında mesajını hash'e "
-                   "dönüştürmek için kullanılır.")
+                   f"İşte W[{self._i}] üretildi. Aynı formülle W[{self._i+1}..63] "
+                   "de türetilir; bu 64 W değeri sıkıştırma round'larında mesajını "
+                   "hash'e dönüştürmek için kullanılır.")
 
 
 class _WDetailDialog(QDialog):
@@ -262,7 +276,7 @@ class _WDetailDialog(QDialog):
         layout.addWidget(self.title_label)
 
         self.hint_label = QLabel(
-            "İpucu: üstteki kutulara tıkla ya da ilerlemek için sahneye tıkla.")
+            "İpucu: üst kutulara tıkla; ilerlemek için Geri/İleri kullan.")
         self.hint_label.setFont(QFont("IBM Plex Sans", 9))
         self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.hint_label)
@@ -270,11 +284,28 @@ class _WDetailDialog(QDialog):
         self.wizard = _WDetailWidget(detail, parent=self)
         layout.addWidget(self.wizard, stretch=1)
 
+        # Gezinme: ◀ Geri / İleri ▶ (gövde-tıkla ilerletmez) + Baştan.
+        nav_row = QHBoxLayout()
+        nav_row.addStretch(1)
+        self.prev_btn = QPushButton("◀ Geri")
+        self.prev_btn.clicked.connect(self._go_prev)
+        nav_row.addWidget(self.prev_btn)
+        self.next_btn = QPushButton("İleri ▶")
+        self.next_btn.clicked.connect(self._go_next)
+        nav_row.addWidget(self.next_btn)
         self.replay_btn = QPushButton("Baştan")
         self.replay_btn.clicked.connect(self.wizard.start)
-        layout.addWidget(self.replay_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+        nav_row.addWidget(self.replay_btn)
+        nav_row.addStretch(1)
+        layout.addLayout(nav_row)
 
         self.wizard.start()
+
+    def _go_prev(self) -> None:
+        self.wizard.jump_to_scene(self.wizard._scene() - 1)
+
+    def _go_next(self) -> None:
+        self.wizard.jump_to_scene(self.wizard._scene() + 1)
 
     def _resize_to_available_screen(self) -> None:
         screen = self.screen() or QApplication.primaryScreen()
@@ -292,11 +323,13 @@ class _WDetailDialog(QDialog):
         self.title_label.setStyleSheet(
             f"color: {ANIM_COLORS['accent_mauve']}; background: transparent;")
         self.hint_label.setStyleSheet(
-            f"color: {ANIM_COLORS['text_muted']}; background: transparent;")
-        self.replay_btn.setStyleSheet(
+            f"color: {ANIM_COLORS['text_secondary']}; background: transparent;")
+        btn_style = (
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: {ANIM_COLORS['text_on_accent']}; border: none; "
             "border-radius: 6px; padding: 7px 16px; font-weight: bold; }}")
+        for btn in (self.prev_btn, self.next_btn, self.replay_btn):
+            btn.setStyleSheet(btn_style)
         self.wizard.update()
         self.update()
 

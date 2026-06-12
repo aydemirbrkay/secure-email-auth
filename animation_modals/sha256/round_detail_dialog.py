@@ -23,7 +23,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
-    QApplication, QDialog, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QApplication, QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ..base import ANIM_COLORS, cached_font
@@ -99,11 +99,11 @@ class _SHARoundDetailWidget(QWidget):
         return None
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        # Yalnızca üst şerit kutusuna tıklamak sahne değiştirir; gövdeye
+        # tıklamak ilerletmez (yoğun bit ekranında kazara atlama olmasın).
         idx = self._strip_box_at(event.pos().x(), event.pos().y())
         if idx is not None:
             self.jump_to_scene(idx)
-            return
-        self._advance_scene()
 
     # --- Çizim ---
 
@@ -136,7 +136,8 @@ class _SHARoundDetailWidget(QWidget):
             p.setPen(QPen(color, 2 if cur else 1))
             p.drawRoundedRect(x, _STRIP_Y, bw, _STRIP_H, 7, 7)
             p.setFont(cached_font("Georgia", 9, QFont.Weight.Bold))
-            p.setPen(color if (cur or done) else QColor(ANIM_COLORS["text_muted"]))
+            p.setPen(color if (cur or done)
+                     else QColor(ANIM_COLORS["text_secondary"]))
             p.drawText(QRect(x + 2, _STRIP_Y + 3, bw - 4, 16),
                        Qt.AlignmentFlag.AlignCenter, f"{i + 1}")
             p.setFont(cached_font("IBM Plex Sans", 8, QFont.Weight.Bold))
@@ -166,7 +167,7 @@ class _SHARoundDetailWidget(QWidget):
 
     def _draw_note(self, p: QPainter, area: QRect, y: int, text: str) -> int:
         p.setFont(cached_font("IBM Plex Sans", 9))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(area.left() + 12, y, area.width() - 24, 44),
                    Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap, text)
         return y + 46
@@ -309,7 +310,7 @@ class _SHARoundDetailWidget(QWidget):
         p.setPen(QColor(ANIM_COLORS["accent_green"]))
         p.drawText(x, y + 16, first8)
         x += fm.horizontalAdvance(first8)
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(x, y + 16, rest)
         y += 30
         self._draw_note(p, area, y,
@@ -369,11 +370,28 @@ class _SHARoundDetailDialog(QDialog):
             detail, h0_init, final_word, final_hash, parent=self)
         layout.addWidget(self.wizard, stretch=1)
 
+        # Gezinme: ◀ Geri / İleri ▶ (gövde-tıkla ilerletmez) + Baştan.
+        nav_row = QHBoxLayout()
+        nav_row.addStretch(1)
+        self.prev_btn = QPushButton("◀ Geri")
+        self.prev_btn.clicked.connect(self._go_prev)
+        nav_row.addWidget(self.prev_btn)
+        self.next_btn = QPushButton("İleri ▶")
+        self.next_btn.clicked.connect(self._go_next)
+        nav_row.addWidget(self.next_btn)
         self.replay_btn = QPushButton("Baştan")
         self.replay_btn.clicked.connect(self.wizard.start)
-        layout.addWidget(self.replay_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+        nav_row.addWidget(self.replay_btn)
+        nav_row.addStretch(1)
+        layout.addLayout(nav_row)
 
         self.wizard.start()
+
+    def _go_prev(self) -> None:
+        self.wizard.jump_to_scene(self.wizard._scene() - 1)
+
+    def _go_next(self) -> None:
+        self.wizard.jump_to_scene(self.wizard._scene() + 1)
 
     def _resize_to_available_screen(self) -> None:
         screen = self.screen() or QApplication.primaryScreen()
@@ -391,11 +409,13 @@ class _SHARoundDetailDialog(QDialog):
         self.title_label.setStyleSheet(
             f"color: {ANIM_COLORS['accent_yellow']}; background: transparent;")
         self.hint_label.setStyleSheet(
-            f"color: {ANIM_COLORS['text_muted']}; background: transparent;")
-        self.replay_btn.setStyleSheet(
+            f"color: {ANIM_COLORS['text_secondary']}; background: transparent;")
+        btn_style = (
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: {ANIM_COLORS['text_on_accent']}; border: none; "
             "border-radius: 6px; padding: 7px 16px; font-weight: bold; }}")
+        for btn in (self.prev_btn, self.next_btn, self.replay_btn):
+            btn.setStyleSheet(btn_style)
         self.wizard.update()
         self.update()
 

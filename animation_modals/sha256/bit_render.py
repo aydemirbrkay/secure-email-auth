@@ -41,8 +41,9 @@ def draw_bit_row(
     satırı yerleştirmesi içindir."""
     color = QColor(color_hex)
     h = cell_w + 6
+    # Etiket koyu temada okunur olsun → emphasize değilse de text_primary.
     p.setFont(cached_font("Courier New", 9, QFont.Weight.Bold))
-    p.setPen(color if emphasize else QColor(ANIM_COLORS["text_secondary"]))
+    p.setPen(color if emphasize else QColor(ANIM_COLORS["text_primary"]))
     p.drawText(QRect(8, y, 130, h),
                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
     p.setPen(QColor(ANIM_COLORS["text_primary"]))
@@ -53,12 +54,13 @@ def draw_bit_row(
     for i, ch in enumerate(bits(hexstr)):
         on = ch == "1"
         bg = QColor(color)
-        bg.setAlphaF(0.85 if (on and emphasize) else (0.30 if on else 0.05))
+        # 0-bitler de görünür kalsın (koyu temada okunabilirlik): dolgu 0.12.
+        bg.setAlphaF(0.85 if (on and emphasize) else (0.30 if on else 0.12))
         p.setBrush(QBrush(bg))
-        p.setPen(QPen(color if on else QColor(ANIM_COLORS["border"]), 1))
+        p.setPen(QPen(color if on else QColor(ANIM_COLORS["text_muted"]), 1))
         p.drawRoundedRect(x, y, cell_w, cell_w, 2, 2)
         p.setPen(QColor(ANIM_COLORS["text_primary"] if on
-                        else ANIM_COLORS["text_muted"]))
+                        else ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(x, y, cell_w, cell_w), Qt.AlignmentFlag.AlignCenter, ch)
         x += cell_w
         if (i + 1) % 4 == 0 and i != 31:

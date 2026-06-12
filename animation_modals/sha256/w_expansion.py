@@ -100,14 +100,14 @@ class _WExpansionWidget(QWidget):
                    f"Örnek: W[{i_val}] hesaplanışı   "
                    f"·   W[{i_val+1}..63] aynı formülle türetilir")
         p.setFont(QFont("Georgia", 8))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(0, y0 + 22, W, 14), Qt.AlignmentFlag.AlignCenter,
                    "W[0..15]: mesaj bloğunun 16 × 32-bit kelimesidir (ilk 64 baytı). "
                    "W[16..63]: aşağıdaki σ fonksiyonlarıyla türetilir.")
 
         # σ formülleri sabit referans (tek-örnek banner'ı altına kayar)
         p.setFont(QFont("Courier New", 9))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(0, y0 + 40, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)")
         p.drawText(QRect(0, y0 + 58, W, 18), Qt.AlignmentFlag.AlignCenter,

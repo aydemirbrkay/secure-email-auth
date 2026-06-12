@@ -84,6 +84,33 @@ class TestSHARoundDetailDialog(unittest.TestCase):
         wizard.jump_to_scene(0)
         self.assertEqual(wizard._scene(), 0)
 
+    def test_body_click_does_not_advance(self):
+        """Gövdeye (şerit dışına) tıklamak sahneyi DEĞİŞTİRMEMELİ (kazara atlama)."""
+        from PyQt6.QtCore import QPointF, Qt as _Qt
+        from PyQt6.QtGui import QMouseEvent
+        dialog = self._make_dialog()
+        wizard = dialog.wizard
+        wizard.resize(900, 460)
+        wizard.jump_to_scene(0)
+        # Şeridin ALTINDA (gövde) bir nokta — _strip_box_at None döndürür.
+        pos = QPointF(400, 300)
+        ev = QMouseEvent(QMouseEvent.Type.MouseButtonPress, pos,
+                         _Qt.MouseButton.LeftButton, _Qt.MouseButton.LeftButton,
+                         _Qt.KeyboardModifier.NoModifier)
+        wizard.mousePressEvent(ev)
+        self.assertEqual(wizard._scene(), 0)
+
+    def test_nav_buttons_change_scene(self):
+        """◀ Geri / İleri ▶ düğmeleri sahneyi değiştirmeli."""
+        dialog = self._make_dialog()
+        self.assertEqual(dialog.wizard._scene(), 0)
+        dialog._go_next()
+        self.assertEqual(dialog.wizard._scene(), 1)
+        dialog._go_prev()
+        self.assertEqual(dialog.wizard._scene(), 0)
+        dialog._go_prev()  # 0'da kalmalı (alt sınır)
+        self.assertEqual(dialog.wizard._scene(), 0)
+
     def test_dialog_restyles_on_theme_change(self):
         from animation_modals.base import ANIM_COLORS
         MANAGER.set_mode("dark")

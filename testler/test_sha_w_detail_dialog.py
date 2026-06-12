@@ -51,6 +51,34 @@ class TestSHAWDetailDialog(unittest.TestCase):
             self.assertEqual(wizard._scene(), scene)
             wizard.grab()
 
+    def test_body_click_does_not_advance(self):
+        from PyQt6.QtCore import QPointF, Qt as _Qt
+        from PyQt6.QtGui import QMouseEvent
+        dialog = _WDetailDialog(self._detail)
+        wizard = dialog.wizard
+        wizard.resize(900, 440)
+        wizard.jump_to_scene(0)
+        ev = QMouseEvent(QMouseEvent.Type.MouseButtonPress, QPointF(400, 300),
+                         _Qt.MouseButton.LeftButton, _Qt.MouseButton.LeftButton,
+                         _Qt.KeyboardModifier.NoModifier)
+        wizard.mousePressEvent(ev)
+        self.assertEqual(wizard._scene(), 0)
+
+    def test_nav_buttons_change_scene(self):
+        dialog = _WDetailDialog(self._detail)
+        self.assertEqual(dialog.wizard._scene(), 0)
+        dialog._go_next()
+        self.assertEqual(dialog.wizard._scene(), 1)
+        dialog._go_prev()
+        self.assertEqual(dialog.wizard._scene(), 0)
+
+    def test_scene_titles_are_dynamic_to_index(self):
+        """Strip başlıkları drilled W indeksinden türemeli (σ0(W[i-15]) vb.)."""
+        dialog = _WDetailDialog(self._detail)
+        i = self._detail["i"]
+        self.assertIn(f"W[{i-15}]", dialog.wizard._titles[1])
+        self.assertIn(f"W[{i-2}]", dialog.wizard._titles[2])
+
     def test_dialog_restyles_on_theme_change(self):
         from animation_modals.base import ANIM_COLORS
         MANAGER.set_mode("dark")

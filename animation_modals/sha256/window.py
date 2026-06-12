@@ -18,6 +18,7 @@ from .w_expansion import _WExpansionWidget
 from .match_widget import _MatchAssemblyWidget
 from .intro_widget import _SHA256IntroWidget
 from .prep_widget import _SHAMessagePrepWidget, _SHA256PaddingWidget
+from .round_detail_dialog import _SHARoundDetailDialog
 
 # ---------------------------------------------------------------------------
 # SHA-256 Animasyon Penceresi
@@ -136,6 +137,8 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         if hasattr(self, "_chain_lbl"):
             self._chain_lbl.setStyleSheet(
                 f"color: {ANIM_COLORS['text_muted']};")
+        if hasattr(self, "_round_detail_btn"):
+            self._round_detail_btn.setStyleSheet(self._round_detail_btn_style())
 
     def _init_content(self) -> None:
         from PyQt6.QtWidgets import QStackedWidget
@@ -396,7 +399,47 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._chain_lbl.setWordWrap(True)
         self._chain_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._chain_lbl)
+
+        # Bit düzeyi drill-down düğmesi — round'un Σ1/Ch/Σ0/Maj iç işleyişini
+        # bit bit çözen sihirbazı açar (S-Box/keystream referans düğmesi dili).
+        self._round_detail_btn = QPushButton("🔬  Bu round'u bit bit çöz")
+        self._round_detail_btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        self._round_detail_btn.setStyleSheet(self._round_detail_btn_style())
+        self._round_detail_btn.clicked.connect(self._show_round_detail)
+        self._round_detail_btn.setEnabled(self._data.get("round_detail") is not None)
+        lay.addWidget(
+            self._round_detail_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return w
+
+    @staticmethod
+    def _round_detail_btn_style() -> str:
+        """Round drill-down düğmesinin stili (S-Box referans düğmesiyle aynı dil)."""
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+            f"color: {ANIM_COLORS['accent_yellow']}; "
+            f"border: 1px solid {ANIM_COLORS['accent_yellow']}; "
+            "border-radius: 5px; padding: 4px 12px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_yellow']}; "
+            f"color: {ANIM_COLORS['text_on_accent']}; }}"
+        )
+
+    def _show_round_detail(self) -> None:
+        """Son bloğun 64. round'unu bit düzeyinde çözen drill-down'ı açar.
+        'Ben neyi hesapladım?' köprüsü için gerçek değerleri taşır."""
+        detail = self._data.get("round_detail")
+        if detail is None:
+            return
+        dialog = _SHARoundDetailDialog(
+            detail,
+            h0_init=self._data["pre_final_h"][0],
+            final_word=self._data["final_h_parts"][0],
+            final_hash=self._data["final_hash"],
+            parent=self,
+        )
+        self._round_detail_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     @staticmethod
     def _diag_round_btn_style(active: bool) -> str:

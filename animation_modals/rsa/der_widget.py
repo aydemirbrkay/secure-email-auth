@@ -55,6 +55,11 @@ class _DERByteFlowWidget(QWidget):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
         self._compute_schedule()
+        # TLV açıklaması artık metin duvarı değil; kullanıcı alan "çip"lerine
+        # tıklayarak yalnız gerekli bilgiyi açar (SHA padding sayfasıyla aynı
+        # mantık). None = henüz seçim yok (kısa ipucu gösterilir).
+        self._tlv_selected: str | None = None
+        self._chip_rects: dict[str, QRect] = {}
 
     # ------------------------------------------------------------------
     # Zamanlama / tick motoru
@@ -307,46 +312,91 @@ class _DERByteFlowWidget(QWidget):
         return y
 
     def _draw_tlv_explanation(self, p: QPainter, y: int) -> int:
-        """DER INTEGER kaydının TLV (Tag-Length-Value) yapısını AES tarzı kısa
-        açıklamalarla anlatır. SEQUENCE'in iki INTEGER'ı tek grupta topladığını,
-        her INTEGER'ın 'etiket(02) + uzunluk + değer' olarak sarıldığını ve bu
-        yüzden n'in ham baytlarının önüne 02+uzunluk geldiğini gösterir."""
-        W = self.width()
-        n_bd = self._der_field_breakdown(H._DER_N)
-        e_bd = self._der_field_breakdown(H._DER_E)
+        """DER INTEGER kaydının TLV (Tag-Length-Value) yapısını anlatır.
 
-        # Kavram satırı
+        Metin duvarı yerine: kısa bir kavram satırı + tıklanabilir alan çipleri
+        (SEQUENCE / n / e). Kullanıcı bir çipe tıklayınca yalnız o alanın
+        açıklaması görünür → sayfa sade kalır (SHA padding sayfasıyla aynı
+        mantık). ``_chip_rects`` mousePressEvent için saklanır."""
+        W = self.width()
+
+        # Kavram satırı (her zaman görünür)
         p.setFont(QFont("Georgia", 10, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
         p.drawText(QRect(0, y, W, 18), Qt.AlignmentFlag.AlignCenter,
                    "DER her sayıyı 3 parçayla sarar:  ETİKET + UZUNLUK + DEĞER  (TLV)")
-        y += 20
+        y += 24
 
-        lines = [
-            (ANIM_COLORS["accent_blue"],
-             f"SEQUENCE (30):  iki INTEGER'ı tek grupta toplar · "
-             f"{self._der[1]:02X} = grubun uzunluğu ({self._der[1]} bayt)"),
-            (ANIM_COLORS["accent_mauve"],
-             f"n →  02 (INTEGER etiketi)  ·  {n_bd['length_hex']} "
-             f"(uzunluk = {n_bd['length']} bayt)  ·  {n_bd['value_hex']} (n'nin baytları)"),
-            (ANIM_COLORS["accent_peach"],
-             f"e →  02 (INTEGER etiketi)  ·  {e_bd['length_hex']} "
-             f"(uzunluk = {e_bd['length']} bayt)  ·  {e_bd['value_hex']} (e'nin baytı)"),
+        # Tıklanabilir alan çipleri (buton gibi)
+        chips = [
+            ("seq", "SEQUENCE", ANIM_COLORS["accent_blue"]),
+            ("n", "n : INTEGER", ANIM_COLORS["accent_mauve"]),
+            ("e", "e : INTEGER", ANIM_COLORS["accent_peach"]),
         ]
-        p.setFont(QFont("Georgia", 9))
-        for col, text in lines:
-            p.setPen(QColor(col))
-            p.drawText(QRect(8, y, W - 16, 16),
-                       Qt.AlignmentFlag.AlignCenter, text)
-            y += 17
+        p.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        fm = p.fontMetrics()
+        pad, gap, ch = 12, 8, 24
+        widths = [fm.horizontalAdvance(lbl) + 2 * pad for _, lbl, _ in chips]
+        total = sum(widths) + gap * (len(chips) - 1)
+        x = (W - total) // 2
+        self._chip_rects = {}
+        for (key, lbl, col), cw in zip(chips, widths):
+            rect = QRect(x, y, cw, ch)
+            self._chip_rects[key] = rect
+            selected = self._tlv_selected == key
+            fill = QColor(col)
+            fill.setAlpha(150 if selected else 36)
+            p.setBrush(QBrush(fill))
+            p.setPen(QPen(QColor(col), 2 if selected else 1))
+            p.drawRoundedRect(rect, 6, 6)
+            p.setPen(QColor(ANIM_COLORS["text_on_accent"] if selected else col))
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, lbl)
+            x += cw + gap
+        y += ch + 8
 
-        # Somut bağ: n'in ham baytı → DER kaydı
+        # Seçilen alanın açıklaması (yoksa kısa ipucu)
         p.setFont(QFont("Georgia", 9))
-        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        if self._tlv_selected is None:
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(8, y, W - 16, 16), Qt.AlignmentFlag.AlignCenter,
+                       "Ayrıntı için yukarıdaki bir alana tıkla.")
+            return y + 22
+
+        n_bd = self._der_field_breakdown(H._DER_N)
+        e_bd = self._der_field_breakdown(H._DER_E)
+        if self._tlv_selected == "seq":
+            p.setPen(QColor(ANIM_COLORS["accent_blue"]))
+            p.drawText(QRect(8, y, W - 16, 16), Qt.AlignmentFlag.AlignCenter,
+                       f"SEQUENCE (30):  iki INTEGER'ı tek grupta toplar · "
+                       f"{self._der[1]:02X} = grubun uzunluğu ({self._der[1]} bayt)")
+            return y + 22
+        if self._tlv_selected == "n":
+            p.setPen(QColor(ANIM_COLORS["accent_mauve"]))
+            p.drawText(QRect(8, y, W - 16, 16), Qt.AlignmentFlag.AlignCenter,
+                       f"n →  02 (INTEGER etiketi)  ·  {n_bd['length_hex']} "
+                       f"(uzunluk = {n_bd['length']} bayt)  ·  {n_bd['value_hex']} (n'nin baytları)")
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(8, y + 17, W - 16, 16), Qt.AlignmentFlag.AlignCenter,
+                       f"Yani n = {H._N} → ham {n_bd['value_hex']}, DER kaydı: "
+                       f"02 {n_bd['length_hex']} {n_bd['value_hex']}")
+            return y + 39
+        # "e"
+        p.setPen(QColor(ANIM_COLORS["accent_peach"]))
         p.drawText(QRect(8, y, W - 16, 16), Qt.AlignmentFlag.AlignCenter,
-                   f"Yani n = {H._N} → ham {n_bd['value_hex']}, DER kaydı: "
-                   f"02 {n_bd['length_hex']} {n_bd['value_hex']}")
+                   f"e →  02 (INTEGER etiketi)  ·  {e_bd['length_hex']} "
+                   f"(uzunluk = {e_bd['length']} bayt)  ·  {e_bd['value_hex']} (e'nin baytı)")
         return y + 22
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        """TLV alan çiplerine tıklanınca o alanın açıklamasını açar/kapatır."""
+        pos = event.pos()
+        for key, rect in self._chip_rects.items():
+            if rect.contains(pos):
+                # Aynı çipe tekrar tıklamak kapatır (toggle).
+                self._tlv_selected = None if self._tlv_selected == key else key
+                self.update()
+                return
+        super().mousePressEvent(event)
 
     @staticmethod
     def _der_field_breakdown(field: bytes) -> dict:

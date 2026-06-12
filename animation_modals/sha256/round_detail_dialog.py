@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..base import ANIM_COLORS, cached_font
+from .bit_render import bits as _bits, bit_grid_metrics, draw_bit_row
 from arayuz.theme import MANAGER
 
 _SCENE_TITLES = ["Giriş", "Σ1(E)", "Ch → T1", "Σ0(A)", "Maj → T2", "Köprü"]
@@ -38,11 +39,6 @@ _SCENE_COUNT = 6
 
 _STRIP_Y = 10
 _STRIP_H = 40
-
-
-def _bits(hexstr: str) -> str:
-    """8-hane hex → 32 karakterlik ikili dize."""
-    return format(int(hexstr, 16), "032b")
 
 
 class _SHARoundDetailWidget(QWidget):
@@ -118,10 +114,7 @@ class _SHARoundDetailWidget(QWidget):
         scene = self._scene()
         self._draw_strip(p, W, scene)
         # Bit satırı grid'ini genişliğe göre hesapla (satırlar hizalı kalsın).
-        self._bits_x0 = 220
-        region = W - self._bits_x0 - 14
-        self._cell_w = max(9, min(20, region // 36))
-        self._nibble_gap = max(3, self._cell_w // 2)
+        self._bits_x0, self._cell_w, self._nibble_gap = bit_grid_metrics(W)
 
         body = QRect(0, 62, W, self.height() - 62)
         [self._sc_input, self._sc_sigma1, self._sc_ch, self._sc_sigma0,
@@ -156,38 +149,12 @@ class _SHARoundDetailWidget(QWidget):
         self, p: QPainter, y: int, label: str, hexstr: str, color_hex: str,
         *, emphasize: bool = False,
     ) -> int:
-        """Etiket + hex + 32 hizalı bit hücresi çizer; satır yüksekliğini döndürür."""
-        color = QColor(color_hex)
-        h = self._cell_w + 6
-        # Etiket
-        p.setFont(cached_font("Courier New", 9, QFont.Weight.Bold))
-        p.setPen(color if emphasize else QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(8, y, 130, h), Qt.AlignmentFlag.AlignVCenter
-                   | Qt.AlignmentFlag.AlignLeft, label)
-        # Hex değer
-        p.setPen(QColor(ANIM_COLORS["text_primary"]))
-        p.drawText(QRect(140, y, 74, h), Qt.AlignmentFlag.AlignVCenter
-                   | Qt.AlignmentFlag.AlignLeft, hexstr)
-        # 32 bit hücresi (nibble grupları arası ekstra boşluk)
-        bits = _bits(hexstr)
-        x = self._bits_x0
-        p.setFont(cached_font("Courier New", max(7, self._cell_w - 3),
-                              QFont.Weight.Bold))
-        for i, ch in enumerate(bits):
-            on = ch == "1"
-            bg = QColor(color)
-            bg.setAlphaF(0.85 if (on and emphasize) else (0.30 if on else 0.05))
-            p.setBrush(QBrush(bg))
-            p.setPen(QPen(color if on else QColor(ANIM_COLORS["border"]), 1))
-            p.drawRoundedRect(x, y, self._cell_w, self._cell_w, 2, 2)
-            p.setPen(QColor(ANIM_COLORS["text_primary"] if on
-                            else ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(x, y, self._cell_w, self._cell_w),
-                       Qt.AlignmentFlag.AlignCenter, ch)
-            x += self._cell_w
-            if (i + 1) % 4 == 0 and i != 31:
-                x += self._nibble_gap
-        return h
+        """Paylaşılan bit-satırı çizicisine widget'ın grid ölçülerini geçirir."""
+        return draw_bit_row(
+            p, y=y, label=label, hexstr=hexstr, color_hex=color_hex,
+            bits_x0=self._bits_x0, cell_w=self._cell_w,
+            nibble_gap=self._nibble_gap, emphasize=emphasize,
+        )
 
     def _draw_title(self, p: QPainter, area: QRect, text: str,
                     color_hex: str) -> int:

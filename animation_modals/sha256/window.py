@@ -19,6 +19,7 @@ from .match_widget import _MatchAssemblyWidget
 from .intro_widget import _SHA256IntroWidget
 from .prep_widget import _SHAMessagePrepWidget, _SHA256PaddingWidget
 from .round_detail_dialog import _SHARoundDetailDialog
+from .w_detail_dialog import _WDetailDialog
 
 # ---------------------------------------------------------------------------
 # SHA-256 Animasyon Penceresi
@@ -110,6 +111,8 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         if hasattr(self, "_wexpand_title"):
             self._wexpand_title.setStyleSheet(
                 f"color: {ANIM_COLORS['accent_mauve']};")
+        if hasattr(self, "_w_detail_btn"):
+            self._w_detail_btn.setStyleSheet(self._round_detail_btn_style())
 
         # _make_match_page başlığı
         if hasattr(self, "_match_title"):
@@ -283,7 +286,26 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         wexp_scroll.setStyleSheet("background: transparent; border: none;")
         wexp_scroll.setMinimumHeight(260)
         lay.addWidget(wexp_scroll, stretch=1)
+
+        # Bit düzeyi drill-down: W[16]'nın σ0/σ1 iç işleyişi.
+        self._w_detail_btn = QPushButton("🔬  W[16]'yı bit bit çöz")
+        self._w_detail_btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        self._w_detail_btn.setStyleSheet(self._round_detail_btn_style())
+        self._w_detail_btn.clicked.connect(self._show_w_detail)
+        self._w_detail_btn.setEnabled(self._data.get("w_detail") is not None)
+        lay.addWidget(self._w_detail_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return w
+
+    def _show_w_detail(self) -> None:
+        """W[16]'nın σ0/σ1 iç işleyişini bit düzeyinde çözen drill-down'ı açar."""
+        detail = self._data.get("w_detail")
+        if detail is None:
+            return
+        dialog = _WDetailDialog(detail, parent=self)
+        self._w_detail_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _make_diagram_page(self) -> QWidget:
         # Sayfa düzeni:

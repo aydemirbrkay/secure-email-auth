@@ -132,6 +132,42 @@ class TestSHA256Pure(unittest.TestCase):
         # üretmesi beklenir (aksi hâlde operand/sonuç ayrımı kaybolmuştur).
         self.assertTrue(any(row["w_i15"] != row["s0"] for row in exp))
 
+    def test_w_detail_is_real_sigma_internals(self):
+        """Alt tür: BİRİM (W bit düzeyi drill-down veri sözleşmesi — DOĞRULUK).
+        w_detail, W[16]'nın σ0/σ1 iç işlemlerini (ROTR/SHR/XOR) ve dört
+        operandını taşır; W drill-down sihirbazı bunları bit bit çizer.
+        σ0(x)=ROTR7⊕ROTR18⊕SHR3, σ1(y)=ROTR17⊕ROTR19⊕SHR10 ve
+        W[16]=W[0]+σ0+W[9]+σ1 gerçek hesapla tutarlı olmalı."""
+        from animation_modals.sha256_pure import _rotr
+
+        result = sha256_steps(b"Hello World")
+        d = result["w_detail"]
+        self.assertEqual(d["i"], 16)
+        hexkeys = [
+            "w_i16", "w_i15", "w_i7", "w_i2",
+            "x_rotr7", "x_rotr18", "x_shr3", "sigma0",
+            "y_rotr17", "y_rotr19", "y_shr10", "sigma1", "result",
+        ]
+        for key in hexkeys:
+            self.assertEqual(len(d[key]), 8, key)
+            int(d[key], 16)
+
+        x = int(d["w_i15"], 16)  # σ0 operandı (W[1])
+        y = int(d["w_i2"], 16)   # σ1 operandı (W[14])
+        self.assertEqual(d["x_rotr7"], f"{_rotr(x, 7):08x}")
+        self.assertEqual(d["x_rotr18"], f"{_rotr(x, 18):08x}")
+        self.assertEqual(d["x_shr3"], f"{x >> 3:08x}")
+        s0 = _rotr(x, 7) ^ _rotr(x, 18) ^ (x >> 3)
+        self.assertEqual(d["sigma0"], f"{s0:08x}")
+        self.assertEqual(d["y_rotr17"], f"{_rotr(y, 17):08x}")
+        self.assertEqual(d["y_rotr19"], f"{_rotr(y, 19):08x}")
+        self.assertEqual(d["y_shr10"], f"{y >> 10:08x}")
+        s1 = _rotr(y, 17) ^ _rotr(y, 19) ^ (y >> 10)
+        self.assertEqual(d["sigma1"], f"{s1:08x}")
+        # W[16] = W[0] + σ0 + W[9] + σ1 (mod 2^32)
+        total = (int(d["w_i16"], 16) + s0 + int(d["w_i7"], 16) + s1) & 0xFFFFFFFF
+        self.assertEqual(d["result"], f"{total:08x}")
+
     def test_snapshots_are_self_consistent_single_round(self):
         """Alt tür: BİRİM (DOĞRULUK — diyagram tutarlılığı, regresyon).
         Round diyagramı tek bir round'un dönüşümünü çizer: gösterilen GİRİŞ

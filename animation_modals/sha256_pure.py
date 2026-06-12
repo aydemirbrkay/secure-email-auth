@@ -81,6 +81,31 @@ def _build_round_detail(
     return detail
 
 
+def _build_w_detail(w: list[int], i: int) -> dict:
+    """W[i]'nin σ0/σ1 bit düzeyi ara değerlerini hex sözlük olarak verir.
+
+    σ0(x) = ROTR(x,7) ⊕ ROTR(x,18) ⊕ SHR(x,3)   (x = W[i-15])
+    σ1(y) = ROTR(y,17) ⊕ ROTR(y,19) ⊕ SHR(y,10)  (y = W[i-2])
+    W[i]  = W[i-16] + σ0(x) + W[i-7] + σ1(y)  (mod 2³²)
+    W drill-down sihirbazı bu alanları bit bit çizer."""
+    x, y = w[i - 15], w[i - 2]
+    x_rotr7, x_rotr18, x_shr3 = _rotr(x, 7), _rotr(x, 18), x >> 3
+    s0 = x_rotr7 ^ x_rotr18 ^ x_shr3
+    y_rotr17, y_rotr19, y_shr10 = _rotr(y, 17), _rotr(y, 19), y >> 10
+    s1 = y_rotr17 ^ y_rotr19 ^ y_shr10
+    fields = {
+        "w_i16": w[i - 16], "w_i15": x, "w_i7": w[i - 7], "w_i2": y,
+        "x_rotr7": x_rotr7, "x_rotr18": x_rotr18, "x_shr3": x_shr3,
+        "sigma0": s0,
+        "y_rotr17": y_rotr17, "y_rotr19": y_rotr19, "y_shr10": y_shr10,
+        "sigma1": s1,
+        "result": w[i],
+    }
+    detail = {key: f"{val:08x}" for key, val in fields.items()}
+    detail["i"] = i
+    return detail
+
+
 def sha256_steps(message: bytes) -> dict:
     """
     SHA-256 hesaplamasını adım adım yapar ve animasyon için veri döndürür.
@@ -126,6 +151,8 @@ def sha256_steps(message: bytes) -> dict:
     block_initial_states: list[list[str]] = []
 
     w_expansion_sample: list[dict] | None = None
+    # İlk bloğun W[16] σ0/σ1 bit düzeyi ara değerleri (W drill-down için).
+    w_detail: dict | None = None
     # Son bloğun 64. round'unun bit düzeyi ara değerleri (drill-down için).
     round_detail: dict | None = None
 
@@ -137,6 +164,7 @@ def sha256_steps(message: bytes) -> dict:
             w.append((w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFF)
 
         if w_expansion_sample is None:  # ilk blok, henüz snapshot yok
+            w_detail = _build_w_detail(w, 16)
             w_expansion_sample = []
             for i in range(16, 32):
                 s0 = _rotr(w[i - 15], 7) ^ _rotr(w[i - 15], 18) ^ (w[i - 15] >> 3)
@@ -219,6 +247,7 @@ def sha256_steps(message: bytes) -> dict:
         "round_snapshots": round_snapshots,
         "round_detail": round_detail,
         "w_expansion": w_expansion_sample,
+        "w_detail": w_detail,
         "final_hash": final_hash,
         # Son blok toplama adımı için
         "pre_final_h":      [f"{v:08x}" for v in h_before],

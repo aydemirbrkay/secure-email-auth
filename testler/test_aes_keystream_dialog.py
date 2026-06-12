@@ -54,15 +54,16 @@ class TestKeystreamWizardDialog(unittest.TestCase):
         self.assertEqual(wizard._scene(), 3)
         self.assertFalse(wizard._timer.isActive())
 
-    def test_wizard_uses_real_round_states_when_provided(self):
-        """rounds_data verilince üretim sahnesi gerçek round state'lerini kullanmalı."""
-        rounds = [{"round": i, "after_add_round_key": _matrix_from_bytes(
-            bytes((i + j) % 256 for j in range(16)))} for i in range(15)]
-        dialog = _KeystreamReferenceDialog(
-            self.keystream, self.nonce, rounds_data=rounds,
-        )
-        # Round 5'in state'i sağlanan veriyle eşleşmeli.
-        self.assertEqual(dialog.wizard._round_state(5), rounds[5]["after_add_round_key"])
+    def test_clicking_scene_strip_jumps_to_that_scene(self):
+        """Üstteki ilerleme kutularına 'tıklamak' o sahneye atlamalı (buton işlevi)."""
+        dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
+        wizard = dialog.wizard
+        wizard.resize(800, 400)
+
+        wizard.jump_to_scene(2)
+        self.assertEqual(wizard._scene(), 2)
+        wizard.jump_to_scene(0)
+        self.assertEqual(wizard._scene(), 0)
 
     def test_dialog_restyles_when_theme_changes(self):
         """Açık diyalog tema değişiminde yeni panel rengini kullanmalı."""

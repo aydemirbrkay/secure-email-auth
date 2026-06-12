@@ -5,7 +5,7 @@ import unittest
 
 from animation_modals.aes.keystream_dialog import (
     _KeystreamReferenceDialog,
-    _TOTAL_TICKS,
+    _SCENE_COUNT,
     _matrix_from_bytes,
 )
 from animation_modals.base import ANIM_COLORS
@@ -42,17 +42,28 @@ class TestKeystreamWizardDialog(unittest.TestCase):
         self.assertEqual(matrix[0][1], "04")
         self.assertEqual(matrix[3][3], "0f")
 
-    def test_wizard_runs_through_all_scenes_and_stops(self):
-        """Sihirbaz tüm tickleri tüketince son sahnede (Sonuç) durmalı."""
+    def test_wizard_is_manual_and_advances_on_click(self):
+        """Otomatik oynatma yok: start() sahne 0'da bırakır; tıkla-ilerle son sahnede durur."""
         dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
         wizard = dialog.wizard
 
         wizard.start()
-        for _ in range(_TOTAL_TICKS + 1):
-            wizard._advance()
+        self.assertEqual(wizard._scene(), 0)
+        self.assertFalse(hasattr(wizard, "_timer"))
 
-        self.assertEqual(wizard._scene(), 3)
-        self.assertFalse(wizard._timer.isActive())
+        for _ in range(_SCENE_COUNT + 3):       # son sahnede satüre olmalı
+            wizard._advance_scene()
+        self.assertEqual(wizard._scene(), _SCENE_COUNT - 1)
+
+    def test_all_scenes_paint_without_error(self):
+        """Her sahne (üretim-önce sıra) hatasız çizilmeli — paint smoke."""
+        dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
+        wizard = dialog.wizard
+        wizard.resize(820, 420)
+        for scene in range(_SCENE_COUNT):
+            wizard.jump_to_scene(scene)
+            self.assertEqual(wizard._scene(), scene)
+            wizard.grab()  # paintEvent'i zorla
 
     def test_clicking_scene_strip_jumps_to_that_scene(self):
         """Üstteki ilerleme kutularına 'tıklamak' o sahneye atlamalı (buton işlevi)."""

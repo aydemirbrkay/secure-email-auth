@@ -3,60 +3,45 @@
 Kullanıcı "mesaj keystream ile XOR'lanır" cümlesini görünce *keystream nedir,
 sabit bir sayı mı yoksa üretilen bir şey mi, nasıl oluşur* diye merak eder. Bu
 diyalog tam da bunu yanıtlar — S-Box türetim sihirbazıyla aynı kalıpta: üstte
-dört sahnelik ilerleme şeridi (kutulara TIKLANARAK o sahneye atlanır), altta o
-an aktif sahnenin canlı çizimi.
+dört sahnelik ilerleme şeridi, altta o an aktif sahnenin tam çizimi.
 
-Sahneler:
-  0) Keystream nedir?  → mesaj ⊕ [16 byte] = şifreli; "sabit değil, üretilir"
-  1) Girdi: Sayaç      → AES-256'nın şifrelediği SAYAÇ BLOĞU (nonce ‖ sayaç)
-  2) Üretim            → sayaç bloğu, gizli anahtarla AES-256'dan geçer (kara
-                         kutu) → 16 byte keystream çıkar. (AES'in iç round'ları
-                         burada GÖSTERİLMEZ; o ayrı animasyondadır.)
-  3) Sonuç             → çıkan 16 byte = keystream; deterministik, nonce'la değişir
+Gezinme TAMAMEN manueldir (otomatik oynatma yoktur): üstteki kutuya tıklamak o
+sahneye atlar; gövdeye tıklamak bir sonraki sahneye geçer. Her sahne anında ve
+TAM çizilir (yarım dolu satır / üst üste yazı olmaz).
+
+Sahneler (üretim-önce akış — önce keystream'in nasıl üretildiği, en sonda nasıl
+kullanıldığı anlatılır):
+  0) Sayaç bloğu  → AES'in şifrelediği SAYAÇ BLOĞUNUN ÜRETİMİ: nonce (12B) ‖
+                    sayaç (00 00 00 02) birleşip 16 baytlık blok olur, 4×4
+                    column-major matrise yerleşir. (Her işlemin görsel karşılığı.)
+  1) Üretim       → sayaç bloğu, gizli anahtarla AES-256'dan geçer (kara kutu)
+                    → 16 byte keystream çıkar. (İç round'lar ayrı animasyondadır.)
+  2) Keystream    → çıkan 16 byte = şifrelemede kullanılan GERÇEK keystream;
+                    deterministik, nonce'la değişir.
+  3) Kullanım     → mesaj ⊕ keystream = şifreli metin; uzun mesajda sayaç artar.
 
 Eski metin-duvarı referans diyaloğunun yerini alır.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QRect, QTimer
+from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ..base import ANIM_COLORS, cached_font, get_animation_tick_ms
+from ..base import ANIM_COLORS, cached_font
 from arayuz.theme import MANAGER
 
 
 # Sahne başlıkları ve vurgu renk anahtarları (soldan sağa üretim akışı).
-_SCENE_TITLES = ["Keystream nedir?", "Girdi: Sayaç", "Üretim", "Sonuç"]
-_SCENE_COLOR_KEYS = ["accent_yellow", "accent_peach", "accent_blue", "accent_green"]
+_SCENE_TITLES = ["Sayaç bloğu", "Üretim", "Keystream", "Kullanım"]
+_SCENE_COLOR_KEYS = ["accent_peach", "accent_blue", "accent_green", "accent_yellow"]
 _SCENE_COUNT = 4
-
-# Her sahnenin tick bütçesi — sakin tempo (kullanıcı "ne olduğunu" rahat görsün).
-_SCENE0_TICKS = 44        # Keystream nedir? — soru belirir.
-_SCENE1_TICKS = 42        # Girdi: sayaç bloğu.
-_SCENE2_TICKS = 64        # Üretim: sayaç → AES-256 kara kutu → keystream.
-_SCENE3_TICKS = 54        # Sonuç + deterministiklik notu.
-_SCENE_BUDGETS = [_SCENE0_TICKS, _SCENE1_TICKS, _SCENE2_TICKS, _SCENE3_TICKS]
 
 # Üstteki ilerleme şeridi geometrisi (mousePressEvent ile aynı kullanılır).
 _STRIP_Y = 10
 _STRIP_H = 40
-
-
-def _scene_bounds() -> list[tuple[int, int]]:
-    """Her sahnenin [başlangıç, bitiş) kümülatif tick aralığını döndürür."""
-    bounds: list[tuple[int, int]] = []
-    cursor = 0
-    for budget in _SCENE_BUDGETS:
-        bounds.append((cursor, cursor + budget))
-        cursor += budget
-    return bounds
-
-
-_SCENE_BOUNDS = _scene_bounds()
-_TOTAL_TICKS = _SCENE_BOUNDS[-1][1]
 
 
 def _matrix_from_bytes(data: bytes, shown: int = 16) -> list[list[str]]:
@@ -68,9 +53,7 @@ def _matrix_from_bytes(data: bytes, shown: int = 16) -> list[list[str]]:
 
 
 class _KeystreamWizardWidget(QWidget):
-    """Keystream'in ne olduğunu ve nasıl üretildiğini dört sahnede canlandırır."""
-
-    _TICK_MS = 85
+    """Keystream'in nasıl üretildiğini dört sahnede manuel (tıkla-ilerle) gösterir."""
 
     def __init__(
         self,
@@ -89,53 +72,40 @@ class _KeystreamWizardWidget(QWidget):
             initial_state_hex if initial_state_hex else _matrix_from_bytes(counter_block)
         )
         self._keystream_matrix = _matrix_from_bytes(keystream)
-        self._tick = 0
+        self._scene_index = 0
         self.setMinimumHeight(360)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._advance)
 
     # ------------------------------------------------------------------
-    # Tick motoru
+    # Manuel sahne gezintisi (otomatik oynatma yok)
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Sihirbazı baştan başlatır."""
-        self._tick = 0
-        self._timer.start(get_animation_tick_ms(self._TICK_MS))
+        """Sihirbazı ilk sahneye sıfırlar ('Baştan oynat')."""
+        self._scene_index = 0
         self.update()
 
     def stop(self) -> None:
-        """Tick zamanlayıcısını durdurur."""
-        self._timer.stop()
-
-    def _advance(self) -> None:
-        if self._tick < _TOTAL_TICKS:
-            self._tick += 1
-            self.update()
-        else:
-            self._timer.stop()
+        """Geriye dönük uyumluluk: artık zamanlayıcı yok, no-op."""
+        return
 
     def _scene(self) -> int:
         """Aktif sahne indeksini (0..3) verir."""
-        for i, (a, b) in enumerate(_SCENE_BOUNDS):
-            if self._tick < b:
-                return i
-        return _SCENE_COUNT - 1
-
-    def _scene_local(self, scene: int) -> int:
-        """Verilen sahnenin içindeki yerel tick (0'dan başlar)."""
-        return self._tick - _SCENE_BOUNDS[scene][0]
+        return self._scene_index
 
     def jump_to_scene(self, scene: int) -> None:
-        """Belirtilen sahnenin başına atlar ve oradan oynatmaya devam eder."""
-        scene = max(0, min(_SCENE_COUNT - 1, scene))
-        self._tick = _SCENE_BOUNDS[scene][0]
-        self._timer.start(get_animation_tick_ms(self._TICK_MS))
+        """Belirtilen sahneye atlar."""
+        self._scene_index = max(0, min(_SCENE_COUNT - 1, scene))
         self.update()
 
+    def _advance_scene(self) -> None:
+        """Bir sonraki sahneye geçer (son sahnede durur)."""
+        if self._scene_index < _SCENE_COUNT - 1:
+            self._scene_index += 1
+            self.update()
+
     # ------------------------------------------------------------------
-    # Etkileşim: ilerleme şeridi kutuları birer "buton"dur
+    # Etkileşim: şerit kutuları 'buton', gövdeye tıklamak ise 'ileri'dir
     # ------------------------------------------------------------------
 
     def _strip_box_at(self, x: int, y: int) -> int | None:
@@ -156,7 +126,8 @@ class _KeystreamWizardWidget(QWidget):
         if idx is not None:
             self.jump_to_scene(idx)
             return
-        super().mousePressEvent(event)
+        # Gövdeye tıklamak bir sonraki sahneye ilerletir.
+        self._advance_scene()
 
     # ------------------------------------------------------------------
     # Çizim
@@ -172,13 +143,13 @@ class _KeystreamWizardWidget(QWidget):
 
         body = QRect(0, 64, W, self.height() - 64)
         if scene == 0:
-            self._draw_scene_what(p, body)
+            self._draw_scene_counter(p, body)
         elif scene == 1:
-            self._draw_scene_input(p, body)
-        elif scene == 2:
             self._draw_scene_generate(p, body)
+        elif scene == 2:
+            self._draw_scene_keystream(p, body)
         else:
-            self._draw_scene_result(p, body)
+            self._draw_scene_usage(p, body)
         p.end()
 
     def _draw_progress_strip(self, p: QPainter, W: int, active: int) -> None:
@@ -209,72 +180,79 @@ class _KeystreamWizardWidget(QWidget):
             p.drawText(QRect(x + 2, y + 19, bw - 4, 18),
                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, title)
 
-    # --- Sahne 0: Keystream nedir? -----------------------------------
+    # --- Sahne 0: Sayaç bloğunun üretimi (nonce ‖ sayaç → 16 byte → 4×4) ---
 
-    def _draw_scene_what(self, p: QPainter, area: QRect) -> None:
-        local = self._scene_local(0)
+    def _draw_scene_counter(self, p: QPainter, area: QRect) -> None:
         cx = area.center().x()
-        y = area.top() + 14
+        y = area.top() + 12
 
         p.setFont(cached_font("IBM Plex Sans", 11))
         p.setPen(QColor(ANIM_COLORS["text_secondary"]))
         p.drawText(QRect(area.left() + 12, y, area.width() - 24, 22),
                    Qt.AlignmentFlag.AlignCenter,
-                   "Mesajın AES'ten geçmez; sonunda 16 byte'lık bir blokla XOR'lanır:")
-        y += 46
+                   "AES mesajı değil, SAYAÇ BLOĞUNU şifreler. Bu blok nasıl kurulur?")
+        y += 30
 
-        p.setFont(cached_font("Courier New", 13, QFont.Weight.Bold))
+        # 1) İşlem: birleştirme (nonce ‖ sayaç). İki grup ayrı renkte, aralarında ‖.
+        peach = ANIM_COLORS["accent_peach"]
+        blue = ANIM_COLORS["accent_blue"]
+        nonce_part = self.counter_block[:12]
+        ctr_part = self.counter_block[12:16]
+        box_w = 30
+        gap = 3
+        sep_w = 26
+        nonce_w = len(nonce_part) * (box_w + gap) - gap
+        ctr_w = len(ctr_part) * (box_w + gap) - gap
+        total = nonce_w + sep_w + ctr_w
+        if total > area.width() - 16:                       # dar pencere: küçült
+            box_w = max(20, (area.width() - 16 - sep_w) // 16 - gap)
+            nonce_w = len(nonce_part) * (box_w + gap) - gap
+            ctr_w = len(ctr_part) * (box_w + gap) - gap
+            total = nonce_w + sep_w + ctr_w
+        ox = max(8, cx - total // 2)
+
+        # Grup etiketleri
+        p.setFont(cached_font("IBM Plex Sans", 8, QFont.Weight.Bold))
+        p.setPen(QColor(peach))
+        p.drawText(QRect(ox, y, nonce_w, 14),
+                   Qt.AlignmentFlag.AlignCenter, "nonce (12 byte)")
+        p.setPen(QColor(blue))
+        p.drawText(QRect(ox + nonce_w + sep_w, y, ctr_w, 14),
+                   Qt.AlignmentFlag.AlignCenter, "sayaç (00 00 00 02)")
+        y += 18
+
+        self._draw_hex_boxes(p, ox, y, nonce_part, peach, box_w=box_w, gap=gap)
+        p.setFont(cached_font("Georgia", 16, QFont.Weight.Bold))
         p.setPen(QColor(ANIM_COLORS["text_primary"]))
-        p.drawText(QRect(area.left(), y, area.width(), 28),
-                   Qt.AlignmentFlag.AlignCenter, "mesaj   ⊕   keystream   =   şifreli metin")
-        y += 50
-
-        shown = max(0, local - 8)
-        self._draw_hex_row(p, cx, y, self.keystream, shown,
-                           ANIM_COLORS["accent_yellow"])
-        y += 64
-
-        if local > 26:
-            p.setFont(cached_font("Georgia", 11, QFont.Weight.Bold))
-            p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-            p.drawText(QRect(area.left() + 12, y, area.width() - 24, 24),
-                       Qt.AlignmentFlag.AlignCenter,
-                       "Bu 16 byte sabit bir sayı mı?  →  Hayır, üretilir.  Nasıl? ↓")
-
-    # --- Sahne 1: Girdi (sayaç bloğu) --------------------------------
-
-    def _draw_scene_input(self, p: QPainter, area: QRect) -> None:
-        local = self._scene_local(1)
-        cx = area.center().x()
-        y = area.top() + 14
-
-        p.setFont(cached_font("IBM Plex Sans", 11))
-        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 22),
-                   Qt.AlignmentFlag.AlignCenter,
-                   "AES-256'nın şifrelediği şey mesaj değil — SAYAÇ BLOĞU:")
-        y += 34
+        p.drawText(QRect(ox + nonce_w, y, sep_w, box_w),
+                   Qt.AlignmentFlag.AlignCenter, "‖")
+        self._draw_hex_boxes(p, ox + nonce_w + sep_w, y, ctr_part, blue,
+                             box_w=box_w, gap=gap)
+        y += box_w + 8
 
         p.setFont(cached_font("Courier New", 10, QFont.Weight.Bold))
-        p.setPen(QColor(ANIM_COLORS["accent_peach"]))
-        p.drawText(QRect(area.left(), y, area.width(), 20),
+        p.setPen(QColor(peach))
+        p.drawText(QRect(area.left(), y, area.width(), 18),
                    Qt.AlignmentFlag.AlignCenter,
-                   "sayaç bloğu  =  nonce (12 byte)  ‖  sayaç (00 00 00 02)")
-        y += 32
+                   "=  sayaç bloğu (16 byte)  ↓")
+        y += 26
 
-        shown = max(0, local)
-        self._draw_hex_row(p, cx, y, self.counter_block, shown,
-                           ANIM_COLORS["accent_peach"])
-        y += 62
+        # 2) İşlem: 16 baytın 4×4 column-major matrise yerleşmesi
+        self._draw_matrix(p, cx - 92, y, self._counter_matrix,
+                          peach, title="4×4 (column-major)")
+        y += 4 * 42 + 3 * 4 + 22
 
-        if local > 18:
-            self._draw_matrix(p, cx - 92, y, self._counter_matrix,
-                              ANIM_COLORS["accent_peach"], title="4×4 (column-major)")
+        p.setFont(cached_font("IBM Plex Sans", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 40),
+                   Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
+                   "nonce her şifrelemede rastgele üretilir (değerler bu yüzden "
+                   "'rastgele' görünür); 00 00 00 02 ise GCM'de ilk veri bloğunun "
+                   "sayaç değeridir.")
 
-    # --- Sahne 2: Üretim (AES-256 kara kutu, round'lar YOK) ----------
+    # --- Sahne 1: Üretim (AES-256 kara kutu, round'lar YOK) ----------
 
     def _draw_scene_generate(self, p: QPainter, area: QRect) -> None:
-        local = self._scene_local(2)
         y = area.top() + 14
 
         p.setFont(cached_font("IBM Plex Sans", 11))
@@ -300,29 +278,24 @@ class _KeystreamWizardWidget(QWidget):
         x = ox + mat_w
 
         # → ok
-        self._draw_arrow(p, x, row_y + mat_w // 2, arrow_w,
-                         visible=local > 6)
+        self._draw_arrow(p, x, row_y + mat_w // 2, arrow_w)
         x += arrow_w
 
         # 2) AES-256 kara kutu (anahtarla)
-        self._draw_aes_box(p, x, row_y, box_w, 4 * cell + 3 * 4, local)
+        self._draw_aes_box(p, x, row_y, box_w, 4 * cell + 3 * 4)
         x += box_w
 
         # → ok
-        self._draw_arrow(p, x, row_y + mat_w // 2, arrow_w,
-                         visible=local > 24)
+        self._draw_arrow(p, x, row_y + mat_w // 2, arrow_w)
         x += arrow_w
 
-        # 3) Keystream matrisi (kademeli dolar)
-        shown = max(0, (local - 26))
-        ks_partial = _matrix_from_bytes(self.keystream, shown)
-        self._draw_matrix(p, x, row_y, ks_partial,
+        # 3) Keystream matrisi (tam dolu)
+        self._draw_matrix(p, x, row_y, self._keystream_matrix,
                           ANIM_COLORS["accent_green"], title="keystream", cell=cell)
 
-    # --- Sahne 3: Sonuç ----------------------------------------------
+    # --- Sahne 2: Keystream sonucu -----------------------------------
 
-    def _draw_scene_result(self, p: QPainter, area: QRect) -> None:
-        local = self._scene_local(3)
+    def _draw_scene_keystream(self, p: QPainter, area: QRect) -> None:
         cx = area.center().x()
         y = area.top() + 14
 
@@ -335,72 +308,101 @@ class _KeystreamWizardWidget(QWidget):
 
         self._draw_matrix(p, cx - 92, y, self._keystream_matrix,
                           ANIM_COLORS["accent_green"])
-        # 4×4 (cell 42) matrisin tam yüksekliği + başlık payı: alttaki yazılar
-        # matrise BİNMESİN diye yeterli boşluk bırakılır.
-        y += 4 * 42 + 3 * 4 + 24
+        # 4×4 (cell 42) matrisin tam yüksekliği + başlık payı.
+        y += 4 * 42 + 3 * 4 + 22
 
-        if local > 10:
-            p.setFont(cached_font("IBM Plex Sans", 10))
-            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
-            p.drawText(QRect(area.left() + 12, y, area.width() - 24, 40),
-                       Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
-                       "Aynı nonce ve anahtarla her zaman aynı keystream üretilir. "
-                       "Nonce her şifrelemede yeni ve rastgele olduğu için keystream "
-                       "asla tekrar etmez.")
-            y += 46
+        p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 22),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "Bu, şifrelemende kullanılan GERÇEK keystream.")
+        y += 28
 
-        if local > 22:
-            p.setFont(cached_font("Courier New", 11, QFont.Weight.Bold))
-            p.setPen(QColor(ANIM_COLORS["accent_yellow"]))
-            p.drawText(QRect(area.left(), y, area.width(), 22),
-                       Qt.AlignmentFlag.AlignCenter,
-                       "keystream  ⊕  mesaj  =  şifreli metin")
-            y += 26
+        p.setFont(cached_font("IBM Plex Sans", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 40),
+                   Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
+                   "Aynı nonce ve anahtarla her zaman aynı keystream üretilir. "
+                   "Nonce her şifrelemede yeni ve rastgele olduğu için keystream "
+                   "asla tekrar etmez.")
 
-        if local > 30:
-            p.setFont(cached_font("IBM Plex Sans", 9))
-            p.setPen(QColor(ANIM_COLORS["text_muted"]))
-            p.drawText(QRect(area.left() + 12, y, area.width() - 24, 36),
-                       Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
-                       "Mesaj 16 bayttan uzunsa sayaç birer artar (00 00 00 03, "
-                       "00 00 00 04 …) ve sonraki her blok kendi keystream'ini "
-                       "aynı yolla üretir.")
+    # --- Sahne 3: Kullanım (mesaj ⊕ keystream) -----------------------
+
+    def _draw_scene_usage(self, p: QPainter, area: QRect) -> None:
+        cx = area.center().x()
+        y = area.top() + 16
+
+        p.setFont(cached_font("IBM Plex Sans", 11))
+        p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 22),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "Keystream üretildi; mesaj artık onunla XOR'lanır:")
+        y += 40
+
+        p.setFont(cached_font("Courier New", 13, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["text_primary"]))
+        p.drawText(QRect(area.left(), y, area.width(), 28),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "mesaj   ⊕   keystream   =   şifreli metin")
+        y += 50
+
+        self._draw_hex_row(p, cx, y, self.keystream, 16,
+                           ANIM_COLORS["accent_yellow"])
+        y += 64
+
+        p.setFont(cached_font("IBM Plex Sans", 9))
+        p.setPen(QColor(ANIM_COLORS["text_muted"]))
+        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 40),
+                   Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
+                   "Mesaj 16 bayttan uzunsa sayaç birer artar (00 00 00 03, "
+                   "00 00 00 04 …) ve sonraki her blok kendi keystream'ini "
+                   "aynı yolla üretir.")
 
     # ------------------------------------------------------------------
     # Çizim yardımcıları
     # ------------------------------------------------------------------
 
-    def _draw_arrow(self, p: QPainter, x: int, mid_y: int, w: int,
-                    *, visible: bool) -> None:
-        """Aşamalar arası yatay '→' oku (görünür değilse soluk)."""
-        color = QColor(ANIM_COLORS["accent_yellow" if visible else "border"])
+    def _draw_arrow(self, p: QPainter, x: int, mid_y: int, w: int) -> None:
+        """Aşamalar arası yatay '→' oku."""
+        color = QColor(ANIM_COLORS["accent_yellow"])
         p.setFont(cached_font("Georgia", 18, QFont.Weight.Bold))
         p.setPen(color)
         p.drawText(QRect(x, mid_y - 16, w, 32), Qt.AlignmentFlag.AlignCenter, "→")
 
-    def _draw_aes_box(self, p: QPainter, x: int, y: int, w: int, h: int,
-                      local: int) -> None:
-        """'AES-256' kara kutusu — gizli anahtar ipucuyla, çalışırken hafif nabız."""
-        active = 8 <= local <= 28
+    def _draw_aes_box(self, p: QPainter, x: int, y: int, w: int, h: int) -> None:
+        """'AES-256' kara kutusu — gizli anahtar ipucuyla."""
         color = QColor(ANIM_COLORS["accent_blue"])
         bg = QColor(color)
-        bg.setAlphaF(0.22 if active else 0.12)
+        bg.setAlphaF(0.22)
         p.setBrush(QBrush(bg))
-        p.setPen(QPen(color, 2 if active else 1))
+        p.setPen(QPen(color, 2))
         p.drawRoundedRect(x, y, w, h, 8, 8)
         p.setFont(cached_font("Georgia", 12, QFont.Weight.Bold))
         p.setPen(color)
-        p.drawText(QRect(x, y + h // 2 - 26, w, 22),
+        p.drawText(QRect(x, y + h // 2 - 18, w, 22),
                    Qt.AlignmentFlag.AlignCenter, "AES-256")
         p.setFont(cached_font("IBM Plex Sans", 8))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(x + 4, y + h // 2, w - 8, 18),
+        p.drawText(QRect(x + 4, y + h // 2 + 6, w - 8, 18),
                    Qt.AlignmentFlag.AlignCenter, "🔑 gizli anahtar")
-        if active:
-            p.setFont(cached_font("IBM Plex Sans", 8, QFont.Weight.Bold))
-            p.setPen(color)
-            p.drawText(QRect(x + 4, y + h // 2 + 18, w - 8, 16),
-                       Qt.AlignmentFlag.AlignCenter, "şifreliyor…")
+
+    def _draw_hex_boxes(
+        self, p: QPainter, x0: int, y: int, data: bytes, color_hex: str,
+        *, box_w: int = 30, gap: int = 3,
+    ) -> None:
+        """``data`` baytlarını ``x0``'dan başlayan tek satır hex kutusu olarak çizer."""
+        color = QColor(color_hex)
+        for i, b in enumerate(data):
+            x = x0 + i * (box_w + gap)
+            bg = QColor(color); bg.setAlphaF(0.18)
+            p.setBrush(QBrush(bg))
+            p.setPen(QPen(color, 1))
+            p.drawRoundedRect(x, y, box_w, box_w, 4, 4)
+            p.setFont(cached_font("Courier New", max(8, box_w // 3),
+                                  QFont.Weight.Bold))
+            p.setPen(QColor(ANIM_COLORS["text_primary"]))
+            p.drawText(QRect(x, y, box_w, box_w),
+                       Qt.AlignmentFlag.AlignCenter, f"{b:02x}")
 
     def _draw_hex_row(
         self, p: QPainter, cx: int, y: int, data: bytes, shown: int, color_hex: str,
@@ -528,7 +530,7 @@ class _KeystreamReferenceDialog(QDialog):
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.title_label)
 
-        self.hint_label = QLabel("İpucu: üstteki kutulara tıklayarak adımlar arasında gezebilirsin.")
+        self.hint_label = QLabel("İpucu: üstteki kutulara tıkla ya da ilerlemek için sahneye tıkla.")
         self.hint_label.setFont(QFont("IBM Plex Sans", 9))
         self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.hint_label)

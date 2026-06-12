@@ -36,12 +36,15 @@ class _WExpansionWidget(QWidget):
 
     def __init__(
         self, expansion: list[dict] | None, parent: QWidget | None = None,
+        focus_index: int = 0,
     ) -> None:
         super().__init__(parent)
         self._exp: list[dict] = expansion or []
-        # Tek örnek — kullanıcı isteğine göre 16 i-navigasyonu yerine
-        # W[16] için tek detaylı animasyon. W[17..63] aynı formülle hesaplanır.
-        self._cur = 0
+        # Tek örnek — 16 i-navigasyonu yerine tek detaylı animasyon. Gösterilen
+        # örnek, drill-down ile AYNI öğretici indekse hizalanır (focus_index);
+        # böylece sayfa ve "bit bit çöz" sihirbazı tutarlı W[i]'yi anlatır.
+        # W[i+1..63] aynı formülle hesaplanır.
+        self._cur = max(0, min(len(self._exp) - 1, focus_index)) if self._exp else 0
         self._tick = 0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)

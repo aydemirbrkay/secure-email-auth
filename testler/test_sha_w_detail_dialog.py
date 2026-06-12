@@ -27,7 +27,10 @@ class TestSHAWDetailDialog(unittest.TestCase):
     def test_dialog_carries_real_w_detail(self):
         dialog = _WDetailDialog(self._detail)
         self.assertEqual(dialog.wizard.detail["result"], self._detail["result"])
-        self.assertEqual(dialog.wizard.detail["i"], 16)
+        # Öğretici (dinamik) indeks: gerçek veriyle aynı + operandları dolu.
+        self.assertEqual(dialog.wizard.detail["i"], self._detail["i"])
+        self.assertNotEqual(self._detail["w_i15"], "00000000")
+        self.assertNotEqual(self._detail["w_i2"], "00000000")
 
     def test_wizard_is_manual_and_advances_on_click(self):
         dialog = _WDetailDialog(self._detail)

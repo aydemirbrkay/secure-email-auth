@@ -164,7 +164,16 @@ def sha256_steps(message: bytes) -> dict:
             w.append((w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFF)
 
         if w_expansion_sample is None:  # ilk blok, henüz snapshot yok
-            w_detail = _build_w_detail(w, 16)
+            # Drill-down için ÖĞRETİCİ indeks seç: σ0 (w[i-15]) ve σ1 (w[i-2])
+            # operandlarının İKİSİ de sıfırdan farklı olduğu ilk i. Kısa
+            # mesajlarda W[16]'nın σ1 operandı (w[14]) padding'e denk gelip 0
+            # olabiliyor → tüm-sıfır, öğretici olmayan ekran. Böyle bir i yoksa
+            # (ör. boş mesaj) 16'ya düşülür.
+            i_star = next(
+                (i for i in range(16, 32) if w[i - 15] != 0 and w[i - 2] != 0),
+                16,
+            )
+            w_detail = _build_w_detail(w, i_star)
             w_expansion_sample = []
             for i in range(16, 32):
                 s0 = _rotr(w[i - 15], 7) ^ _rotr(w[i - 15], 18) ^ (w[i - 15] >> 3)

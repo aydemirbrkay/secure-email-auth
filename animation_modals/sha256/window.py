@@ -268,14 +268,29 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay = QVBoxLayout(w)
         lay.setContentsMargins(12, 8, 12, 8)
 
+        w_detail = self._data.get("w_detail")
+        w_idx = w_detail["i"] if w_detail else 16
+
+        # Başlık + "bit bit çöz" düğmesi AYNI satırda → sayfaya ekstra dikey
+        # yükseklik eklenmez (alt navigasyon ekranda kalır).
+        title_row = QHBoxLayout()
         title = QLabel("Adım 2  Mesaj Genişletme (Message Schedule)")
         title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         title.setStyleSheet(f"color: {ANIM_COLORS['accent_mauve']};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(title)
         self._wexpand_title = title
+        title_row.addWidget(title, stretch=1)
 
-        widget = _WExpansionWidget(self._data.get("w_expansion") or [])
+        self._w_detail_btn = QPushButton(f"🔬  W[{w_idx}]'yı bit bit çöz")
+        self._w_detail_btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        self._w_detail_btn.setStyleSheet(self._round_detail_btn_style())
+        self._w_detail_btn.clicked.connect(self._show_w_detail)
+        self._w_detail_btn.setEnabled(w_detail is not None)
+        title_row.addWidget(self._w_detail_btn)
+        lay.addLayout(title_row)
+
+        widget = _WExpansionWidget(
+            self._data.get("w_expansion") or [], focus_index=w_idx - 16)
         wexp_scroll = QScrollArea()
         wexp_scroll.setWidget(widget)
         wexp_scroll.setWidgetResizable(True)
@@ -286,18 +301,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         wexp_scroll.setStyleSheet("background: transparent; border: none;")
         wexp_scroll.setMinimumHeight(260)
         lay.addWidget(wexp_scroll, stretch=1)
-
-        # Bit düzeyi drill-down: W[16]'nın σ0/σ1 iç işleyişi.
-        self._w_detail_btn = QPushButton("🔬  W[16]'yı bit bit çöz")
-        self._w_detail_btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
-        self._w_detail_btn.setStyleSheet(self._round_detail_btn_style())
-        self._w_detail_btn.clicked.connect(self._show_w_detail)
-        self._w_detail_btn.setEnabled(self._data.get("w_detail") is not None)
-        lay.addWidget(self._w_detail_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return w
 
     def _show_w_detail(self) -> None:
-        """W[16]'nın σ0/σ1 iç işleyişini bit düzeyinde çözen drill-down'ı açar."""
+        """W[i_star]'ın σ0/σ1 iç işleyişini bit düzeyinde çözen drill-down'ı açar."""
         detail = self._data.get("w_detail")
         if detail is None:
             return
@@ -323,11 +330,22 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(4)
 
+        # Başlık + "bit bit çöz" düğmesi AYNI satırda → sayfaya ekstra dikey
+        # yükseklik eklenmez (alt navigasyon ekranda kalır).
+        title_row = QHBoxLayout()
         self._diag_title = QLabel()
         self._diag_title.setFont(QFont("Georgia", 12, QFont.Weight.Bold))
         self._diag_title.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._diag_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(self._diag_title)
+        title_row.addWidget(self._diag_title, stretch=1)
+
+        self._round_detail_btn = QPushButton("🔬  Bu round'u bit bit çöz")
+        self._round_detail_btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        self._round_detail_btn.setStyleSheet(self._round_detail_btn_style())
+        self._round_detail_btn.clicked.connect(self._show_round_detail)
+        self._round_detail_btn.setEnabled(self._data.get("round_detail") is not None)
+        title_row.addWidget(self._round_detail_btn)
+        lay.addLayout(title_row)
 
         # Round bar (tıklanabilir 9 buton — her snapshot için). Çok blok
         # varsa solda blok navigasyonu.
@@ -421,16 +439,6 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         self._chain_lbl.setWordWrap(True)
         self._chain_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(self._chain_lbl)
-
-        # Bit düzeyi drill-down düğmesi — round'un Σ1/Ch/Σ0/Maj iç işleyişini
-        # bit bit çözen sihirbazı açar (S-Box/keystream referans düğmesi dili).
-        self._round_detail_btn = QPushButton("🔬  Bu round'u bit bit çöz")
-        self._round_detail_btn.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
-        self._round_detail_btn.setStyleSheet(self._round_detail_btn_style())
-        self._round_detail_btn.clicked.connect(self._show_round_detail)
-        self._round_detail_btn.setEnabled(self._data.get("round_detail") is not None)
-        lay.addWidget(
-            self._round_detail_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         return w
 
     @staticmethod

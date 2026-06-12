@@ -142,7 +142,11 @@ class TestSHA256Pure(unittest.TestCase):
 
         result = sha256_steps(b"Hello World")
         d = result["w_detail"]
-        self.assertEqual(d["i"], 16)
+        # Öğretici indeks: 16..31 aralığında, σ0/σ1 operandları (w_i15/w_i2)
+        # İKİSİ de sıfırdan farklı (tüm-sıfır, öğretici olmayan ekran olmasın).
+        self.assertTrue(16 <= d["i"] < 32)
+        self.assertNotEqual(d["w_i15"], "00000000")
+        self.assertNotEqual(d["w_i2"], "00000000")
         hexkeys = [
             "w_i16", "w_i15", "w_i7", "w_i2",
             "x_rotr7", "x_rotr18", "x_shr3", "sigma0",

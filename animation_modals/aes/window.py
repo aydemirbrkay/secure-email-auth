@@ -176,11 +176,9 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._flow_page = self._make_flow_page()
         self._stack.addWidget(self._flow_page)
 
-        # Sayfa 4 — Eşleşme sonucu
-        self._gcm_xor_page = self._make_gcm_xor_page()
-        self._stack.addWidget(self._gcm_xor_page)
-
-        # Sayfa 5 — Eşleşme sonucu
+        # Sayfa 4 — Eşleşme/özet sonucu.
+        # NOT: Ayrı GCM XOR sayfası kaldırıldı; mesaj ⊕ keystream artık GCM
+        # hazırlık sayfasının (image 4) kendisinde gösterilir.
         self._match_page = self._make_match_page()
         self._stack.addWidget(self._match_page)
 
@@ -216,38 +214,63 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._prep_stack.addWidget(self._plaintext_prep_scroll)
 
         if self._gcm_mode:
+            # GCM hazırlık sayfası (image 4) ARTIK sayaç bloğunu DEĞİL, doğrudan
+            # "mesaj ⊕ keystream = şifreli metin" akışını (image 6 AddRoundKey
+            # stili 3 matris) gösterir. Sayaç bloğu/keystream üretimi keystream
+            # düğmesindeki sihirbazda anlatılır.
             gcm_page = QWidget()
             gcm_page_layout = QVBoxLayout(gcm_page)
-            gcm_page_layout.setContentsMargins(0, 0, 0, 0)
-            gcm_top_row = QHBoxLayout()
-            gcm_top_row.addStretch(1)
-            self._gcm_prep_keystream_btn = QPushButton("keystream")
-            self._gcm_prep_keystream_btn.setFixedHeight(28)
-            self._gcm_prep_keystream_btn.setStyleSheet(self._reference_button_style())
-            self._gcm_prep_keystream_btn.clicked.connect(self._show_keystream_reference)
-            gcm_top_row.addWidget(self._gcm_prep_keystream_btn)
-            gcm_page_layout.addLayout(gcm_top_row)
+            gcm_page_layout.setContentsMargins(8, 4, 8, 4)
+            gcm_page_layout.setSpacing(6)
 
-            self._gcm_prep_widget = _AESPlaintextPrepWidget(
-                plaintext_text=self._plaintext_text_str,
-                plaintext_bytes=self._plaintext_bytes_data,
-                padded_plaintext=self._padded_plaintext_data,
-                first_block=self._first_block_data,
-                blocks_total=self._blocks_total_data,
-                state_matrix=self._state_matrix_data,
-                on_continue=self._switch_to_rounds_only,
-                mode="gcm",
-                message_bytes=self._message_bytes,
+            self._gcm_prep_title = QLabel(
+                "Mesajınız GCM kullanıyor — mesaj ⊕ keystream = şifreli metin"
             )
-            self._gcm_prep_widget._pp_title.setText("Mesajınız GCM kullanıyor")
+            self._gcm_prep_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
+            self._gcm_prep_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+            self._gcm_prep_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._gcm_prep_title.setWordWrap(True)
+            gcm_page_layout.addWidget(self._gcm_prep_title)
+
+            self._gcm_xor_widget = _GCMRealEncryptWidget(parent=gcm_page)
+            self._gcm_xor_widget.set_inputs(
+                bytes.fromhex(self._final_block_hex),
+                self._message_bytes,
+                self._expected_ct_hex,
+            )
+            # keystream düğmesi widget'ın sağ üstündedir; eski iki isim de (XOR
+            # düğmesi + GCM hazırlık düğmesi) artık AYNI düğmeyi gösterir.
+            self._keystream_btn = self._gcm_xor_widget._keystream_btn
+            self._gcm_prep_keystream_btn = self._gcm_xor_widget._keystream_btn
+            self._keystream_btn.clicked.connect(self._show_keystream_reference)
+
             self._gcm_prep_scroll = QScrollArea()
-            self._gcm_prep_scroll.setWidget(self._gcm_prep_widget)
+            self._gcm_prep_scroll.setWidget(self._gcm_xor_widget)
             self._gcm_prep_scroll.setWidgetResizable(True)
             self._gcm_prep_scroll.setStyleSheet("background: transparent; border: none;")
-            gcm_page_layout.addWidget(self._gcm_prep_scroll)
+            gcm_page_layout.addWidget(self._gcm_prep_scroll, stretch=1)
+
+            self._gcm_prep_continue_btn = QPushButton("Devam ▶")
+            self._gcm_prep_continue_btn.setFont(QFont("IBM Plex Sans", 10, QFont.Weight.Bold))
+            self._gcm_prep_continue_btn.setStyleSheet(self._gcm_continue_btn_style())
+            self._gcm_prep_continue_btn.clicked.connect(self._switch_to_rounds_only)
+            gcm_page_layout.addWidget(
+                self._gcm_prep_continue_btn, alignment=Qt.AlignmentFlag.AlignHCenter
+            )
+
             self._gcm_prep_page = gcm_page
             self._prep_stack.addWidget(gcm_page)
         return w
+
+    @staticmethod
+    def _gcm_continue_btn_style() -> str:
+        """GCM hazırlık sayfasındaki 'Devam ▶' düğmesinin birincil stili."""
+        return (
+            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
+            f"color: {ANIM_COLORS['text_on_accent']}; border: none; "
+            "border-radius: 6px; padding: 6px 18px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {ANIM_COLORS['accent_mauve']}; }}"
+        )
 
     def _make_round_page(self) -> QWidget:
         w = QWidget()
@@ -452,38 +475,6 @@ class AESAnimationWindow(CryptoAnimationWindow):
         lay.addWidget(scroll)
         return w
 
-    def _make_gcm_xor_page(self) -> QWidget:
-        """Round keystream'ini mesajla XOR'layan ayrı GCM son-adım sayfasını kurar."""
-        from PyQt6.QtWidgets import QScrollArea
-
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(12, 8, 12, 8)
-        layout.setSpacing(8)
-
-        self._gcm_xor_title = QLabel("GCM son adımı: mesaj bloğu ⊕ keystream bloğu")
-        self._gcm_xor_title.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
-        self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
-        self._gcm_xor_title.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
-        )
-        self._gcm_xor_title.setMinimumWidth(180)
-        layout.addWidget(self._gcm_xor_title)
-
-        self._gcm_xor_widget = _GCMRealEncryptWidget(parent=page)
-        self._keystream_btn = self._gcm_xor_widget._keystream_btn
-        self._keystream_btn.clicked.connect(self._show_keystream_reference)
-        scroll = QScrollArea()
-        scroll.setWidget(self._gcm_xor_widget)
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        layout.addWidget(scroll, stretch=1)
-
-        self._xor_continue_btn = QPushButton("Özete geç  ▶")
-        self._xor_continue_btn.clicked.connect(self._switch_from_gcm_xor_to_match)
-        layout.addWidget(self._xor_continue_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
-        return page
-
     @staticmethod
     def _reference_button_style() -> str:
         """S-Box referans düğmesiyle aynı görsel dili kullanan stil döndürür."""
@@ -526,12 +517,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._plaintext_widget.start()
 
     def _switch_to_gcm_prep(self) -> None:
-        """GCM akışında temel AES mesaj bloğu ekranından sayaç/keystream ekranına geçer."""
+        """GCM akışında mesaj→matris ekranından mesaj⊕keystream=şifreli ekranına geçer."""
         if not self._gcm_mode:
             self._switch_to_rounds_only()
             return
         self._prep_stack.setCurrentWidget(self._gcm_prep_page)
-        self._gcm_prep_widget.start()
+        self._gcm_xor_widget.start()
 
     def _switch_to_rounds_only(self) -> None:
         """Plaintext prep tamamlanınca: rounds sayfasına geç (pencere büyütme YOK, zaten büyük)."""
@@ -631,15 +622,18 @@ class AESAnimationWindow(CryptoAnimationWindow):
             f"QFrame {{ background: {ANIM_COLORS['bg_card']}; "
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
-        self._gcm_xor_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
-        self._keystream_btn.setStyleSheet(self._reference_button_style())
-        if hasattr(self, "_gcm_prep_keystream_btn"):
-            self._gcm_prep_keystream_btn.setStyleSheet(self._reference_button_style())
-        # QLabel tabanlı sayfa widget'ları
+        # GCM hazırlık sayfası (image 4) — yalnız GCM modunda mevcut.
+        if hasattr(self, "_gcm_prep_title"):
+            self._gcm_prep_title.setStyleSheet(f"color: {ANIM_COLORS['accent_green']};")
+        if hasattr(self, "_keystream_btn"):
+            self._keystream_btn.setStyleSheet(self._reference_button_style())
+        if hasattr(self, "_gcm_prep_continue_btn"):
+            self._gcm_prep_continue_btn.setStyleSheet(self._gcm_continue_btn_style())
+        # QLabel tabanlı sayfa widget'ları (QPainter olan _gcm_xor_widget
+        # refresh_theme'deki update() ile zaten yenilenir).
         for w in (
             getattr(self, "_intro", None),
             getattr(self, "_plaintext_widget", None),
-            getattr(self, "_gcm_prep_widget", None),
         ):
             if w is not None and hasattr(w, "restyle"):
                 w.restyle()
@@ -685,21 +679,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
         )
 
     def _show_match_result(self) -> None:
-        """Round bitişinde GCM XOR sayfasını, ECB'de doğrudan son özeti gösterir."""
-        if self._gcm_mode:
-            self._stack.setCurrentWidget(self._gcm_xor_page)
-            self._gcm_xor_widget.set_inputs(
-                bytes.fromhex(self._final_block_hex),
-                self._message_bytes,
-                self._expected_ct_hex,
-            )
-            self._gcm_xor_widget.start()
-            return
-        self._show_final_summary()
+        """Round bitişinde final özet sayfasını gösterir.
 
-    def _switch_from_gcm_xor_to_match(self) -> None:
-        """Ayrı GCM XOR adımını durdurup final özet sayfasına geçer."""
-        self._gcm_xor_widget.stop()
+        GCM'de mesaj ⊕ keystream = şifreli akışı zaten hazırlık sayfasında
+        (image 4) gösterildiğinden ayrı XOR sayfası yoktur; doğrudan özete geçilir.
+        """
         self._show_final_summary()
 
     def _show_final_summary(self) -> None:

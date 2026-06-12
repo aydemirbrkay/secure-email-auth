@@ -176,12 +176,13 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         )
 
     def test_gcm_prep_uses_two_screens_then_rounds(self):
-        """GCM hazırlığı mesaj bloğu tanıtımından sayaç/keystream gerçeğine geçmeli."""
+        """GCM hazırlığı mesaj→matris tanıtımından mesaj⊕keystream=şifreli ekranına geçmeli."""
         from animation_modals import AESAnimationWindow
 
+        message = b"mesaj"
         a = AESAnimationWindow(
             key=bytes(range(32)),
-            plaintext=b"mesaj",
+            plaintext=message,
             expected_ct_hex="00" * 16,
             nonce=bytes(range(12)),
         )
@@ -189,13 +190,15 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         self.assertEqual(a._prep_stack.count(), 2)
         self.assertIs(a._prep_stack.currentWidget(), a._plaintext_prep_scroll)
         self.assertFalse(a._plaintext_widget._is_gcm)
-        self.assertTrue(a._gcm_prep_widget._is_gcm)
         self.assertEqual(a._plaintext_widget._pp_title.text(), "AES blok şifreleyici")
         self.assertEqual(a._plaintext_widget._txt_lbl.text(), 'Plaintext: "mesaj"')
 
+        # İkinci ekran artık sayaç bloğu değil; doğrudan mesaj ⊕ keystream akışı.
         a._switch_to_gcm_prep()
         self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_page)
         self.assertTrue(hasattr(a, "_gcm_prep_keystream_btn"))
+        self.assertEqual(a._gcm_xor_widget._message, message)
+        self.assertIs(a._keystream_btn, a._gcm_xor_widget._keystream_btn)
 
         a._switch_to_rounds_only()
         self.assertIs(a._stack.currentWidget(), a._round_page)
@@ -213,8 +216,8 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         self.assertEqual(a._prep_stack.count(), 1)
         self.assertFalse(hasattr(a, "_gcm_prep_widget"))
 
-    def test_gcm_rounds_finish_on_separate_xor_page_before_summary(self):
-        """GCM roundları bitince match özeti yerine önce ayrı keystream XOR sayfası açılmalı."""
+    def test_gcm_xor_on_prep_page_and_rounds_finish_on_summary(self):
+        """Mesaj⊕keystream artık hazırlık sayfasında; roundlar bitince doğrudan özet açılmalı."""
         from animation_modals import AESAnimationWindow
 
         message = b"mesaj"
@@ -225,9 +228,9 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
             nonce=bytes(range(12)),
         )
 
-        a._show_match_result()
-
-        self.assertIs(a._stack.currentWidget(), a._gcm_xor_page)
+        # XOR akışı GCM hazırlık sayfasında (image 4) gösterilir.
+        a._switch_to_gcm_prep()
+        self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_page)
         self.assertEqual(a._gcm_xor_widget._message, message)
         keystream = bytes.fromhex(a._final_block_hex)
         self.assertEqual(
@@ -236,9 +239,11 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         )
         self.assertTrue(hasattr(a, "_keystream_btn"))
         self.assertIs(a._keystream_btn.parentWidget(), a._gcm_xor_widget)
-        self.assertFalse(hasattr(a, "_gcm_widget"))
+        # Ayrı XOR sayfası kaldırıldı.
+        self.assertFalse(hasattr(a, "_gcm_xor_page"))
 
-        a._switch_from_gcm_xor_to_match()
+        # Roundlar bitince doğrudan final özet (ara XOR sayfası yok).
+        a._show_match_result()
         self.assertIs(a._stack.currentWidget(), a._match_page)
 
     def test_round_zero_uses_plaintext_state_as_before_matrix(self):

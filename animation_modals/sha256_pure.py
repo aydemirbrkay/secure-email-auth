@@ -39,6 +39,48 @@ def _rotr(x: int, n: int) -> int:
     return ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF
 
 
+def _build_round_detail(
+    regs_in: list[int], k: int, w: int, round_no: int,
+    block_no: int, blocks_count: int,
+) -> dict:
+    """Tek bir sıkıştırma round'unun TÜM ara değerlerini hex sözlük olarak verir.
+
+    Bit düzeyi drill-down sihirbazı bu alanları çizer: Σ1/Ch → T1, Σ0/Maj → T2,
+    A'=T1+T2, E'=D+T1. Tüm değerler 8-hane hex; widget bit düzeyi için
+    ``int(x, 16)`` ile çözer. ``sha256_steps``'in round döngüsüyle birebir aynı
+    formülleri kullanır (tek doğruluk kaynağı buradaki açık adımlardır)."""
+    a, b, c, d, e, f, g, h = regs_in
+    e_rotr6, e_rotr11, e_rotr25 = _rotr(e, 6), _rotr(e, 11), _rotr(e, 25)
+    s1 = e_rotr6 ^ e_rotr11 ^ e_rotr25
+    e_and_f = e & f
+    not_e_and_g = (~e & g) & 0xFFFFFFFF
+    ch = (e_and_f ^ not_e_and_g) & 0xFFFFFFFF
+    a_rotr2, a_rotr13, a_rotr22 = _rotr(a, 2), _rotr(a, 13), _rotr(a, 22)
+    s0 = a_rotr2 ^ a_rotr13 ^ a_rotr22
+    a_and_b, a_and_c, b_and_c = a & b, a & c, b & c
+    maj = (a_and_b ^ a_and_c ^ b_and_c) & 0xFFFFFFFF
+    t1 = (h + s1 + ch + k + w) & 0xFFFFFFFF
+    t2 = (s0 + maj) & 0xFFFFFFFF
+    fields = {
+        "a": a, "b": b, "c": c, "d": d, "e": e, "f": f, "g": g, "h": h,
+        "k": k, "w": w,
+        "e_rotr6": e_rotr6, "e_rotr11": e_rotr11, "e_rotr25": e_rotr25,
+        "sigma1": s1,
+        "e_and_f": e_and_f, "not_e_and_g": not_e_and_g, "ch": ch,
+        "a_rotr2": a_rotr2, "a_rotr13": a_rotr13, "a_rotr22": a_rotr22,
+        "sigma0": s0,
+        "a_and_b": a_and_b, "a_and_c": a_and_c, "b_and_c": b_and_c, "maj": maj,
+        "t1": t1, "t2": t2,
+        "new_a": (t1 + t2) & 0xFFFFFFFF,
+        "new_e": (d + t1) & 0xFFFFFFFF,
+    }
+    detail = {key: f"{val:08x}" for key, val in fields.items()}
+    detail["round_no"] = round_no
+    detail["block_no"] = block_no
+    detail["blocks_count"] = blocks_count
+    return detail
+
+
 def sha256_steps(message: bytes) -> dict:
     """
     SHA-256 hesaplamasını adım adım yapar ve animasyon için veri döndürür.
@@ -84,8 +126,10 @@ def sha256_steps(message: bytes) -> dict:
     block_initial_states: list[list[str]] = []
 
     w_expansion_sample: list[dict] | None = None
+    # Son bloğun 64. round'unun bit düzeyi ara değerleri (drill-down için).
+    round_detail: dict | None = None
 
-    for block in blocks:
+    for blk_idx, block in enumerate(blocks):
         w = list(struct.unpack(">16I", block))
         for i in range(16, 64):
             s0 = _rotr(w[i - 15], 7) ^ _rotr(w[i - 15], 18) ^ (w[i - 15] >> 3)
@@ -121,6 +165,14 @@ def sha256_steps(message: bytes) -> dict:
             # aksi halde seyrek snapshot'larda (R9, R17…) gösterilen giriş 8
             # round eski kalıp animasyonu tutarsız yapıyordu.
             regs_in = [a, b, c, d, e, f, g, hh]
+            # Son bloğun 64. round'u (i==63): drill-down'ın çözeceği round.
+            # Çıkışı (new_a) son bloğun A çalışma değişkenine eşittir → final
+            # hash'in ilk word'üne köprülenir ("ben neyi hesapladım?").
+            if blk_idx == len(blocks) - 1 and i == 63:
+                round_detail = _build_round_detail(
+                    regs_in, K[i], w[i], round_no=i + 1,
+                    block_no=blk_idx + 1, blocks_count=len(blocks),
+                )
             s1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
             ch = ((e & f) ^ (~e & g)) & 0xFFFFFFFF
             temp1 = (hh + s1 + ch + K[i] + w[i]) & 0xFFFFFFFF
@@ -165,6 +217,7 @@ def sha256_steps(message: bytes) -> dict:
         "initial_h": [f"{v:08x}" for v in H0],
         "block_initial_states": block_initial_states,
         "round_snapshots": round_snapshots,
+        "round_detail": round_detail,
         "w_expansion": w_expansion_sample,
         "final_hash": final_hash,
         # Son blok toplama adımı için

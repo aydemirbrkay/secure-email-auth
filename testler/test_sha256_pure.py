@@ -171,6 +171,78 @@ class TestSHA256Pure(unittest.TestCase):
                                  f"R{snap['round']}: çıkış girişten türetilebilmeli")
 
 
+    def test_round_detail_is_real_round64_internals(self):
+        """Alt tür: BİRİM (bit düzeyi drill-down veri sözleşmesi — DOĞRULUK).
+        round_detail, SON bloğun 64. round'unun TÜM ara değerlerini taşır;
+        bit düzeyi drill-down sihirbazı bunları çizer. Her alan gerçek SHA
+        hesabıyla tutarlı olmalı: Σ1/Ch → T1, Σ0/Maj → T2, A'=T1+T2, E'=D+T1.
+        Ayrıca 'ben neyi hesapladım?' köprüsü: new_a (64. round A çıkışı) son
+        bloğun çalışma değişkeni A'sına eşit ve pre_final_h[0]+new_a final
+        hash'in ilk word'ünü verir."""
+        from animation_modals.sha256_pure import _rotr
+
+        result = sha256_steps(b"Hello World")
+        d = result["round_detail"]
+
+        # Tüm alanlar 8-hane hex
+        hexkeys = [
+            "a", "b", "c", "d", "e", "f", "g", "h", "k", "w",
+            "e_rotr6", "e_rotr11", "e_rotr25", "sigma1",
+            "e_and_f", "not_e_and_g", "ch",
+            "a_rotr2", "a_rotr13", "a_rotr22", "sigma0",
+            "a_and_b", "a_and_c", "b_and_c", "maj",
+            "t1", "t2", "new_a", "new_e",
+        ]
+        for key in hexkeys:
+            self.assertIn(key, d, key)
+            self.assertEqual(len(d[key]), 8, key)
+            int(d[key], 16)
+        self.assertEqual(d["round_no"], 64)
+
+        a, b, c, dd, e, f, g, h = (int(d[x], 16) for x in "abcdefgh")
+        k, w = int(d["k"], 16), int(d["w"], 16)
+
+        # Σ1(E) bit işlemleri
+        self.assertEqual(d["e_rotr6"], f"{_rotr(e, 6):08x}")
+        self.assertEqual(d["e_rotr11"], f"{_rotr(e, 11):08x}")
+        self.assertEqual(d["e_rotr25"], f"{_rotr(e, 25):08x}")
+        s1 = _rotr(e, 6) ^ _rotr(e, 11) ^ _rotr(e, 25)
+        self.assertEqual(d["sigma1"], f"{s1:08x}")
+        # Ch
+        ch = ((e & f) ^ (~e & g)) & 0xFFFFFFFF
+        self.assertEqual(d["ch"], f"{ch:08x}")
+        # Σ0(A) bit işlemleri
+        s0 = _rotr(a, 2) ^ _rotr(a, 13) ^ _rotr(a, 22)
+        self.assertEqual(d["sigma0"], f"{s0:08x}")
+        # Maj
+        maj = (a & b) ^ (a & c) ^ (b & c)
+        self.assertEqual(d["maj"], f"{maj:08x}")
+        # T1 / T2 (hex toplama)
+        t1 = (h + s1 + ch + k + w) & 0xFFFFFFFF
+        t2 = (s0 + maj) & 0xFFFFFFFF
+        self.assertEqual(d["t1"], f"{t1:08x}")
+        self.assertEqual(d["t2"], f"{t2:08x}")
+        self.assertEqual(d["new_a"], f"{(t1 + t2) & 0xFFFFFFFF:08x}")
+        self.assertEqual(d["new_e"], f"{(dd + t1) & 0xFFFFFFFF:08x}")
+
+        # Köprü: 64. round'un A çıkışı = son bloğun çalışma değişkeni A
+        self.assertEqual(d["new_a"], result["final_working"][0])
+        # pre_final_h[0] + new_a (mod 2^32) = final hash'in ilk word'ü
+        bridge = (int(result["pre_final_h"][0], 16)
+                  + int(d["new_a"], 16)) & 0xFFFFFFFF
+        self.assertEqual(f"{bridge:08x}", result["final_h_parts"][0])
+        self.assertEqual(f"{bridge:08x}", result["final_hash"][:8])
+
+    def test_round_detail_tracks_last_block(self):
+        """Alt tür: BİRİM (çok bloklu süreklilik).
+        Çok bloklu mesajda round_detail SON bloğu yansıtmalı: block_no =
+        blocks_count, böylece final köprü gerçek çıktıya bağlanır."""
+        result = sha256_steps(b"x" * 130)  # 3 blok
+        d = result["round_detail"]
+        self.assertEqual(d["block_no"], result["blocks_count"])
+        self.assertEqual(d["new_a"], result["final_working"][0])
+
+
 class TestSHA256AnimationStructure(unittest.TestCase):
     """sha256_animation modülünün yeni widget yapısını doğrular
     (Alt kategori: SMOKE — animasyon sınıf varlığı)."""

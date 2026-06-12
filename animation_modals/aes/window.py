@@ -162,6 +162,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         intro_scroll.setStyleSheet("background: transparent; border: none;")
         intro_scroll.setMinimumHeight(260)
+        self._intro_scroll = intro_scroll
         self._stack.addWidget(intro_scroll)
 
         # Sayfa 1 — Plaintext Hazırlığı (yeni, tek seferlik pre-step)
@@ -184,6 +185,12 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
         # Intro başlat (otomatik)
         self._intro.start()
+
+        # Navigasyon: tüm sayfalar (intro → hazırlık → XOR → roundlar → özet)
+        # tek bir İleri/Geri zinciriyle gezilebilir. _nav_phase hangi mantıksal
+        # sayfada olduğumuzu tutar; _advance_step/_go_back bu zincirde gezdirir.
+        self._nav_phase = "intro"
+        self._update_nav_buttons()
 
     def _make_plaintext_prep_page(self) -> QWidget:
         """ECB için tek, GCM için mesaj ve sayaç rolleri ayrılmış iki hazırlık ekranı kurar."""
@@ -504,31 +511,107 @@ class AESAnimationWindow(CryptoAnimationWindow):
     # Navigasyon yardımcıları
     # ------------------------------------------------------------------
 
-    def _switch_to_plaintext_prep(self) -> None:
-        """Intro tamamlanınca plaintext prep sayfasına geçer ve animasyonu başlatır.
+    # ------------------------------------------------------------------
+    # Tek zincirli navigasyon: intro → prep0 → (GCM: prep1) → rounds → match
+    # İleri/Geri (base butonları) tüm bu sayfaları gezer; sayfa içi "Devam"
+    # düğmeleri de aynı _switch_* metotlarını çağırdığından zincire uyumludur.
+    # ------------------------------------------------------------------
 
-        Pencere zaten base sınıftan büyük (ekranın %82'si) açıldığı için burada
-        yeniden boyutlandırma YOK; eskiden intro 820×620 küçük açıldığından bu
-        metot pencereyi büyütüyordu. SHA introsuyla aynı davranış: boyut sabit
-        kalır, yalnızca görünen sayfa değişir.
-        """
+    def _advance_step(self) -> None:  # type: ignore[override]
+        """İleri ▶ — bulunulan faza göre zincirde bir ileri."""
+        ph = getattr(self, "_nav_phase", "intro")
+        if ph == "intro":
+            self._switch_to_plaintext_prep()
+        elif ph == "prep0":
+            self._switch_to_gcm_prep() if self._gcm_mode else self._switch_to_rounds_only()
+        elif ph == "prep1":
+            self._switch_to_rounds_only()
+        elif ph == "rounds":
+            if self.current_step >= self.total_steps - 1:
+                self._show_final_summary()
+            else:
+                self.current_step += 1
+                self._render_step(self.current_step)
+                self._nav_phase = "rounds"
+                self._update_nav_buttons()
+        # ph == "match": son sayfa, ileri yok
+
+    def _go_back(self) -> None:  # type: ignore[override]
+        """◀ Geri — bulunulan faza göre zincirde bir geri."""
+        ph = getattr(self, "_nav_phase", "intro")
+        if ph == "match":
+            self._nav_phase = "rounds"
+            self.current_step = max(0, self.total_steps - 1)
+            self._stack.setCurrentWidget(self._round_page)
+            self._render_step(self.current_step)
+            self._update_nav_buttons()
+        elif ph == "rounds":
+            if self.current_step > 0:
+                self.current_step -= 1
+                self._render_step(self.current_step)
+                self._update_nav_buttons()
+            elif self._gcm_mode:
+                self._switch_to_gcm_prep()       # roundların başı → XOR sayfası
+            else:
+                self._switch_to_plaintext_prep()  # ECB: → mesaj hazırlık
+        elif ph == "prep1":
+            self._switch_to_plaintext_prep()
+        elif ph == "prep0":
+            self._goto_intro()
+        # ph == "intro": ilk sayfa, geri yok
+
+    def _update_nav_buttons(self) -> None:
+        """Geri/İleri etkinliğini ve ilerleme çubuğunu cari faza göre günceller."""
+        ph = getattr(self, "_nav_phase", "intro")
+        if hasattr(self, "_btn_prev"):
+            self._btn_prev.setEnabled(ph != "intro")
+        if hasattr(self, "_btn_next"):
+            if ph == "match":
+                self._btn_next.setText("Tamamlandı")
+                self._btn_next.setEnabled(False)
+            else:
+                self._btn_next.setText("İleri  ▶")
+                self._btn_next.setEnabled(True)
+        if hasattr(self, "_progress"):
+            if ph == "rounds":
+                self._progress.setValue(self.current_step + 1)
+            elif ph == "match":
+                self._progress.setValue(self.total_steps)
+            else:
+                self._progress.setValue(0)
+
+    def _goto_intro(self) -> None:
+        """Zincirin başı: intro sayfasını gösterir."""
+        self._nav_phase = "intro"
+        self._stack.setCurrentWidget(self._intro_scroll)
+        self._update_nav_buttons()
+
+    def _switch_to_plaintext_prep(self) -> None:
+        """Mesaj→matris hazırlık sayfasına (prep0) geçer ve animasyonu başlatır."""
+        self._nav_phase = "prep0"
         self._stack.setCurrentWidget(self._plaintext_page)
         self._prep_stack.setCurrentIndex(0)
         self._plaintext_widget.start()
+        self._update_nav_buttons()
 
     def _switch_to_gcm_prep(self) -> None:
-        """GCM akışında mesaj→matris ekranından mesaj⊕keystream=şifreli ekranına geçer."""
+        """GCM: mesaj ⊕ keystream = şifreli (prep1) sayfasına geçer."""
         if not self._gcm_mode:
             self._switch_to_rounds_only()
             return
+        self._nav_phase = "prep1"
+        self._stack.setCurrentWidget(self._plaintext_page)
         self._prep_stack.setCurrentWidget(self._gcm_prep_page)
         self._gcm_xor_widget.start()
+        self._update_nav_buttons()
 
     def _switch_to_rounds_only(self) -> None:
-        """Plaintext prep tamamlanınca: rounds sayfasına geç (pencere büyütme YOK, zaten büyük)."""
+        """Round detay sayfasına geçer ve ilk adımı (Round 0) gösterir."""
+        self._nav_phase = "rounds"
+        self.current_step = 0
         self._stack.setCurrentWidget(self._round_page)
         self._render_step(0)
-        self._progress.setValue(1)
+        self._update_nav_buttons()
 
     # Geriye dönük uyumluluk için: eski isim _switch_to_rounds_only çağırır.
     def _switch_to_rounds(self) -> None:
@@ -539,14 +622,11 @@ class AESAnimationWindow(CryptoAnimationWindow):
         """Round bar'daki butona tıklanınca o round'un ilk adımına atla."""
         if r not in self._round_start:
             return
+        self._nav_phase = "rounds"
         self.current_step = self._round_start[r]
+        self._stack.setCurrentWidget(self._round_page)
         self._render_step(self.current_step)
-        self._progress.setValue(self.current_step + 1)
-        if hasattr(self, "_btn_prev"):
-            self._btn_prev.setEnabled(self.current_step > 0)
-        if hasattr(self, "_btn_next"):
-            self._btn_next.setEnabled(True)
-            self._btn_next.setText("İleri  ▶")
+        self._update_nav_buttons()
 
     @staticmethod
     def _round_btn_style(active: bool) -> str:
@@ -688,6 +768,7 @@ class AESAnimationWindow(CryptoAnimationWindow):
 
     def _show_final_summary(self) -> None:
         """Final AES state dizilimini ve moda uygun kısa sözel özeti gösterir."""
+        self._nav_phase = "match"
         self._stack.setCurrentWidget(self._match_page)
         self._update_round_bar(14)
         last = self._steps_data[-1]
@@ -727,6 +808,8 @@ class AESAnimationWindow(CryptoAnimationWindow):
         self._match_lbl.setTextFormat(Qt.TextFormat.RichText)
         self._match_lbl.setText(html_body)
         self._match_lbl.setStyleSheet(f"color: {ANIM_COLORS['text_primary']};")
+        self._nav_phase = "match"
+        self._update_nav_buttons()
 
     # showEvent override — intro başlatılmış, timer başlatma
     def showEvent(self, event) -> None:  # type: ignore[override]

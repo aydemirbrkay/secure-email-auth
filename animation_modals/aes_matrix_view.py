@@ -1129,7 +1129,9 @@ class _GCMRealEncryptWidget(QWidget):
             p.drawText(QRect(0, y, W, 22), Qt.AlignmentFlag.AlignCenter, msg)
             y += 24
 
-        # Uzun mesajda yalnız ilk blok gösterilir; gerisi sayaç artarak aynı yolla.
+        # Mesaj uzunluğuna göre kısa açıklama: GCM padding kullanmaz, bu yüzden
+        # mesaj 16 bayttan KISAYSA matrisin kalan hücreleri boş kalır (sadece
+        # mesaj kadar bayt şifrelenir); UZUNSA sonraki bloklar sayaç artarak gelir.
         if len(self._message) > 16:
             p.setFont(cached_font("IBM Plex Sans", 9))
             p.setPen(QColor(ANIM_COLORS["text_muted"]))
@@ -1137,6 +1139,13 @@ class _GCMRealEncryptWidget(QWidget):
                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
                        "Bu, mesajın ilk 16 baytlık bloğu; uzun mesajda sonraki "
                        "bloklar sayaç artarak aynı şekilde şifrelenir.")
+        elif 0 < len(self._message) < 16:
+            p.setFont(cached_font("IBM Plex Sans", 9))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(8, y, W - 16, 34),
+                       Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                       "GCM padding kullanmaz: yalnız mesaj kadar bayt şifrelenir, "
+                       "bu yüzden matrisin kalan hücreleri boş kalır.")
         p.end()
 
     def _draw_matrix(

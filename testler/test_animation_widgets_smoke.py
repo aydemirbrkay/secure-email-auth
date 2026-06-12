@@ -246,6 +246,48 @@ class TestAESIntroLayoutLikeSHA(unittest.TestCase):
         a._show_match_result()
         self.assertIs(a._stack.currentWidget(), a._match_page)
 
+    def test_full_forward_back_navigation_chain_gcm(self):
+        """İleri/Geri tüm AES sayfalarını gezebilmeli: intro↔prep0↔prep1↔rounds↔match."""
+        from animation_modals import AESAnimationWindow
+
+        a = AESAnimationWindow(
+            key=bytes(range(32)),
+            plaintext=b"dasdasd",
+            expected_ct_hex="00" * 7,
+            nonce=bytes(range(12)),
+        )
+
+        # Başlangıç: intro, Geri pasif.
+        self.assertEqual(a._nav_phase, "intro")
+        self.assertFalse(a._btn_prev.isEnabled())
+
+        # İleri zinciri: intro → prep0 → prep1 → rounds(0) → rounds(1)
+        a._advance_step(); self.assertEqual(a._nav_phase, "prep0")
+        self.assertEqual(a._prep_stack.currentIndex(), 0)
+        a._advance_step(); self.assertEqual(a._nav_phase, "prep1")
+        self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_page)
+        a._advance_step(); self.assertEqual(a._nav_phase, "rounds")
+        self.assertEqual(a.current_step, 0)
+        self.assertIs(a._stack.currentWidget(), a._round_page)
+        a._advance_step(); self.assertEqual(a.current_step, 1)
+        self.assertTrue(a._btn_prev.isEnabled())
+
+        # Geri zinciri: rounds(1) → rounds(0) → prep1 → prep0 → intro → (intro'da kalır)
+        a._go_back(); self.assertEqual((a._nav_phase, a.current_step), ("rounds", 0))
+        a._go_back(); self.assertEqual(a._nav_phase, "prep1")
+        self.assertIs(a._prep_stack.currentWidget(), a._gcm_prep_page)
+        a._go_back(); self.assertEqual(a._nav_phase, "prep0")
+        a._go_back(); self.assertEqual(a._nav_phase, "intro")
+        self.assertIs(a._stack.currentWidget(), a._intro_scroll)
+        a._go_back(); self.assertEqual(a._nav_phase, "intro")  # ilk sayfada kalır
+
+        # Match'ten Geri son round adımına dönmeli.
+        a._show_final_summary()
+        self.assertEqual(a._nav_phase, "match")
+        self.assertFalse(a._btn_next.isEnabled())
+        a._go_back()
+        self.assertEqual((a._nav_phase, a.current_step), ("rounds", a.total_steps - 1))
+
     def test_round_zero_uses_plaintext_state_as_before_matrix(self):
         """Round 0 AddRoundKey, plaintext state ⊕ round_key = sonuç göstermeli."""
         from animation_modals import AESAnimationWindow

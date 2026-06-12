@@ -299,6 +299,16 @@ class _KeystreamWizardWidget(QWidget):
             p.drawText(QRect(area.left(), y, area.width(), 22),
                        Qt.AlignmentFlag.AlignCenter,
                        "keystream  ⊕  mesaj  =  şifreli metin")
+            y += 24
+
+        if local > 22:
+            p.setFont(cached_font("IBM Plex Sans", 9))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(area.left() + 12, y, area.width() - 24, 36),
+                       Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                       "Mesaj 16 bayttan uzunsa sayaç birer artar (00 00 00 03, "
+                       "00 00 00 04 …) ve sonraki her blok kendi keystream'ini "
+                       "aynı yolla üretir.")
 
     # ------------------------------------------------------------------
     # Çizim yardımcıları

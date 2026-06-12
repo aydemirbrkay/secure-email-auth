@@ -1071,7 +1071,7 @@ class _GCMRealEncryptWidget(QWidget):
         return 760
 
     def _min_h(self) -> int:
-        return 290
+        return 320
 
     # ------------------------------------------------------------------
     # Çizim
@@ -1127,6 +1127,16 @@ class _GCMRealEncryptWidget(QWidget):
                 msg = "Çıktı, beklenen ciphertext ile eşleşmedi."
             p.setFont(cached_font("IBM Plex Sans", 10, QFont.Weight.Bold))
             p.drawText(QRect(0, y, W, 22), Qt.AlignmentFlag.AlignCenter, msg)
+            y += 24
+
+        # Uzun mesajda yalnız ilk blok gösterilir; gerisi sayaç artarak aynı yolla.
+        if len(self._message) > 16:
+            p.setFont(cached_font("IBM Plex Sans", 9))
+            p.setPen(QColor(ANIM_COLORS["text_muted"]))
+            p.drawText(QRect(8, y, W - 16, 34),
+                       Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                       "Bu, mesajın ilk 16 baytlık bloğu; uzun mesajda sonraki "
+                       "bloklar sayaç artarak aynı şekilde şifrelenir.")
         p.end()
 
     def _draw_matrix(

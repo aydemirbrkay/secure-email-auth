@@ -160,7 +160,11 @@ class _SHARoundDetailWidget(QWidget):
     def _draw_title(self, p: QPainter, area: QRect, text: str,
                     color_hex: str) -> int:
         p.setFont(cached_font("Georgia", 12, QFont.Weight.Bold))
-        p.setPen(QColor(color_hex))
+        # color_hex bir ANIM_COLORS anahtarı ("accent_blue") veya ham hex
+        # olabilir; anahtarı çöz, çözülemezse olduğu gibi kullan. (Eskiden
+        # QColor("accent_blue") geçersiz=siyah render edip koyu temada
+        # başlıkları görünmez yapıyordu.)
+        p.setPen(QColor(ANIM_COLORS.get(color_hex, color_hex)))
         p.drawText(QRect(area.left() + 8, area.top() + 6, area.width() - 16, 24),
                    Qt.AlignmentFlag.AlignCenter, text)
         return area.top() + 38
@@ -175,7 +179,7 @@ class _SHARoundDetailWidget(QWidget):
     def _draw_hex_eq(self, p: QPainter, area: QRect, y: int, text: str,
                      color_hex: str) -> int:
         p.setFont(cached_font("Courier New", 12, QFont.Weight.Bold))
-        p.setPen(QColor(color_hex))
+        p.setPen(QColor(ANIM_COLORS.get(color_hex, color_hex)))
         p.drawText(QRect(area.left() + 8, y, area.width() - 16, 24),
                    Qt.AlignmentFlag.AlignCenter, text)
         return y + 30

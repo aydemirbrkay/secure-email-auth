@@ -18,7 +18,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPolygon
 from PyQt6.QtCore import QPoint
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
-from ..aes_pure import derive_sbox_value, _gf_mul
+from ..aes_pure import derive_sbox_value, _gf_mul, gf_inverse_exponent_steps
 from ..base import ANIM_COLORS, get_animation_tick_ms
 
 # Her adımın başlığı ve vurgu rengi (soldan sağa türetim akışı).
@@ -30,7 +30,8 @@ _STEP_COUNT = 4
 # azaltma ile ayrıca ölçeklenir). Affine bitleri tek tek görünür kalsın diye
 # _BIT_TICKS bilhassa yüksek tutulur.
 _INTRO_TICKS = 8      # Adım 0: girdi belirir.
-_INV_TICKS = 22       # Adım 1: ters kavramı + a·x=01 doğrulaması.
+_INV_TICKS = 40       # Adım 1: a⁻¹ = a²⁵⁴ üs alma — kareleme zinciri (a,a²,…,a¹²⁸)
+                      #         + seçili karelerin çarpımı + a·a⁻¹=01 doğrulaması.
 _BIT_TICKS = 5        # Affine'de her çıkış biti için alt-tick (okunaklı tempo).
 _AFFINE_TICKS = 8 * _BIT_TICKS  # Adım 2: 8 çıkış biti tek tek (8×5=40 tick).
 _RESULT_TICKS = 12    # Adım 3: sonuç + S[satır,sütun] şeması.
@@ -358,9 +359,41 @@ class _SBoxDerivationWidget(QWidget):
     # Sahne 1 — Çarpımsal Ters (kavram + a·x=01 doğrulaması)
     # ------------------------------------------------------------------
 
+    # Adım 1 fazları (adım içi ilerlemeye göre): kavram → kareleme zinciri →
+    # seçili karelerin çarpımı → bulundu/doğrulama.
+    _INV_SQUARE_START = 0.15
+    _INV_MULTIPLY_START = 0.60
+    _INV_FOUND_START = 0.90
+
+    # Kareleme zincirindeki güç etiketleri: a^(2^k), k = 0..7.
+    _SQUARE_LABELS = ("a", "a²", "a⁴", "a⁸", "a¹⁶", "a³²", "a⁶⁴", "a¹²⁸")
+
+    def _inverse_phase(self, progress: float) -> tuple[str, int, int]:
+        """(faz, gösterilen_kare_sayısı, gösterilen_çarpım_sayısı) döndürür.
+
+        Faz akışı: ``concept`` (kavram) → ``square`` (kareleri üret) →
+        ``multiply`` (seçili kareleri çarp) → ``found`` (ters + doğrulama).
+        Kare sayısı 0..8, çarpım sayısı 0..7 (a hariç 7 kare çarpılır)."""
+        if progress < self._INV_SQUARE_START:
+            return "concept", 0, 0
+        if progress < self._INV_MULTIPLY_START:
+            f = (progress - self._INV_SQUARE_START) / (
+                self._INV_MULTIPLY_START - self._INV_SQUARE_START)
+            return "square", min(8, 1 + int(f * 8)), 0
+        if progress < self._INV_FOUND_START:
+            f = (progress - self._INV_MULTIPLY_START) / (
+                self._INV_FOUND_START - self._INV_MULTIPLY_START)
+            return "multiply", 8, min(7, int(f * 7))
+        return "found", 8, 7
+
     def _paint_scene_inverse(self, p: QPainter, rect: QRect) -> None:
-        """Çarpımsal ters kavramını kurar ve GF(2⁸)'de a·x=01 ile doğrular."""
-        d = derive_sbox_value(self._byte)
+        """Çarpımsal tersi a⁻¹ = a²⁵⁴ ÜS ALMASIYLA (ardışık kareleme) BULUR.
+
+        a → a² → a⁴ → … → a¹²⁸ kareleri üretilir; 254 = 11111110 olduğundan
+        a hariç tüm kareler GF(2⁸)'de çarpılıp a⁻¹ elde edilir ve a·a⁻¹ = 01
+        ile doğrulanır. ``_gf_inverse``'in gerçek (brute-force olmayan)
+        mantığını birebir görselleştirir; brute-force 'tek tek deneme' yerine
+        matematiksel yöntem gösterilir."""
         progress = self._step_local_progress(1)
 
         if self._byte == 0:
@@ -371,44 +404,105 @@ class _SBoxDerivationWidget(QWidget):
             )
             return
 
-        # Faz eşikleri (adım içi ilerlemeye göre).
-        show_inverse = progress >= 0.35   # ? yerine ters belirir.
-        show_verify = progress >= 0.65    # GF çarpımı 01 doğrulanır.
+        steps = gf_inverse_exponent_steps(self._byte)
+        squares = steps["squares"]
+        multiplied = steps["multiplied"]
+        inv = steps["inverse"]
 
         mauve = QColor(ANIM_COLORS["accent_mauve"])
         green = QColor(ANIM_COLORS["accent_green"])
+        yellow = QColor(ANIM_COLORS["accent_yellow"])
+        sec = QColor(ANIM_COLORS["text_secondary"])
+        muted = QColor(ANIM_COLORS["text_muted"])
+        primary = QColor(ANIM_COLORS["text_primary"])
+        border = QColor(ANIM_COLORS["border"])
 
-        # a · x = 01 eşitliği (ortada büyük).
-        cy = rect.top() + 46
-        p.setFont(QFont("Courier New", 24, QFont.Weight.Bold))
-        a_txt = f"{self._byte:02x}"
-        x_txt = f"{d.inverse:02x}" if show_inverse else "?"
+        phase, squares_shown, products_shown = self._inverse_phase(progress)
+
+        # Üst: kavram (a⁻¹ = a²⁵⁴, çünkü a²⁵⁵ = 1) ve üs ikili gösterimi.
+        y = rect.top() + 2
+        p.setFont(QFont("Courier New", 15, QFont.Weight.Bold))
         self._paint_equation(
-            p, rect.center().x(), cy,
-            [(a_txt, QColor(ANIM_COLORS["accent_blue"])),
-             (" · ", QColor(ANIM_COLORS["text_secondary"])),
-             (x_txt, green if show_inverse else mauve),
-             (" = ", QColor(ANIM_COLORS["text_secondary"])),
-             ("01", QColor(ANIM_COLORS["text_primary"]))],
+            p, rect.center().x(), y + 12,
+            [("a⁻¹ = a", sec), ("²⁵⁴", green),
+             ("    (çünkü a²⁵⁵ = 1)", muted)],
         )
+        p.setFont(QFont("IBM Plex Sans", 9))
+        p.setPen(muted)
+        p.drawText(QRect(rect.left(), y + 26, rect.width(), 14),
+                   Qt.AlignmentFlag.AlignCenter,
+                   "254 = 1111 1110₂  →  a hariç tüm kareler çarpılır")
 
-        # Açıklama: önce kavram, sonra doğrulama.
-        if show_verify:
-            check = _gf_mul(self._byte, d.inverse)
-            note = (
-                f"Doğrulama (GF(2⁸)): {self._byte:02x} · {d.inverse:02x} = "
-                f"{check:02x} ✓  →  {d.inverse:02x}, {self._byte:02x}'in tersidir."
+        # Kareleme zinciri: a → a² → a⁴ → … → a¹²⁸ (chip'ler, ² ile bağlı).
+        n = 8
+        cw, ch = 50, 38
+        arrow = 16
+        row_w = n * cw + (n - 1) * arrow
+        ox = rect.center().x() - row_w // 2
+        cy = y + 56
+        for i in range(n):
+            x = ox + i * (cw + arrow)
+            shown = i < squares_shown
+            is_mult = i in multiplied  # bit=1 → çarpıma katılır
+            col = green if is_mult else mauve
+            fill = QColor(col)
+            fill.setAlpha(60 if shown else 12)
+            p.setBrush(QBrush(fill))
+            p.setPen(QPen(col if shown else border, 2 if shown else 1))
+            p.drawRoundedRect(x, cy, cw, ch, 7, 7)
+            p.setFont(QFont("IBM Plex Sans", 8, QFont.Weight.Bold))
+            p.setPen(col if shown else muted)
+            p.drawText(QRect(x - 4, cy - 14, cw + 8, 13),
+                       Qt.AlignmentFlag.AlignCenter, self._SQUARE_LABELS[i])
+            p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
+            p.setPen(primary if shown else muted)
+            p.drawText(QRect(x, cy, cw, ch), Qt.AlignmentFlag.AlignCenter,
+                       f"{squares[i]:02x}" if shown else "·")
+            if i < n - 1:
+                ax = x + cw
+                lit = (i + 1) < squares_shown
+                p.setPen(QPen(yellow if lit else border, 2))
+                p.drawLine(ax + 2, cy + ch // 2, ax + arrow - 2, cy + ch // 2)
+                p.setFont(QFont("IBM Plex Sans", 8, QFont.Weight.Bold))
+                p.setPen(yellow if lit else muted)
+                p.drawText(QRect(ax, cy - 1, arrow, 12),
+                           Qt.AlignmentFlag.AlignCenter, "²")
+
+        # Çarpım / sonuç satırı: a⁻¹ = a² · a⁴ · … = inv (birikerek).
+        if phase in ("multiply", "found"):
+            done = phase == "found"
+            count = 7 if done else max(1, products_shown)
+            terms = " · ".join(self._SQUARE_LABELS[i] for i in multiplied[:count])
+            value = inv if done else steps["products"][count - 1]
+            tail = "" if (done or count >= 7) else " · …"
+            py = cy + ch + 22
+            p.setFont(QFont("Courier New", 13, QFont.Weight.Bold))
+            self._paint_equation(
+                p, rect.center().x(), py,
+                [("a⁻¹ = ", sec), (terms + tail, green if done else yellow),
+                 (" = ", sec), (f"{value:02x}", green)],
             )
-            p.setPen(green)
-        elif show_inverse:
-            note = f"Bu eşi {d.inverse:02x}; çarpımları gerçekten 01 mi? Doğrulayalım…"
-            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+
+        # Not / doğrulama.
+        if phase == "concept":
+            note = (
+                "Tersi tek tek denemeyiz: GF(2⁸)'de a⁻¹ = a²⁵⁴. a'yı ardışık "
+                "kareleyip (a, a², a⁴, …) 254'ün 1 olan bitlerine düşen kareleri "
+                "çarparak buluruz."
+            )
+            p.setPen(sec)
+        elif phase == "square":
+            note = "Her kutu, bir öncekinin GF(2⁸)'deki karesidir: a → a² → a⁴ → …"
+            p.setPen(sec)
+        elif phase == "multiply":
+            note = ("254 = 11111110 olduğundan a (en sağ bit 0) hariç tüm kareler "
+                    "çarpılır; çarpım GF(2⁸)'de birikiyor.")
+            p.setPen(sec)
         else:
-            note = (
-                "GF(2⁸)'de 0 dışında her sayının, çarpımı 01 veren tek bir eşi "
-                "(çarpımsal tersi) vardır. Bu eşi arıyoruz."
-            )
-            p.setPen(QColor(ANIM_COLORS["text_secondary"]))
+            check = _gf_mul(self._byte, inv)
+            note = (f"Bulundu: a⁻¹ = {inv:02x}.  Doğrulama: {self._byte:02x} · "
+                    f"{inv:02x} = {check:02x} ✓")
+            p.setPen(green)
         self._paint_note(p, rect, note, set_pen=False)
 
     # ------------------------------------------------------------------

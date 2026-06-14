@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
     QFrame,
+    QGridLayout,
     QHeaderView,
     QHBoxLayout,
     QLabel,
@@ -125,16 +126,108 @@ class _SBoxReferenceDialog(QDialog):
         return self.table_frame
 
     def _build_derivation_page(self) -> QWidget:
-        """S-Box türetimini canlandıran animasyon widget'ını taşıyan sayfayı kurar."""
+        """S-Box türetim sayfasını kurar: solda tıklanabilir girdi matrisi,
+        sağda türetim animasyonu.
+
+        Sol matristen bir byte seçmek o byte'ın türetimini baştan oynatır;
+        böylece kullanıcı istediği değerin hesabını seçip izleyebilir ve
+        animasyonu kaçırdıysa aynı değere dönüp yeniden görebilir.
+        """
         self.derivation_frame = QFrame(self)
-        derivation_layout = QVBoxLayout(self.derivation_frame)
-        derivation_layout.setContentsMargins(16, 14, 16, 16)
-        derivation_layout.setSpacing(8)
+        outer = QHBoxLayout(self.derivation_frame)
+        outer.setContentsMargins(14, 12, 14, 14)
+        outer.setSpacing(12)
+
+        outer.addWidget(self._build_input_matrix(), stretch=0)
 
         self.derivation_widget = _SBoxDerivationWidget(self.derivation_frame)
         self.derivation_widget.set_mappings(self._mappings)
-        derivation_layout.addWidget(self.derivation_widget, stretch=1)
+        outer.addWidget(self.derivation_widget, stretch=1)
         return self.derivation_frame
+
+    def _build_input_matrix(self) -> QWidget:
+        """Mesajın SubBytes girdi byte'larını tıklanabilir bir ızgara olarak kurar.
+
+        Her hücre, o adımdaki benzersiz bir girdi byte'ını gösterir; tıklanınca
+        ``show_derivation_for`` ile o byte'ın türetim animasyonu baştan oynar.
+        Amaç: kullanıcı istediği değerin hesabını seçebilsin ve kaçırırsa geri
+        dönüp tekrar izleyebilsin. Girdi yoksa kısa bir bilgi etiketi gösterilir.
+
+        Dönüş: sol panele yerleştirilecek hazır ``QWidget``.
+        """
+        panel = QWidget()
+        lay = QVBoxLayout(panel)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        self.input_matrix_title = QLabel("Girdi byte'ları\n(tıkla → hesabı izle)")
+        self.input_matrix_title.setWordWrap(True)
+        self.input_matrix_title.setFont(QFont("IBM Plex Sans", 9, QFont.Weight.Bold))
+        lay.addWidget(self.input_matrix_title)
+
+        self._input_buttons: list[tuple[int, QPushButton]] = []
+        self._selected_input_byte: int | None = None
+        self.input_empty_hint: QLabel | None = None
+
+        inputs = list(dict.fromkeys(source for source, _ in self._mappings))
+        if not inputs:
+            self.input_empty_hint = QLabel(
+                "Bu adımda girdi yok; varsayılan örnek gösteriliyor.")
+            self.input_empty_hint.setWordWrap(True)
+            self.input_empty_hint.setFont(QFont("IBM Plex Sans", 8))
+            lay.addWidget(self.input_empty_hint)
+        else:
+            grid_host = QWidget()
+            grid = QGridLayout(grid_host)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setSpacing(4)
+            cols = 4
+            for idx, source in enumerate(inputs):
+                byte = int(source, 16)
+                btn = QPushButton(f"{byte:02x}")
+                btn.setFixedSize(42, 34)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.clicked.connect(
+                    lambda _checked=False, b=byte: self._on_input_selected(b))
+                self._input_buttons.append((byte, btn))
+                grid.addWidget(btn, idx // cols, idx % cols)
+            lay.addWidget(grid_host)
+
+        lay.addStretch(1)
+        panel.setFixedWidth(190)
+        return panel
+
+    def _on_input_selected(self, byte: int) -> None:
+        """Girdi matrisinden seçilen byte'ın türetimini baştan oynatır.
+
+        ``byte`` 0-255 arası girdi değeridir. Seçim, türetim widget'ını o byte'a
+        kilitler (``show_derivation_for``) ve seçili hücreyi vurgular.
+        """
+        self._selected_input_byte = byte
+        self.show_derivation_for(byte)
+        self._style_input_buttons()
+
+    def _style_input_buttons(self) -> None:
+        """Girdi matrisi düğmelerini aktif temaya göre boyar; seçili byte vurgulu.
+
+        Seçili hücre sarı zemin + koyu metinle ayrışır; diğerleri nötr zemin
+        ve hover'da sarı kenarlık alır. Tema değişiminde de yeniden çağrılır.
+        """
+        for byte, btn in getattr(self, "_input_buttons", []):
+            if byte == self._selected_input_byte:
+                btn.setStyleSheet(
+                    f"QPushButton {{ background: {ANIM_COLORS['accent_yellow']}; "
+                    f"color: {ANIM_COLORS['bg_main']}; "
+                    f"border: 2px solid {ANIM_COLORS['accent_yellow']}; "
+                    "border-radius: 5px; font-weight: bold; }}")
+            else:
+                btn.setStyleSheet(
+                    f"QPushButton {{ background: {ANIM_COLORS['bg_input']}; "
+                    f"color: {ANIM_COLORS['text_primary']}; "
+                    f"border: 1px solid {ANIM_COLORS['border']}; "
+                    "border-radius: 5px; font-weight: bold; }}"
+                    f"QPushButton:hover {{ border: 1px solid "
+                    f"{ANIM_COLORS['accent_yellow']}; }}")
 
     def _example_text(self) -> str:
         if not self._mappings:
@@ -244,6 +337,13 @@ class _SBoxReferenceDialog(QDialog):
             f"border: 1px solid {ANIM_COLORS['border']}; border-radius: 8px; }}"
         )
         self.derivation_widget.update()  # QPainter widget'ı yeni paletle yeniden boyanır.
+        if hasattr(self, "input_matrix_title"):
+            self.input_matrix_title.setStyleSheet(
+                f"color: {ANIM_COLORS['text_secondary']};")
+        if getattr(self, "input_empty_hint", None) is not None:
+            self.input_empty_hint.setStyleSheet(
+                f"color: {ANIM_COLORS['text_muted']};")
+        self._style_input_buttons()
         self._highlight_used_cells()
         self.update()
 

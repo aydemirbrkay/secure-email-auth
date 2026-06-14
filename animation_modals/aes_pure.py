@@ -77,17 +77,74 @@ def _gf_mul(a: int, b: int) -> int:
 
 
 def _gf_inverse(a: int) -> int:
-    """GF(2^8) gövdesinde bir byte'ın çarpımsal tersini döndürür (0 → 0).
+    """GF(2^8) gövdesinde bir byte'ın çarpımsal tersini ÜS ALMA ile döndürür.
 
-    Brute-force ile a · x = 1 sağlayan x aranır; eğitim amacıyla sade
-    tutulmuştur. 0'ın tersi tanımsızdır, AES sözleşmesi gereği 0 döner.
+    Amaç: Tersi, "tek tek deneme" (brute-force) yerine gerçek matematiksel
+    yöntemle hesaplar; animasyon da bu mantığı birebir gösterir.
+
+    Yöntem: GF(2⁸)'in sıfırdan farklı 255 elemanı çarpımsal bir grup oluşturur;
+    bu yüzden a ≠ 0 için a²⁵⁵ = 1, dolayısıyla a⁻¹ = a²⁵⁴ (Fermat/Lagrange).
+    254 = 0b11111110 olduğundan a²⁵⁴, ardışık karelerin (a², a⁴, …, a¹²⁸)
+    çarpımıdır; klasik kare-al-ve-çarp (square-and-multiply) ile hesaplanır.
+
+    Parametre ``a``: 0-255 arası byte.
+    Dönüş: ``a``'nın GF(2⁸) çarpımsal tersi (byte). 0'ın tersi tanımsızdır;
+    AES sözleşmesi gereği 0 döner.
     """
     if a == 0:
         return 0
-    for x in range(1, 256):
-        if _gf_mul(a, x) == 1:
-            return x
-    return 0  # GF(2^8) bir cisim olduğundan buraya ulaşılmaz
+    result = 1
+    square = a
+    exp = 254
+    while exp:
+        if exp & 1:
+            result = _gf_mul(result, square)
+        square = _gf_mul(square, square)
+        exp >>= 1
+    return result
+
+
+def gf_inverse_exponent_steps(a: int) -> dict:
+    """a⁻¹ = a²⁵⁴'ün ardışık-kareleme adımlarını animasyon için üretir.
+
+    Amaç: ``_gf_inverse``'in yaptığı gerçek hesabı (kare-al-ve-çarp) görsel
+    olarak adım adım gösterebilmek için ara değerleri toplar.
+
+    Parametre ``a``: 0-255 arası byte.
+
+    Dönüş sözlüğü:
+      ``a``         : girdi byte'ı,
+      ``exponent``  : 254 (a²⁵⁴ = a⁻¹),
+      ``bits``      : 254'ün 8 biti, LSB→MSB ([0,1,1,1,1,1,1,1]); i. bit,
+                      a^(2^i) karesinin çarpıma katılıp katılmadığını söyler,
+      ``squares``   : [a^(2⁰), a^(2¹), …, a^(2⁷)] = [a, a², a⁴, …, a¹²⁸],
+      ``multiplied``: çarpıma giren kare indeksleri (bit=1 olanlar) = [1..7],
+      ``products``  : her çarpımdan sonra biriken kısmi çarpım listesi
+                      (son eleman = a⁻¹),
+      ``inverse``   : a⁻¹.
+
+    ``a == 0`` için tersi tanımsızdır; alanlar sıfır/boş döner.
+    """
+    if a == 0:
+        return {
+            "a": 0, "exponent": 254, "bits": [0] * 8,
+            "squares": [], "multiplied": [], "products": [], "inverse": 0,
+        }
+    squares = [a]
+    for _ in range(7):
+        squares.append(_gf_mul(squares[-1], squares[-1]))
+    bits = [(254 >> i) & 1 for i in range(8)]
+    multiplied = [i for i in range(8) if bits[i]]
+    products: list[int] = []
+    running = 1
+    for i in multiplied:
+        running = _gf_mul(running, squares[i])
+        products.append(running)
+    return {
+        "a": a, "exponent": 254, "bits": bits,
+        "squares": squares, "multiplied": multiplied,
+        "products": products, "inverse": products[-1] if products else 0,
+    }
 
 
 def _affine_transform(b: int) -> int:

@@ -50,6 +50,7 @@ class _SHARoundDetailWidget(QWidget):
         h0_init: str,
         final_word: str,
         final_hash: str,
+        is_final_round: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -57,6 +58,9 @@ class _SHARoundDetailWidget(QWidget):
         self.h0_init = h0_init
         self.final_word = final_word
         self.final_hash = final_hash
+        # Köprü sahnesi yalnız son bloğun 64. round'unda final hash'e bağlanır;
+        # diğer round'larda çıktının sonraki round'a aktığı anlatılır.
+        self.is_final_round = is_final_round
         self._scene_index = 0
         # Bit satırı yerleşimi (paintEvent her boyutta yeniden hesaplar).
         self._bits_x0 = 230
@@ -189,10 +193,12 @@ class _SHARoundDetailWidget(QWidget):
     def _sc_input(self, p: QPainter, area: QRect) -> None:
         d = self.detail
         blocks = d.get("blocks_count", 1)
+        rn = d.get("round_no", 64)
+        blk = d.get("block_no", 1)
         origin = ("senin mesaj bloğundan" if blocks == 1
-                  else f"son bloktan (Blok {d.get('block_no')}/{blocks})")
+                  else f"Blok {blk}/{blocks}'ten")
         y = self._draw_title(p, area,
-                             f"Son bloğun 64. round'u — girişler", "accent_blue")
+                             f"Round {rn} — girişler", "accent_blue")
         # a..h chip satırı
         labels = ["A", "B", "C", "D", "E", "F", "G", "H"]
         vals = [d[k] for k in "abcdefgh"]
@@ -294,8 +300,33 @@ class _SHARoundDetailWidget(QWidget):
                               f"E' = D + T1 = {d['new_e']}",
                               ANIM_COLORS["accent_green"])
 
+    def _sc_next_round(self, p: QPainter, area: QRect) -> None:
+        """Son round DEĞİLSE: bu round'un çıktısının sonraki round'a nasıl
+        aktığını gösterir (final hash köprüsü yalnız son round'da anlamlı)."""
+        d = self.detail
+        rn = d.get("round_no", 0)
+        y = self._draw_title(p, area, "Bu round'un çıktısı ne olur?",
+                             "accent_green")
+        y = self._draw_hex_eq(p, area, y + 4,
+                              f"A' = T1 + T2 = {d['new_a']}      "
+                              f"E' = D + T1 = {d['new_e']}",
+                              ANIM_COLORS["accent_green"])
+        y = self._draw_hex_eq(p, area, y + 6,
+                              f"Round {rn}  →  Round {rn + 1}: "
+                              "A..H bir sağa kayar; A←A', E←E'",
+                              ANIM_COLORS["accent_yellow"])
+        self._draw_note(p, area, y + 10,
+                        "Her round register'ları bir sağa kaydırır ve yalnız A "
+                        "ile E'yi günceller (B..D, F..H bir önceki değerden gelir). "
+                        "64 round sonra son bloğun çıkışı başlangıç H değerlerine "
+                        "eklenir; bu toplam hash'i oluşturur — son round'un "
+                        "'Köprü' sahnesi bunu ekrandaki hash'e bağlar.")
+
     def _sc_bridge(self, p: QPainter, area: QRect) -> None:
         d = self.detail
+        if not self.is_final_round:
+            self._sc_next_round(p, area)
+            return
         y = self._draw_title(p, area, "Ben neyi hesapladım?", "accent_green")
         y = self._draw_hex_eq(p, area, y + 4,
                               f"64. round'un A çıkışı:  A' = {d['new_a']}",
@@ -333,10 +364,12 @@ class _SHARoundDetailDialog(QDialog):
         h0_init: str,
         final_word: str,
         final_hash: str,
+        is_final_round: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.detail = detail
+        self.is_final_round = is_final_round
         self._configure_window()
         self._build_ui(detail, h0_init, final_word, final_hash)
         self._resize_to_available_screen()
@@ -345,7 +378,8 @@ class _SHARoundDetailDialog(QDialog):
         self.finished.connect(self._disconnect_theme_signal)
 
     def _configure_window(self) -> None:
-        self.setWindowTitle("SHA-256 Round 64 — Bit Bit Çözüm")
+        rn = self.detail.get("round_no", 64)
+        self.setWindowTitle(f"SHA-256 Round {rn} — Bit Bit Çözüm")
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.CustomizeWindowHint
@@ -359,7 +393,13 @@ class _SHARoundDetailDialog(QDialog):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(10)
 
-        self.title_label = QLabel("Mesajın hash'inin bir parçası nasıl hesaplandı?")
+        rn = detail.get("round_no", 64)
+        title_text = (
+            "Mesajın hash'inin bir parçası nasıl hesaplandı?"
+            if self.is_final_round
+            else f"Sıkıştırma round {rn} bit bit nasıl hesaplanır?"
+        )
+        self.title_label = QLabel(title_text)
         self.title_label.setFont(QFont("Georgia", 14, QFont.Weight.Bold))
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.title_label)
@@ -371,7 +411,8 @@ class _SHARoundDetailDialog(QDialog):
         layout.addWidget(self.hint_label)
 
         self.wizard = _SHARoundDetailWidget(
-            detail, h0_init, final_word, final_hash, parent=self)
+            detail, h0_init, final_word, final_hash,
+            is_final_round=self.is_final_round, parent=self)
         layout.addWidget(self.wizard, stretch=1)
 
         # Gezinme: ◀ Geri / İleri ▶ (gövde-tıkla ilerletmez) + Baştan.

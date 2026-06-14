@@ -146,6 +146,10 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
     def _init_content(self) -> None:
         from PyQt6.QtWidgets import QStackedWidget
 
+        # Sayfa 0 intro = "algoritma şeması"; başlangıçta o gösterilir. Geri
+        # navigasyonu (bkz. _go_back) bu sayfaya dönebilmek için bu bayrağı okur.
+        self._showing_intro = True
+
         self._stack = QStackedWidget()
         self.content_layout.addWidget(self._stack, stretch=1)
 
@@ -165,6 +169,7 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         intro_scroll.setStyleSheet("background: transparent; border: none;")
         intro_scroll.setMinimumHeight(260)
+        self._intro_scroll = intro_scroll
         self._stack.addWidget(intro_scroll)
 
         # Sayfa 1 — Mesaj Hazırlığı (yeni, Adım 1/5)
@@ -454,16 +459,26 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         )
 
     def _show_round_detail(self) -> None:
-        """Son bloğun 64. round'unu bit düzeyinde çözen drill-down'ı açar.
-        'Ben neyi hesapladım?' köprüsü için gerçek değerleri taşır."""
-        detail = self._data.get("round_detail")
+        """GÖSTERİLEN round'u bit düzeyinde çözen drill-down'ı açar.
+
+        Düğme her round'da etkin; eskiden hep son bloğun 64. round'unu
+        açıyordu (yanıltıcı). Artık o an diyagramda görünen snapshot'ın kendi
+        detayını açar. Son bloğun 64. round'unda 'Köprü' sahnesi çıktıyı final
+        hash'e bağlar; diğer round'larda çıktının sonraki round'a aktığını
+        gösterir."""
+        snap_idx = self.current_step - 3
+        if snap_idx < 0 or snap_idx >= len(self._snaps):
+            return
+        detail = self._snaps[snap_idx].get("detail")
         if detail is None:
             return
+        is_final_round = (snap_idx == len(self._snaps) - 1)
         dialog = _SHARoundDetailDialog(
             detail,
             h0_init=self._data["pre_final_h"][0],
             final_word=self._data["final_h_parts"][0],
             final_hash=self._data["final_hash"],
+            is_final_round=is_final_round,
             parent=self,
         )
         self._round_detail_dialog = dialog
@@ -526,13 +541,13 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
         current_step / progress / bottom button state'ini güncelleyerek
         hedef adıma atla (AES'in _jump_to_round desenine paralel)."""
         self.current_step = target_step
+        self._showing_intro = False
         self._render_step(target_step)
         self._progress.setValue(target_step + 1)
-        if hasattr(self, "_btn_prev"):
-            self._btn_prev.setEnabled(target_step > 0)
         if hasattr(self, "_btn_next"):
             self._btn_next.setEnabled(True)
             self._btn_next.setText("İleri  ▶")
+        self._sync_nav_buttons()
 
     def _diag_update_round_bar(self, in_block_idx: int) -> None:
         self._diag_active_round_idx = in_block_idx
@@ -664,9 +679,60 @@ class SHA256AnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _switch_to_content(self) -> None:
-        """Intro'dan Mesaj Hazırlığı sayfasına geç ve step 0'ı render et."""
+        """Intro'dan (algoritma şeması) Mesaj Hazırlığı sayfasına geç ve
+        step 0'ı render et. Artık intro'da değiliz; Geri butonu 'Algoritmaya
+        dön' olur (bir geri daha şemaya döner)."""
+        self._showing_intro = False
         self._render_step(0)
         self._progress.setValue(1)
+        self._sync_nav_buttons()
+
+    def _switch_to_intro(self) -> None:
+        """Adım 1'den intro'ya (algoritma şeması) geri döner."""
+        self._showing_intro = True
+        self._stack.setCurrentWidget(self._intro_scroll)
+        self._progress.setValue(0)
+        if hasattr(self, "_btn_next"):
+            self._btn_next.setEnabled(True)
+            self._btn_next.setText("İleri  ▶")
+        self._sync_nav_buttons()
+
+    def _sync_nav_buttons(self) -> None:
+        """Geri butonunun metnini/aktifliğini cari konuma göre ayarlar.
+
+        İçeriğin ilk adımındayken (Adım 1) bir geri daha intro'ya (algoritma
+        şemasına) döneceği için buton 'Algoritmaya dön' yazar — kullanıcı çok
+        geri gelince şemayı yeniden görebilir."""
+        if not hasattr(self, "_btn_prev"):
+            return
+        if self._showing_intro:
+            self._btn_prev.setEnabled(False)
+            self._btn_prev.setText("◀  Geri")
+        elif self.current_step == 0:
+            self._btn_prev.setEnabled(True)
+            self._btn_prev.setText("◀  Algoritmaya dön")
+        else:
+            self._btn_prev.setEnabled(True)
+            self._btn_prev.setText("◀  Geri")
+
+    def _advance_step(self) -> None:  # type: ignore[override]
+        """İleri ▶ — intro'dayken içeriğe geçer, sonra base zincirini izler."""
+        if getattr(self, "_showing_intro", False):
+            self._switch_to_content()
+            return
+        super()._advance_step()
+        self._sync_nav_buttons()
+
+    def _go_back(self) -> None:  # type: ignore[override]
+        """◀ Geri — Adım 1'den intro'ya (algoritma şeması) döner; aksi halde
+        base davranışı (bir önceki adım)."""
+        if getattr(self, "_showing_intro", False):
+            return
+        if self.current_step == 0:
+            self._switch_to_intro()
+            return
+        super()._go_back()
+        self._sync_nav_buttons()
 
     # showEvent override — intro kendi timer'ını yönetiyor, base class'ı atla
     def showEvent(self, event) -> None:  # type: ignore[override]

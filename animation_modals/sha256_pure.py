@@ -239,6 +239,14 @@ def sha256_steps(message: bytes) -> dict:
                     "k": f"{K[i]:08x}",
                     "t1": f"{temp1:08x}",
                     "t2": f"{temp2:08x}",
+                    # Bu snapshot'a ait bit-düzeyi drill-down verisi: "bu round'u
+                    # bit bit çöz" düğmesi GÖSTERİLEN round'u açsın (eskiden hep
+                    # son bloğun 64. round'unu açıyordu). regs_in bu round'un
+                    # girişidir → detay gösterilen round'la birebir tutarlıdır.
+                    "detail": _build_round_detail(
+                        regs_in, K[i], w[i], i + 1,
+                        blk_idx + 1, len(blocks),
+                    ),
                 })
 
         h_before = list(h)  # son bloğun eklenmesinden önceki H değerleri

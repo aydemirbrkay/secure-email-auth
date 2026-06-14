@@ -43,6 +43,14 @@ class TestSHAWDetailDialog(unittest.TestCase):
         self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
         self.assertEqual(dialog.windowType(), Qt.WindowType.Window)
 
+    def test_no_replay_button(self):
+        """'Baştan' düğmesi kaldırıldı (yanlış tıklama riski); Geri/İleri kalır."""
+        dialog = _WDetailDialog(self._detail)
+
+        self.assertFalse(hasattr(dialog, "replay_btn"))
+        self.assertTrue(hasattr(dialog, "prev_btn"))
+        self.assertTrue(hasattr(dialog, "next_btn"))
+
     def test_wizard_is_manual_and_advances_on_click(self):
         dialog = _WDetailDialog(self._detail)
         wizard = dialog.wizard

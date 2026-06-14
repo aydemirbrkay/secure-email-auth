@@ -49,6 +49,14 @@ class TestSHARoundDetailDialog(unittest.TestCase):
         self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
         self.assertEqual(dialog.windowType(), Qt.WindowType.Window)
 
+    def test_no_replay_button(self):
+        """'Baştan' düğmesi kaldırıldı (yanlış tıklama riski); Geri/İleri kalır."""
+        dialog = self._make_dialog()
+
+        self.assertFalse(hasattr(dialog, "replay_btn"))
+        self.assertTrue(hasattr(dialog, "prev_btn"))
+        self.assertTrue(hasattr(dialog, "next_btn"))
+
     def test_bits_helper_is_32_chars(self):
         """_bits, 8-hane hex'i 32 karakter ikiliye çevirmeli."""
         self.assertEqual(len(_bits("00000000")), 32)

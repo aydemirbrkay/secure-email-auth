@@ -292,7 +292,8 @@ class _WDetailDialog(QDialog):
         self.wizard = _WDetailWidget(detail, parent=self)
         layout.addWidget(self.wizard, stretch=1)
 
-        # Gezinme: ◀ Geri / İleri ▶ (gövde-tıkla ilerletmez) + Baştan.
+        # Gezinme: ◀ Geri / İleri ▶ (gövde-tıkla ilerletmez). "Baştan" kaldırıldı
+        # — kullanıcı yanlışlıkla tıklayıp sahneyi sıfırlamasın; Geri/İleri yeter.
         nav_row = QHBoxLayout()
         nav_row.addStretch(1)
         self.prev_btn = QPushButton("◀ Geri")
@@ -301,9 +302,6 @@ class _WDetailDialog(QDialog):
         self.next_btn = QPushButton("İleri ▶")
         self.next_btn.clicked.connect(self._go_next)
         nav_row.addWidget(self.next_btn)
-        self.replay_btn = QPushButton("Baştan")
-        self.replay_btn.clicked.connect(self.wizard.start)
-        nav_row.addWidget(self.replay_btn)
         nav_row.addStretch(1)
         layout.addLayout(nav_row)
 
@@ -336,7 +334,7 @@ class _WDetailDialog(QDialog):
             f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
             f"color: {ANIM_COLORS['text_on_accent']}; border: none; "
             "border-radius: 6px; padding: 7px 16px; font-weight: bold; }}")
-        for btn in (self.prev_btn, self.next_btn, self.replay_btn):
+        for btn in (self.prev_btn, self.next_btn):
             btn.setStyleSheet(btn_style)
         self.wizard.update()
         self.update()

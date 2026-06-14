@@ -274,11 +274,12 @@ class ThemeManager(QObject):
     def __init__(self) -> None:
         super().__init__()
         self._settings = QSettings("ErciyesBM", "SecureEmail")
-        # Varsayılan tema AÇIK (light): program ilk açılışta açık temayla başlar.
-        # Kullanıcı bir tema seçtiyse o ayar korunur (kalıcı QSettings).
-        self.mode: str = self._settings.value("theme_mode", "light", type=str)
-        if self.mode not in _PALETTES:
-            self.mode = "light"
+        # Uygulama HER açılışta açık (light) tema ile başlar. Kullanıcı oturum
+        # içinde tema değiştir düğmesiyle (set_mode/toggle) değiştirebilir; ancak
+        # başlangıç daima açık temadır → kayıtlı tercih başlangıçta KASITLI olarak
+        # yok sayılır. (Aksi halde testlerin/önceki oturumun yazdığı 'dark' değeri
+        # açılışı koyu yapıyordu.)
+        self.mode: str = "light"
         _load_palette(self.mode)
         global GLOBAL_STYLESHEET
         GLOBAL_STYLESHEET = build_global_stylesheet()

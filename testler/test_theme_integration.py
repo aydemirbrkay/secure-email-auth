@@ -131,5 +131,37 @@ class TestThemeIntegration(unittest.TestCase):
         theme.MANAGER.set_mode("dark")
 
 
+class TestThemeStartsLight(unittest.TestCase):
+    """Uygulama her açılışta açık (light) tema ile başlamalı.
+
+    Kayıtlı tercih (QSettings) ne olursa olsun başlangıç daima açık temadır;
+    kullanıcı oturum içinde set_mode/toggle ile değiştirebilir.
+    """
+
+    def setUp(self) -> None:
+        from arayuz import theme
+        self._original = theme.MANAGER.mode
+
+    def tearDown(self) -> None:
+        from arayuz import theme
+        theme.MANAGER.set_mode(self._original)
+
+    def test_fresh_manager_starts_light_even_if_dark_saved(self) -> None:
+        from PyQt6.QtCore import QSettings
+        from arayuz import theme
+
+        QSettings("ErciyesBM", "SecureEmail").setValue("theme_mode", "dark")
+        manager = theme.ThemeManager()
+        self.assertEqual(manager.mode, "light")
+
+    def test_runtime_toggle_still_changes_theme(self) -> None:
+        """Başlangıç açık olsa da kullanıcı oturum içinde temayı değiştirebilmeli."""
+        from arayuz import theme
+
+        theme.MANAGER.set_mode("light")
+        theme.MANAGER.toggle()
+        self.assertEqual(theme.MANAGER.mode, "dark")
+
+
 if __name__ == "__main__":
     unittest.main()

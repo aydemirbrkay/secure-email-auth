@@ -145,8 +145,16 @@ class _RSAKeyBuilderWidget(QWidget):
         return lbl
 
     def set_step(self, step_idx: int) -> None:
-        """Verilen adıma göre alanları doldur ve yeni dolanları pulse ile vurgula."""
-        for key, fill_step, _sym, val, color_key in self._FIELDS:
+        """Verilen adıma göre alanları doldur ve yeni dolanları pulse ile vurgula.
+
+        Alan değerleri her çağrıda CARİ H değerlerinden okunur; böylece elle
+        (özelleştirme) ya da rastgele yeniden seçim sonrası panel anında tazelenir."""
+        cur_vals = {
+            "p": str(H._P), "q": str(H._Q), "n": str(H._N),
+            "phi": str(H._PHI), "e": str(H._E), "d": str(H._D),
+        }
+        for key, fill_step, _sym, _snapshot_val, color_key in self._FIELDS:
+            val = cur_vals[key]
             sym_lbl, val_lbl, frame = self._cells[key]
             should_be_filled = step_idx >= fill_step
             was_filled = self._last_step >= fill_step
@@ -174,10 +182,10 @@ class _RSAKeyBuilderWidget(QWidget):
                 )
 
         # Açık anahtar — Adım 4 sonrası (e ve n biliniyor)
-        # Cari (instance-snapshot) değerlerden oku; FIELDS aynı anda set edildi
-        e_val = self._FIELDS[4][3]   # 'e' alanının str değeri
-        n_val = self._FIELDS[2][3]   # 'n' alanının str değeri
-        d_val = self._FIELDS[5][3]   # 'd' alanının str değeri
+        # Cari H değerlerinden oku (elle/rastgele seçim sonrası taze).
+        e_val = cur_vals["e"]
+        n_val = cur_vals["n"]
+        d_val = cur_vals["d"]
         self._set_key_card(
             self._public_card, icon_sign="+", title="Açık Anahtar",
             color=ANIM_COLORS["accent_blue"],

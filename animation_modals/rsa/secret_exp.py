@@ -241,13 +241,23 @@ class _EEAWidget(QWidget):
                        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter,
                        line)
 
-        # Sonuç d — arama bittikten sonra belirir
+        # Sonuç d — arama bittikten sonra çerçeveli kutuda belirir; "d bulundu"
+        # mesajı kullanıcıya net görünsün diye yeşil kenarlıkla vurgulanır.
         result_y = row_y + len(visible) * line_h + 16
         if self._tick >= self._t_result:
             p.setFont(QFont("Courier New", 14, QFont.Weight.Bold))
+            d_text = f"d = {H._D}"
+            box_w = p.fontMetrics().horizontalAdvance(d_text) + 48
+            box_h = 32
+            box_x = (W - box_w) // 2
+            fill = QColor(success_color)
+            fill.setAlpha(45)
+            p.setBrush(QBrush(fill))
+            p.setPen(QPen(success_color, 2))
+            p.drawRoundedRect(box_x, result_y, box_w, box_h, 6, 6)
             p.setPen(success_color)
-            p.drawText(QRect(0, result_y, W, 26),
-                       Qt.AlignmentFlag.AlignCenter, f"d = {H._D}")
+            p.drawText(QRect(box_x, result_y, box_w, box_h),
+                       Qt.AlignmentFlag.AlignCenter, d_text)
 
         # Doğrulama — kongrüans formunda (e·d ≡ 1 mod ϕ)
         verify_y = result_y + 36

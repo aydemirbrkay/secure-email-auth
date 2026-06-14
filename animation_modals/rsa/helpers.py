@@ -95,43 +95,46 @@ _DER_SEQ: bytes = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
 _B64_DEMO: str  = base64.b64encode(_DER_SEQ).decode()
 
 
-def _reseed_demo() -> None:
-    """Modül seviyesindeki RSA demo değerlerini rastgele bir küçük asal
-    çiftiyle yeniden hesaplar. RSAAnimationWindow her açıldığında çağrılır,
-    böylece kullanıcı her seferinde farklı (p, q, n, ϕ, e, d) görür.
+# Otomatik/elle her iki seçimde de geçerli açık üs e'nin aranacağı yaygın
+# küçük adaylar. e: küçük ve gcd(e, ϕ) = 1 koşulunu sağlayan ilk değer.
+_E_CANDIDATES: tuple[int, ...] = (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
 
-    Seçim kuralları:
-      - p, q ∈ _PRIME_POOL (11..97 asalları), p ≠ q
-      - n = p × q ≥ 143 (örnek mesaj için makul aralık)
-      - e: küçük ve gcd(e, ϕ) = 1 koşulunu sağlayan ilk yaygın değer
-        (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
-      - d = e⁻¹ mod ϕ, (e × d) mod ϕ == 1 invariantı sağlanmalı
-      - m: 2 ≤ m < n ve gcd(m, n) = 1 koşuluyla rastgele (doğru RSA örneği:
-        m, n ile aralarında asal olmalı ki şifreleme bire-bir olsun)
+
+def _recompute_from_pq(p: int, q: int, min_n: int = 143) -> bool:
+    """Verilen (p, q) çiftinden tüm RSA demo global'lerini (n, ϕ, e, d, m,
+    DER, b64) yeniden hesaplar ve bağlar.
+
+    Hem `_reseed_demo` (rastgele çift) hem `_apply_custom_pq` (kullanıcı çifti)
+    bu çekirdeği kullanır → seçim kuralları tek yerde tutulur.
+
+    Geçerlilik koşulları:
+      - n = p × q ≥ min_n
+      - e: `_E_CANDIDATES` içinden gcd(e, ϕ) = 1 ve e < ϕ sağlayan ilk değer
+      - d = e⁻¹ mod ϕ, (e × d) mod ϕ == 1 invariantı
+      - m: 2 ≤ m < n, gcd(m, n) = 1 (RSA'nın bire-bir olması için)
+
+    Başarılıysa global'leri set edip True; koşullardan biri sağlanmazsa
+    global'lere DOKUNMADAN False döner.
     """
     global _P, _Q, _N, _PHI, _E, _D, _M
     global _DER_N, _DER_E, _DER_SEQ, _B64_DEMO
 
-    while True:
-        p, q = random.sample(_PRIME_POOL, 2)
-        n = p * q
-        if n < 143:               # örnek mesaj için makul aralık garantisi
-            continue
-        phi = (p - 1) * (q - 1)
-        e = next(
-            (cand for cand in (3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37)
-             if cand < phi and gcd(cand, phi) == 1),
-            None,
-        )
-        if e is None:
-            continue
-        try:
-            d = pow(e, -1, phi)
-        except ValueError:
-            continue
-        if (e * d) % phi != 1:
-            continue
-        break
+    n = p * q
+    if n < min_n:
+        return False
+    phi = (p - 1) * (q - 1)
+    e = next(
+        (cand for cand in _E_CANDIDATES if cand < phi and gcd(cand, phi) == 1),
+        None,
+    )
+    if e is None:
+        return False
+    try:
+        d = pow(e, -1, phi)
+    except ValueError:
+        return False
+    if (e * d) % phi != 1:
+        return False
 
     # Mesaj m: n ile aralarında asal, 2 ≤ m < n. gcd=1 koşulu RSA'nın
     # doğru çalışması için gerekir (m, p veya q'nun katı olmamalı).
@@ -140,7 +143,7 @@ def _reseed_demo() -> None:
         m = random.randrange(2, n)
 
     _P, _Q = p, q
-    _N = p * q
+    _N = n
     _PHI = phi
     _E = e
     _D = d
@@ -149,6 +152,38 @@ def _reseed_demo() -> None:
     _DER_E = _der_int(_E)
     _DER_SEQ = bytes([0x30, len(_DER_N) + len(_DER_E)]) + _DER_N + _DER_E
     _B64_DEMO = base64.b64encode(_DER_SEQ).decode()
+    return True
+
+
+def _reseed_demo() -> None:
+    """Modül seviyesindeki RSA demo değerlerini rastgele bir küçük asal
+    çiftiyle yeniden hesaplar. RSAAnimationWindow her açıldığında çağrılır,
+    böylece kullanıcı her seferinde farklı (p, q, n, ϕ, e, d) görür.
+
+    Seçim kuralları `_recompute_from_pq` içindedir; p, q ∈ _PRIME_POOL
+    (11..97 asalları), p ≠ q olacak şekilde geçerli bir çift bulunana dek
+    rastgele denenir.
+    """
+    while True:
+        p, q = random.sample(_PRIME_POOL, 2)
+        if _recompute_from_pq(p, q):
+            break
+
+
+def _apply_custom_pq(p: int, q: int) -> str | None:
+    """Kullanıcının elle seçtiği (p, q) çiftini doğrular ve uygular.
+
+    Otomatik moddaki kurallar aynen geçerlidir (n ≥ 143, geçerli e/d/m).
+    Başarılıysa None; aksi halde kullanıcıya gösterilecek Türkçe hata mesajı
+    döndürür. Hata durumunda global'ler değişmez (eski geçerli demo korunur).
+    """
+    if p == q:
+        return "p ve q farklı asallar olmalı."
+    if p not in _PRIME_POOL or q not in _PRIME_POOL:
+        return "Yalnız 11–97 arası asallar seçilebilir."
+    if _recompute_from_pq(p, q):
+        return None
+    return "Bu asallar geçerli bir RSA örneği üretmiyor; başka bir çift seçin."
 
 
 def _generate_demo_b64(seed_int: int) -> str:

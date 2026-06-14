@@ -26,7 +26,9 @@ class _MultiplicationWidget(QWidget):
         super().__init__(parent)
         self.setMinimumHeight(200)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # Çarpma satırlarını cari H._P, H._Q'ya göre dinamik üret
+        # Çarpma satırlarını cari H._P, H._Q'ya göre dinamik üret. showEvent
+        # her açılışta yeniden hesaplar (elle/rastgele p·q değişebilir); başlangıç
+        # için __init__'te de kur ki ilk paint'te dolu olsun.
         self._ROWS = self._compute_rows(H._P, H._Q)
         self._reveal = 0
         self._timer = QTimer(self)
@@ -48,6 +50,8 @@ class _MultiplicationWidget(QWidget):
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
+        # Cari H._P, H._Q'ya göre tazele — elle/rastgele seçim değişmiş olabilir.
+        self._ROWS = self._compute_rows(H._P, H._Q)
         self._reveal = 0
         self.update()
         self._timer.start(get_animation_tick_ms(700))
@@ -295,9 +299,15 @@ class _GCDWidget(QWidget):
         super().__init__(parent)
         self.setMinimumHeight(200)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # Öklid adımları: gcd(3120, 17) — büyükten küçüğe başla
-        # (küçük olan zaten büyük olanda aranmaz; ilk anlamlı bölme
-        # 3120 ÷ 17 olur).
+        self._compute_steps()
+        self._reveal = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+
+    def _compute_steps(self) -> None:
+        """Cari H._E, H._PHI'ye göre Öklid adımlarını ve gcd değerini hesaplar.
+        Büyükten küçüğe başla (ilk anlamlı bölme ϕ ÷ e olur). showEvent her
+        açılışta çağırır → elle/rastgele seçimle e/ϕ değişince taze olur."""
         a, b = max(H._E, H._PHI), min(H._E, H._PHI)
         steps = []
         while b != 0:
@@ -305,12 +315,10 @@ class _GCDWidget(QWidget):
             a, b = b, a % b
         self._steps = steps  # son adımdaki b=0 öncesi a, gcd
         self._gcd_value = a
-        self._reveal = 0
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
+        self._compute_steps()
         self._reveal = 0
         self.update()
         self._timer.start(get_animation_tick_ms(550))
@@ -377,7 +385,7 @@ class _GCDWidget(QWidget):
                 p.drawText(
                     QRect(x, result_y + 2, box_w, 24),
                     Qt.AlignmentFlag.AlignCenter,
-                    f"e = {H._E}   ✓  SEÇİLDİ",
+                    f"e = {H._E}   SEÇİLDİ",
                 )
                 # Alt açıklama — gerekçe
                 p.setFont(QFont("Georgia", 9))

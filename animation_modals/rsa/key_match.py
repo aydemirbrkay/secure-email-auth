@@ -102,6 +102,24 @@ class _KeyMatchWidget(QWidget):
 
         self.restyle()
 
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        # Demo kartı içeriğini cari H değerlerinden tazele (elle/rastgele seçim
+        # p/q/n/ϕ/e/d'yi değiştirmiş olabilir).
+        self._refresh_demo()
+
+    def _refresh_demo(self) -> None:
+        """Sol DEMO kartının gövde metnini güncel H değerlerinden yeniden yazar."""
+        self._demo_card._body_lbl.setText(  # type: ignore[attr-defined]
+            f"p = {H._P}\n"
+            f"q = {H._Q}\n"
+            f"n = {H._N}\n"
+            f"ϕ(n) = {H._PHI}\n"
+            f"e = {H._E}\n"
+            f"d = {H._D}\n"
+            f"Modülüs: {H._N.bit_length()} bit"
+        )
+
     def restyle(self) -> None:
         """Tema değişiminde tüm etiket/kart stillerini yeniden uygular (statik içerik)."""
         for card in (self._demo_card, self._real_card):
@@ -192,19 +210,23 @@ class _RSAEncryptDecryptWidget(QWidget):
         self.setMinimumHeight(240)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         # Mesaj ve türevleri CARİ modül değerlerinden (H._M, H._E, H._N, H._D)
-        # okunur. H._reseed_demo() her RSAAnimationWindow açılışında m dahil tüm
-        # değerleri yenilediği için m → c → m' döngüsü her demo'da farklı
-        # sayılarla gözlemlenir (anahtarlar değişirken m'nin de değişmesi
-        # 'değişen RSA' kavramını pekiştirir).
-        self._M = H._M
-        self._C = pow(self._M, H._E, H._N)
-        self._M_PRIME = pow(self._C, H._D, H._N)
+        # okunur. H._reseed_demo() / elle seçim m dahil tüm değerleri
+        # yenilediği için m → c → m' döngüsü her demo'da farklı sayılarla
+        # gözlemlenir. showEvent her açılışta tazeler.
+        self._compute_values()
         self._tick = 0
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_tick)
 
+    def _compute_values(self) -> None:
+        """Cari H değerlerinden m, c, m' türetir (elle/rastgele seçimle değişir)."""
+        self._M = H._M
+        self._C = pow(self._M, H._E, H._N)
+        self._M_PRIME = pow(self._C, H._D, H._N)
+
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
+        self._compute_values()
         self._tick = 0
         self.update()
         self._timer.start(get_animation_tick_ms(self._TICK_MS))

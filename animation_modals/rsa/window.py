@@ -9,10 +9,11 @@ from PyQt6.QtGui import (
     QFont, QPainter, QColor, QPen, QBrush, QPolygon,
 )
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QStackedWidget, QVBoxLayout, QWidget,
-    QGraphicsOpacityEffect, QSizePolicy,
+    QFrame, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QVBoxLayout,
+    QWidget, QGraphicsOpacityEffect, QSizePolicy,
 )
 from ..base import CryptoAnimationWindow, ANIM_COLORS
+from arayuz.accessibility import set_accessible
 from . import helpers as H
 from .key_builder import _RSAKeyBuilderWidget
 from .prime_sieve import _PrimeSieveWidget
@@ -20,6 +21,24 @@ from .arithmetic import _MultiplicationWidget, _TotientWidget, _GCDWidget
 from .secret_exp import _EEAWidget
 from .der_widget import _DERByteFlowWidget
 from .key_match import _KeyMatchWidget, _RSAEncryptDecryptWidget
+
+
+def _compact_secondary_style() -> str:
+    """Üst satırdaki "Özelleştir" düğmesi için kompakt ikincil stil.
+
+    Paylaşılan ``button_secondary_style()`` ``min-height: 34px`` ve geniş iç
+    boşlukla gelir; düğme ``setMaximumHeight(24)`` ile sınırlandığında metin
+    kırpılır (düğmenin tamamı görünmez). Bu stil; küçük font, dar iç boşluk ve
+    min-height olmadan tek satıra sığar.
+    """
+    c = ANIM_COLORS
+    return (
+        f"QPushButton {{ background: {c['bg_card']}; "
+        f"color: {c['text_secondary']}; border: 1px solid {c['border']}; "
+        f"border-radius: 5px; padding: 2px 10px; font-size: 11px; }}"
+        f"QPushButton:hover {{ background: {c['accent_peach']}; "
+        f"color: {c['text_on_accent']}; }}"
+    )
 
 
 class RSAAnimationWindow(CryptoAnimationWindow):
@@ -86,13 +105,39 @@ class RSAAnimationWindow(CryptoAnimationWindow):
     # ------------------------------------------------------------------
 
     def _init_content(self) -> None:
-        # Üst: adım başlığı (kompakt)
+        # Elle (özelleştirme) seçim modu durumu
+        self._custom_mode = False
+
+        # Üst: adım başlığı (ortada) + sağda "Özelleştir" düğmesi
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(6)
+
         self._step_lbl = QLabel()
         self._step_lbl.setFont(QFont("Georgia", 11, QFont.Weight.Bold))
         self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
         self._step_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._step_lbl.setMaximumHeight(22)
-        self.content_layout.addWidget(self._step_lbl)
+        self._step_lbl.setMaximumHeight(24)
+
+        self._btn_custom = QPushButton("✎  Özelleştir")
+        self._btn_custom.setMaximumHeight(26)
+        self._btn_custom.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_custom.setStyleSheet(_compact_secondary_style())
+        self._btn_custom.clicked.connect(self._on_custom_clicked)
+        set_accessible(
+            self._btn_custom, "Asalları özelleştir",
+            "p ve q asal sayılarını ızgaradan elle seçmenizi sağlar.",
+        )
+
+        # Başlığı görsel ortada tutmak için düğme genişliği kadar sol boşluk.
+        # Düğme yalnız Adım 1'de görünür; gizlendiğinde boşluk da gizlenir ki
+        # başlık ortada kalsın (bkz. _render_step).
+        self._left_spacer = QWidget()
+        self._left_spacer.setFixedWidth(self._btn_custom.sizeHint().width())
+        top_row.addWidget(self._left_spacer)
+        top_row.addWidget(self._step_lbl, stretch=1)
+        top_row.addWidget(self._btn_custom)
+        self.content_layout.addLayout(top_row)
 
         # Orta: yatay split — sol KeyBuilder, sağ Stack
         split = QHBoxLayout()
@@ -143,8 +188,9 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         self._der_scroll.setStyleSheet("background: transparent; border: none;")
 
         self._stack = QStackedWidget()
+        self._sieve = _PrimeSieveWidget(on_applied=self._on_custom_pq_applied)
         self._page_widgets: list[QWidget] = [
-            _PrimeSieveWidget(),
+            self._sieve,
             _MultiplicationWidget(),
             _TotientWidget(),
             _GCDWidget(),
@@ -189,6 +235,8 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         boyar. QPainter sayfaları (sieve, çarpma, totient, gcd, eea, der, şifr.)
         refresh_theme'deki update() ile yenilenir."""
         self._step_lbl.setStyleSheet(f"color: {ANIM_COLORS['accent_yellow']};")
+        if hasattr(self, "_btn_custom"):
+            self._btn_custom.setStyleSheet(_compact_secondary_style())
         self._caption.setStyleSheet(
             f"QLabel {{ color: {ANIM_COLORS['text_secondary']}; "
             f"background: {ANIM_COLORS['bg_input']}; "
@@ -213,6 +261,53 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         self._kb.set_step(idx)
         self._caption.setText(self._CAPTIONS[idx])
         self._fade_in_current_page()
+        # "Özelleştir/Rastgele Ata" yalnız Adım 1'de (p,q seçimi) anlamlıdır;
+        # ilerledikten sonra gizlenir ki kullanıcı yanlışlıkla tıklayıp asal
+        # seçimini sıfırlamasın. Sol boşluk da onunla birlikte gizlenir.
+        self._set_custom_btn_visible(idx == 0)
+
+    # ------------------------------------------------------------------
+    # Elle (özelleştirme) asal seçimi
+    # ------------------------------------------------------------------
+
+    def _on_custom_clicked(self) -> None:
+        """Düğme kendini açıklar: otomatik→elle ("✎ Özelleştir") ya da
+        elle→otomatik ("🎲 Rastgele Ata")."""
+        if not self._custom_mode:
+            # Otomatik → Elle: Adım 1'e dön ve seçim modunu aç.
+            if self.current_step != 0:
+                self.current_step = 0
+                self._render_step(0)
+                self._progress.setValue(1)
+                if hasattr(self, "_btn_prev"):
+                    self._btn_prev.setEnabled(False)
+                if hasattr(self, "_btn_next"):
+                    self._btn_next.setEnabled(True)
+                    self._btn_next.setText("İleri  ▶")
+            self._custom_mode = True
+            self._sieve.set_custom_mode(True)
+            self._btn_custom.setText("🎲  Rastgele Ata")
+        else:
+            # Elle → Otomatik: yeni rastgele çift ata.
+            H._reseed_demo()
+            self._custom_mode = False
+            self._sieve.set_custom_mode(False)
+            self._btn_custom.setText("✎  Özelleştir")
+            self._on_custom_pq_applied()
+
+    def _on_custom_pq_applied(self) -> None:
+        """p/q değiştiğinde sol paneli ve asal eleğini anında tazeler. Aşağı
+        akış sayfaları kendi showEvent'lerinde güncel H değerlerini okur."""
+        self._kb.set_step(self.current_step)
+        self._sieve.update()
+
+    def _set_custom_btn_visible(self, visible: bool) -> None:
+        """Üst satırdaki özelleştirme düğmesini (ve dengeleyen sol boşluğu)
+        gösterir/gizler. Yalnız Adım 1'de görünür kalır."""
+        if hasattr(self, "_btn_custom"):
+            self._btn_custom.setVisible(visible)
+        if hasattr(self, "_left_spacer"):
+            self._left_spacer.setVisible(visible)
 
     def _show_match_result(self) -> None:
         # Son adım — index 7 (Şifreleme/Deşifreleme Turu)
@@ -221,6 +316,7 @@ class RSAAnimationWindow(CryptoAnimationWindow):
         self._kb.set_step(7)
         self._caption.setText(self._CAPTIONS[7])
         self._fade_in_current_page()
+        self._set_custom_btn_visible(False)
 
     def _fade_in_current_page(self) -> None:
         """Aktif sayfaya 220 ms opacity 0→1 fade-in uygula."""

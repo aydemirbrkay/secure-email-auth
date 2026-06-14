@@ -87,6 +87,11 @@ class _ColoredByteGridWidget(QWidget):
         mesaj/padding sınırını bul, decode'u SADECE mesaj kısmına uygula,
         padding byte'ları için sade '·' kullan.
         """
+        # Çok-baytlı karakter köprüleri için (start, length, gösterim) listesi.
+        # paintEvent bunu kullanıp aynı karaktere ait bitişik bayt hücrelerini
+        # alttan bir parantezle gruplar → "ü = 2 bayt" net görünür.
+        self._multibyte_spans: list[tuple[int, int, str]] = []
+
         if not self._data:
             return []
 
@@ -117,11 +122,15 @@ class _ColoredByteGridWidget(QWidget):
             # UTF-8 başarılı: her karakter kendi byte sayısı kadar replikle
             # (ü = 2 byte → iki hücrede 'ü'; emoji = 4 byte → dört hücre).
             msg_chars = []
+            idx = 0
             for ch in text:
                 cp = ord(ch)
                 display = ch if cp >= 32 and cp != 127 else "·"
                 byte_count = len(ch.encode("utf-8"))
                 msg_chars.extend([display] * byte_count)
+                if byte_count > 1:
+                    self._multibyte_spans.append((idx, byte_count, display))
+                idx += byte_count
 
         # Padding byte'ları için sade '·' (anlamlı karakter taşımaz).
         return msg_chars + ["·"] * n_padding
@@ -241,6 +250,28 @@ class _ColoredByteGridWidget(QWidget):
                     p.setFont(bin_font)
                     p.drawText(x, y, cw, ch,
                                Qt.AlignmentFlag.AlignCenter, f"{byte_val:08b}")
+
+        # Çok-baytlı karakter köprüleri: aynı karaktere ait bitişik bayt
+        # hücrelerini alttan bir parantezle bağlar ve "ü = N bayt" yazar.
+        # Böylece "aynı karakterin farklı hex'i" yanılgısı kalkar — tek
+        # karakterin birden çok bayta yayıldığı görsel olarak nettir.
+        bottom = 4 + len(self._show_rows) * (ch + gap)
+        for start, length, disp in getattr(self, "_multibyte_spans", []):
+            if start >= n:
+                continue
+            last = min(start + length, n) - 1
+            x_left = row_label_w + 6 + start * (cw + cell_gap)
+            x_right = row_label_w + 6 + last * (cw + cell_gap) + cw
+            col = QColor(ANIM_COLORS["accent_mauve"])
+            line_y = bottom + 4
+            p.setPen(QPen(col, 1))
+            p.drawLine(x_left + 2, line_y, x_right - 2, line_y)
+            p.drawLine(x_left + 2, line_y, x_left + 2, line_y - 3)
+            p.drawLine(x_right - 2, line_y, x_right - 2, line_y - 3)
+            p.setFont(QFont("IBM Plex Sans", 7, QFont.Weight.Bold))
+            p.setPen(col)
+            p.drawText(x_left, line_y + 1, x_right - x_left, 11,
+                       Qt.AlignmentFlag.AlignCenter, f"{disp} = {length} bayt")
 
         # En altta padding etiketleri (varsa)
         if self._padding_labels:

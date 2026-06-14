@@ -274,9 +274,11 @@ class ThemeManager(QObject):
     def __init__(self) -> None:
         super().__init__()
         self._settings = QSettings("ErciyesBM", "SecureEmail")
-        self.mode: str = self._settings.value("theme_mode", "dark", type=str)
+        # Varsayılan tema AÇIK (light): program ilk açılışta açık temayla başlar.
+        # Kullanıcı bir tema seçtiyse o ayar korunur (kalıcı QSettings).
+        self.mode: str = self._settings.value("theme_mode", "light", type=str)
         if self.mode not in _PALETTES:
-            self.mode = "dark"
+            self.mode = "light"
         _load_palette(self.mode)
         global GLOBAL_STYLESHEET
         GLOBAL_STYLESHEET = build_global_stylesheet()

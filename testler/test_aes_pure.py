@@ -190,5 +190,49 @@ class TestSBoxDerivation(unittest.TestCase):
             derive_sbox_value(256)
 
 
+class TestGFInverseExponentiation(unittest.TestCase):
+    """GF(2⁸) tersinin üs alma (a²⁵⁴) yöntemi ve animasyon adımlarını sınar."""
+
+    def test_inverse_via_exponentiation_for_all_nonzero(self):
+        """Üs alma yöntemi tüm sıfırdan farklı byte'lar için a·a⁻¹ = 1 vermeli."""
+        from animation_modals.aes_pure import _gf_inverse, _gf_mul
+
+        for a in range(1, 256):
+            self.assertEqual(_gf_mul(a, _gf_inverse(a)), 1)
+
+    def test_zero_inverse_is_zero(self):
+        """0'ın tersi tanımsızdır; AES sözleşmesi gereği 0 döner."""
+        from animation_modals.aes_pure import _gf_inverse
+
+        self.assertEqual(_gf_inverse(0), 0)
+
+    def test_exponent_steps_chain_and_product(self):
+        """Adımlar: 8 ardışık kare, a hariç çarpılan 7 kare, son çarpım = ters."""
+        from animation_modals.aes_pure import (
+            gf_inverse_exponent_steps, _gf_mul, _gf_inverse,
+        )
+
+        s = gf_inverse_exponent_steps(0x8e)
+        self.assertEqual(len(s["squares"]), 8)
+        self.assertEqual(s["squares"][0], 0x8e)          # a^(2⁰) = a
+        # Her kare, bir öncekinin GF karesi olmalı.
+        for i in range(1, 8):
+            self.assertEqual(s["squares"][i], _gf_mul(s["squares"][i - 1],
+                                                      s["squares"][i - 1]))
+        self.assertEqual(s["bits"], [0, 1, 1, 1, 1, 1, 1, 1])  # 254 = 11111110
+        self.assertEqual(s["multiplied"], [1, 2, 3, 4, 5, 6, 7])
+        self.assertEqual(s["products"][-1], s["inverse"])
+        self.assertEqual(s["inverse"], _gf_inverse(0x8e))
+
+    def test_exponent_steps_zero_is_empty(self):
+        """0 için tersi tanımsız: kareler/çarpımlar boş, ters 0 döner."""
+        from animation_modals.aes_pure import gf_inverse_exponent_steps
+
+        s = gf_inverse_exponent_steps(0)
+        self.assertEqual(s["squares"], [])
+        self.assertEqual(s["products"], [])
+        self.assertEqual(s["inverse"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

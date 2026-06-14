@@ -173,5 +173,40 @@ class TestSBoxDerivationPage(unittest.TestCase):
         self.assertEqual(dialog.derivation_widget.current_byte, 0xAB)
 
 
+class TestSBoxInputMatrix(unittest.TestCase):
+    """Türetim sayfasının solundaki tıklanabilir girdi matrisi testleri."""
+
+    def setUp(self):
+        self._original_theme = MANAGER.mode
+
+    def tearDown(self):
+        MANAGER.set_mode(self._original_theme)
+
+    def test_input_matrix_has_unique_inputs_in_order(self):
+        """Girdi matrisi yalnız benzersiz girdileri, görülme sırasıyla taşımalı."""
+        dialog = _SBoxReferenceDialog([("8e", "19"), ("75", "9d"), ("8e", "19")])
+
+        bytes_in_grid = [byte for byte, _ in dialog._input_buttons]
+        self.assertEqual(bytes_in_grid, [0x8E, 0x75])
+
+    def test_clicking_input_cell_locks_and_plays_that_byte(self):
+        """Girdi hücresine tıklamak o byte'ı kilitler, türetim sayfasını açar."""
+        dialog = _SBoxReferenceDialog([("8e", "19"), ("75", "9d")])
+
+        dialog._on_input_selected(0x75)
+
+        self.assertEqual(dialog._stack.currentIndex(), 1)
+        self.assertEqual(dialog.derivation_widget.current_byte, 0x75)
+        self.assertTrue(dialog.derivation_widget._locked)
+        self.assertEqual(dialog._selected_input_byte, 0x75)
+
+    def test_empty_mappings_show_hint_and_no_buttons(self):
+        """Girdi yoksa matris düğmesi olmamalı; bilgilendirme etiketi gösterilmeli."""
+        dialog = _SBoxReferenceDialog([])
+
+        self.assertEqual(dialog._input_buttons, [])
+        self.assertIsNotNone(dialog.input_empty_hint)
+
+
 if __name__ == "__main__":
     unittest.main()

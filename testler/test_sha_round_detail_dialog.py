@@ -123,8 +123,12 @@ class TestSHARoundDetailDialog(unittest.TestCase):
 
 class TestSHARoundDetailButton(unittest.TestCase):
 
-    def test_diagram_button_opens_dialog_with_real_detail(self):
-        """Diyagram sayfasındaki düğme, drill-down'ı gerçek round_detail ile açmalı."""
+    def test_diagram_button_opens_dialog_with_current_round_detail(self):
+        """Düğme, GÖSTERİLEN round'un detayını açmalı.
+
+        Son round (64) görüntülenirken açılan detayın A çıkışı (new_a), son
+        bloğun çalışma değişkeni A'ya eşittir (eski 'hep round 64' davranışı
+        artık gösterilen round'a bağlı)."""
         from animation_modals.sha256.window import SHA256AnimationWindow
         import hashlib
 
@@ -134,11 +138,30 @@ class TestSHARoundDetailButton(unittest.TestCase):
             expected_hash=hashlib.sha256(msg.encode()).hexdigest(),
         )
         self.assertTrue(window._round_detail_btn.isEnabled())
+        # Son round snapshot'ına (round 64) git, sonra düğmeye bas.
+        last_step = 3 + len(window._snaps) - 1
+        window._diag_jump_to_step(last_step)
         window._round_detail_btn.click()
         self.assertEqual(
             window._round_detail_dialog.wizard.detail["new_a"],
             window._data["final_working"][0],
         )
+        self.assertTrue(window._round_detail_dialog.is_final_round)
+
+    def test_diagram_button_first_round_shows_first_round(self):
+        """İlk round (R1) görüntülenirken düğme R1'in detayını açmalı (round 64 değil)."""
+        from animation_modals.sha256.window import SHA256AnimationWindow
+        import hashlib
+
+        msg = "Hello World"
+        window = SHA256AnimationWindow(
+            message=msg,
+            expected_hash=hashlib.sha256(msg.encode()).hexdigest(),
+        )
+        window._diag_jump_to_step(3)  # ilk snapshot = round 1
+        window._round_detail_btn.click()
+        self.assertEqual(window._round_detail_dialog.wizard.detail["round_no"], 1)
+        self.assertFalse(window._round_detail_dialog.is_final_round)
 
 
 if __name__ == "__main__":

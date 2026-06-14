@@ -47,6 +47,7 @@ class TestSHARoundDetailDialog(unittest.TestCase):
 
         self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
         self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
+        self.assertEqual(dialog.windowType(), Qt.WindowType.Window)
 
     def test_bits_helper_is_32_chars(self):
         """_bits, 8-hane hex'i 32 karakter ikiliye çevirmeli."""

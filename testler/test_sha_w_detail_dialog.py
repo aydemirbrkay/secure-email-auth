@@ -41,6 +41,7 @@ class TestSHAWDetailDialog(unittest.TestCase):
 
         self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
         self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
+        self.assertEqual(dialog.windowType(), Qt.WindowType.Window)
 
     def test_wizard_is_manual_and_advances_on_click(self):
         dialog = _WDetailDialog(self._detail)

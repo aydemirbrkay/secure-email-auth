@@ -33,7 +33,10 @@ class _SBoxReferenceDialog(QDialog):
         mappings: list[tuple[str, str]],
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        # parent KASITLI olarak super'e verilmez: harici pencere bagimsiz ust-duzey
+        # olur → kendi gorev cubugu dugmesini alir ve minimize normal calisir
+        # (owned pencere koseye kuculup arti birakiyordu). Referans cagiranda tutulur.
+        super().__init__(None)
         self._mappings = [(source.lower(), result.lower()) for source, result in mappings]
         self._used_inputs = {source for source, _ in self._mappings}
 
@@ -59,7 +62,7 @@ class _SBoxReferenceDialog(QDialog):
     def _configure_window(self) -> None:
         self.setWindowTitle("AES S-Box Referans Tablosu")
         self.setWindowFlags(
-            Qt.WindowType.Dialog
+            Qt.WindowType.Window
             | Qt.WindowType.CustomizeWindowHint
             | Qt.WindowType.WindowTitleHint
             | Qt.WindowType.WindowMinimizeButtonHint

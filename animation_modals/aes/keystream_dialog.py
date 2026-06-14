@@ -509,7 +509,10 @@ class _KeystreamReferenceDialog(QDialog):
         initial_state_hex: list[list[str]] | None = None,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        # parent super'e verilmez: bagimsiz ust-duzey pencere → gorev cubugu
+        # dugmesi + normal minimize (owned pencere koseye kuculmesin). Referans
+        # cagiran pencerede tutulur, GC olmaz.
+        super().__init__(None)
         self.keystream = keystream
         self.nonce = nonce
         self.counter_block = counter_block or (nonce + (2).to_bytes(4, "big"))
@@ -524,7 +527,7 @@ class _KeystreamReferenceDialog(QDialog):
         """Diyaloğu bağımsız, kapatma düğmeli, non-modal sihirbaz penceresi yapar."""
         self.setWindowTitle("AES-256-GCM Keystream Sihirbazı")
         self.setWindowFlags(
-            Qt.WindowType.Dialog
+            Qt.WindowType.Window
             | Qt.WindowType.CustomizeWindowHint
             | Qt.WindowType.WindowTitleHint
             | Qt.WindowType.WindowMinimizeButtonHint

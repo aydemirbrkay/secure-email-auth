@@ -42,6 +42,8 @@ class TestKeystreamWizardDialog(unittest.TestCase):
 
         self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
         self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
+        # Bagimsiz ust-duzey pencere: gorev cubugu dugmesi + normal minimize.
+        self.assertEqual(dialog.windowType(), Qt.WindowType.Window)
 
     def test_matrix_from_bytes_is_column_major(self):
         """16 bayt AES column-major 4×4 matrise yerleşmeli (m[r][c] = data[c*4+r])."""

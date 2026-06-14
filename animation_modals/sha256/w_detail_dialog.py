@@ -250,7 +250,10 @@ class _WDetailDialog(QDialog):
     """W[16] drill-down sihirbazını barındıran ince diyalog (round drill-down deseni)."""
 
     def __init__(self, detail: dict, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
+        # parent super'e verilmez: bagimsiz ust-duzey pencere → gorev cubugu
+        # dugmesi + normal minimize (owned pencere koseye kuculmesin). Referans
+        # cagiran pencerede tutulur, GC olmaz.
+        super().__init__(None)
         self.detail = detail
         self._configure_window()
         self._build_ui(detail)
@@ -262,7 +265,7 @@ class _WDetailDialog(QDialog):
     def _configure_window(self) -> None:
         self.setWindowTitle("SHA-256 Mesaj Genişletme — Bit Bit Çözüm")
         self.setWindowFlags(
-            Qt.WindowType.Dialog
+            Qt.WindowType.Window
             | Qt.WindowType.CustomizeWindowHint
             | Qt.WindowType.WindowTitleHint
             | Qt.WindowType.WindowMinimizeButtonHint

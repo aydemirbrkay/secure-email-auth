@@ -40,6 +40,20 @@ class TestSBoxReferenceDialog(unittest.TestCase):
         self.assertFalse(flags & Qt.WindowType.WindowMaximizeButtonHint)
         self.assertEqual(dialog.windowModality(), Qt.WindowModality.NonModal)
 
+    def test_is_independent_top_level_window(self):
+        """Parent verilse bile diyalog bağımsız üst-düzey penceredir.
+
+        Owned pencere görev çubuğu düğmesi almaz ve minimize edilince köşede
+        artık bırakır; bu yüzden diyalog Qt parent'ı almaz ve Qt.Window tipidir.
+        """
+        from PyQt6.QtWidgets import QWidget
+
+        host = QWidget()
+        dialog = _SBoxReferenceDialog([("cb", "1f")], host)
+
+        self.assertIsNone(dialog.parent())
+        self.assertEqual(dialog.windowType(), Qt.WindowType.Window)
+
     def test_has_no_redundant_close_button(self):
         """Pencerenin X düğmesi varken ayrı 'Kapat' butonu bulunmamalı."""
         dialog = _SBoxReferenceDialog([("cb", "1f")])

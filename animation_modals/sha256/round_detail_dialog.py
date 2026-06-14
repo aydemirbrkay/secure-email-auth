@@ -367,7 +367,10 @@ class _SHARoundDetailDialog(QDialog):
         is_final_round: bool = True,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        # parent super'e verilmez: bagimsiz ust-duzey pencere → gorev cubugu
+        # dugmesi + normal minimize (owned pencere koseye kuculmesin). Referans
+        # cagiran pencerede tutulur, GC olmaz.
+        super().__init__(None)
         self.detail = detail
         self.is_final_round = is_final_round
         self._configure_window()
@@ -381,7 +384,7 @@ class _SHARoundDetailDialog(QDialog):
         rn = self.detail.get("round_no", 64)
         self.setWindowTitle(f"SHA-256 Round {rn} — Bit Bit Çözüm")
         self.setWindowFlags(
-            Qt.WindowType.Dialog
+            Qt.WindowType.Window
             | Qt.WindowType.CustomizeWindowHint
             | Qt.WindowType.WindowTitleHint
             | Qt.WindowType.WindowMinimizeButtonHint

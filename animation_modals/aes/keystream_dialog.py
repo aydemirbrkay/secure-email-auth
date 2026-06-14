@@ -27,7 +27,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
-    QApplication, QDialog, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QApplication, QDialog, QLabel, QVBoxLayout, QWidget,
 )
 
 from ..base import ANIM_COLORS, cached_font
@@ -235,7 +235,9 @@ class _KeystreamWizardWidget(QWidget):
         p.drawText(QRect(area.left(), y, area.width(), 18),
                    Qt.AlignmentFlag.AlignCenter,
                    "=  sayaç bloğu (16 byte)  ↓")
-        y += 26
+        # Matrisin kendi başlığı (y-16'da çizilir) bu satırla çakışmasın diye
+        # yeterli dikey boşluk bırakılır (eski 26 → 42).
+        y += 42
 
         # 2) İşlem: 16 baytın 4×4 column-major matrise yerleşmesi
         self._draw_matrix(p, cx - 92, y, self._counter_matrix,
@@ -344,19 +346,29 @@ class _KeystreamWizardWidget(QWidget):
         p.drawText(QRect(area.left(), y, area.width(), 28),
                    Qt.AlignmentFlag.AlignCenter,
                    "mesaj   ⊕   keystream   =   şifreli metin")
-        y += 50
+        y += 42
+
+        # Aşağıdaki satır KEYSTREAM'dir (şifreli metin değil) — kullanıcı bunu
+        # sonuç sanmasın diye açıkça etiketlenir. Şifreli metin, bu keystream
+        # mesajla XOR'lanınca elde edilir ve ana ekrandaki matriste gösterilir.
+        p.setFont(cached_font("IBM Plex Sans", 9, QFont.Weight.Bold))
+        p.setPen(QColor(ANIM_COLORS["accent_green"]))
+        p.drawText(QRect(area.left(), y, area.width(), 16),
+                   Qt.AlignmentFlag.AlignCenter, "keystream (16 byte)")
+        y += 20
 
         self._draw_hex_row(p, cx, y, self.keystream, 16,
-                           ANIM_COLORS["accent_yellow"])
+                           ANIM_COLORS["accent_green"])
         y += 64
 
         p.setFont(cached_font("IBM Plex Sans", 9))
         p.setPen(QColor(ANIM_COLORS["text_muted"]))
-        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 40),
+        p.drawText(QRect(area.left() + 12, y, area.width() - 24, 56),
                    Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
+                   "Bu satır keystream'dir; mesaj baytlarıyla XOR'lanınca "
+                   "şifreli metni verir (ana ekrandaki matriste gösterilir). "
                    "Mesaj 16 bayttan uzunsa sayaç birer artar (00 00 00 03, "
-                   "00 00 00 04 …) ve sonraki her blok kendi keystream'ini "
-                   "aynı yolla üretir.")
+                   "00 00 00 04 …) ve sonraki her blok kendi keystream'ini üretir.")
 
     # ------------------------------------------------------------------
     # Çizim yardımcıları
@@ -530,20 +542,14 @@ class _KeystreamReferenceDialog(QDialog):
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.title_label)
 
-        self.hint_label = QLabel("İpucu: üstteki kutulara tıkla ya da ilerlemek için sahneye tıkla.")
-        self.hint_label.setFont(QFont("IBM Plex Sans", 9))
-        self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.hint_label)
-
+        # NOT: "İpucu" satırı ve "Baştan oynat" düğmesi kaldırıldı — gezinme
+        # tamamen üstteki sahne kutularıyla (tıkla-seç) yapılıyor, otomatik
+        # oynatma/animasyon durumu yok; bu yüzden ipucu ve baştan-oynat gereksiz.
         self.wizard = _KeystreamWizardWidget(
             self.counter_block, self.keystream, self.nonce,
             initial_state_hex=initial_state_hex, parent=self,
         )
         layout.addWidget(self.wizard, stretch=1)
-
-        self.replay_btn = QPushButton("Baştan oynat")
-        self.replay_btn.clicked.connect(self.wizard.start)
-        layout.addWidget(self.replay_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.wizard.start()
 
@@ -566,14 +572,6 @@ class _KeystreamReferenceDialog(QDialog):
         )
         self.title_label.setStyleSheet(
             f"color: {ANIM_COLORS['accent_yellow']}; background: transparent;"
-        )
-        self.hint_label.setStyleSheet(
-            f"color: {ANIM_COLORS['text_muted']}; background: transparent;"
-        )
-        self.replay_btn.setStyleSheet(
-            f"QPushButton {{ background: {ANIM_COLORS['accent_blue']}; "
-            f"color: {ANIM_COLORS['text_on_accent']}; border: none; "
-            "border-radius: 6px; padding: 7px 16px; font-weight: bold; }}"
         )
         self.wizard.update()
         self.update()

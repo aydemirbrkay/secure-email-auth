@@ -549,6 +549,10 @@ class AESAnimationWindow(CryptoAnimationWindow):
         ph = getattr(self, "_nav_phase", "intro")
         if hasattr(self, "_btn_prev"):
             self._btn_prev.setEnabled(ph != "intro")
+            # İlk içerik fazında (prep0) bir geri daha intro'ya (algoritma
+            # şeması) döner → buton bunu açıkça söyler.
+            self._btn_prev.setText(
+                "◀  Algoritmaya dön" if ph == "prep0" else "◀  Geri")
         if hasattr(self, "_btn_next"):
             if ph == "match":
                 self._btn_next.setText("Tamamlandı")

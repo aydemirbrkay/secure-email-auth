@@ -26,12 +26,17 @@ class TestSBoxReferenceDialog(unittest.TestCase):
         self.assertEqual(dialog.highlighted_cells(), {(0xC, 0xB), (0xE, 0xC)})
         self.assertIn("cb→1f", dialog.used_mappings_label.text())
 
-    def test_has_close_only_window_controls(self):
+    def test_has_close_and_minimize_window_controls(self):
+        """Harici diyalog kapat + küçült (minimize) düğmelerini taşımalı.
+
+        Kullanıcı diyaloğu görev çubuğuna küçültebilsin diye minimize aktiftir;
+        büyüt (maximize) gerekli değildir, modal değildir.
+        """
         dialog = _SBoxReferenceDialog([("cb", "1f")])
         flags = dialog.windowFlags()
 
         self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
-        self.assertFalse(flags & Qt.WindowType.WindowMinimizeButtonHint)
+        self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
         self.assertFalse(flags & Qt.WindowType.WindowMaximizeButtonHint)
         self.assertEqual(dialog.windowModality(), Qt.WindowModality.NonModal)
 

@@ -38,6 +38,16 @@ class TestSHARoundDetailDialog(unittest.TestCase):
             final_hash=self._data["final_hash"],
         )
 
+    def test_dialog_has_minimize_button(self):
+        """Harici round drill-down diyaloğu görev çubuğuna küçültülebilmeli."""
+        from PyQt6.QtCore import Qt
+
+        dialog = self._make_dialog()
+        flags = dialog.windowFlags()
+
+        self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
+        self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
+
     def test_bits_helper_is_32_chars(self):
         """_bits, 8-hane hex'i 32 karakter ikiliye çevirmeli."""
         self.assertEqual(len(_bits("00000000")), 32)

@@ -32,6 +32,16 @@ class TestSHAWDetailDialog(unittest.TestCase):
         self.assertNotEqual(self._detail["w_i15"], "00000000")
         self.assertNotEqual(self._detail["w_i2"], "00000000")
 
+    def test_dialog_has_minimize_button(self):
+        """Harici W drill-down diyaloğu görev çubuğuna küçültülebilmeli."""
+        from PyQt6.QtCore import Qt
+
+        dialog = _WDetailDialog(self._detail)
+        flags = dialog.windowFlags()
+
+        self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
+        self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
+
     def test_wizard_is_manual_and_advances_on_click(self):
         dialog = _WDetailDialog(self._detail)
         wizard = dialog.wizard

@@ -33,6 +33,16 @@ class TestKeystreamWizardDialog(unittest.TestCase):
         self.assertEqual(dialog.wizard.counter_block, self.nonce + b"\x00\x00\x00\x02")
         self.assertEqual(dialog.wizard.keystream, self.keystream)
 
+    def test_dialog_has_minimize_button(self):
+        """Harici keystream diyaloğu görev çubuğuna küçültülebilmeli (minimize aktif)."""
+        from PyQt6.QtCore import Qt
+
+        dialog = _KeystreamReferenceDialog(self.keystream, self.nonce)
+        flags = dialog.windowFlags()
+
+        self.assertTrue(flags & Qt.WindowType.WindowMinimizeButtonHint)
+        self.assertTrue(flags & Qt.WindowType.WindowCloseButtonHint)
+
     def test_matrix_from_bytes_is_column_major(self):
         """16 bayt AES column-major 4×4 matrise yerleşmeli (m[r][c] = data[c*4+r])."""
         data = bytes(range(16))
